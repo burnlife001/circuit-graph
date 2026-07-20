@@ -89,7 +89,13 @@ class CircuitGraph:
                 )
                 continue
             # Note: we do not mutate the IR; net_id is looked up on demand.
-            self._add_edge(conn.pin_id, conn.net_id, EdgeKind.CONNECTS_TO, conn.provenance)
+            self._add_edge(
+                conn.pin_id,
+                conn.net_id,
+                EdgeKind.CONNECTS_TO,
+                conn.provenance,
+                metadata=dict(conn.metadata or {}),
+            )
 
         # Orphan pin detection.
         for comp in ir.components:
@@ -133,6 +139,7 @@ class CircuitGraph:
         kind: EdgeKind,
         provenance: Provenance | None = None,
         seq: int = 0,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         edge_id = f"{source}::{target}::{kind.value}::{seq}"
         edge = GraphEdge(
@@ -141,6 +148,7 @@ class CircuitGraph:
             target=target,
             kind=kind,
             provenance=provenance,
+            metadata=dict(metadata) if metadata else {},
         )
         self._edge_map[edge_id] = edge
         self._g.add_edge(

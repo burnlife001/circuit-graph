@@ -13,6 +13,7 @@ from circuit_graph.ir import (
     Component,
     Connection,
     DeviceKind,
+    EdgeKind,
     Net,
     NetType,
     Pin,
@@ -218,3 +219,121 @@ def test_enricher_pipeline_on_t268():
 
     # Pipeline should not produce dependency warnings.
     assert not any("ENRICH_DEPENDENCY_MISSING" in w for w in result.warnings)
+
+
+# ---------------------------------------------------------------------------
+# EdgeSemanticEnricher tests (todolist_fix.md P2-Task4)
+
+
+def _ic_ir() -> CircuitIR:
+    """IR covering all major edge-semantic classification branches."""
+    return CircuitIR(
+        meta={"source": "test", "format": "manual"},
+        components=[
+            # Op-amp with named pins
+            Component(
+                id="U1",
+                device_kind=DeviceKind.IC,
+                part_number="LM321",
+                pins=[
+                    Pin(id="U1.3", number="3", name="+IN"),
+                    Pin(id="U1.4", number="4", name="OUT"),
+                    Pin(id="U1.5", number="5", name="VCC"),
+                    Pin(id="U1.2", number="2", name="GND"),
+                ],
+            ),
+            # Passive resistor
+            Component(
+                id="R1",
+                device_kind=DeviceKind.RESISTOR,
+                raw_value="10K",
+                pins=[Pin(id="R1.1", number="1"), Pin(id="R1.2", number="2")],
+            ),
+        ],
+        nets=[
+            Net(id="+5V", name="+5V"),
+            Net(id="GND", name="GND"),
+            Net(id="SIG", name="SIG"),
+        ],
+        connections=[
+            Connection(pin_id="U1.3", net_id="SIG"),
+            Connection(pin_id="U1.4", net_id="SIG"),
+            Connection(pin_id="U1.5", net_id="+5V"),
+            Connection(pin_id="U1.2", net_id="GND"),
+            Connection(pin_id="R1.1", net_id="SIG"),
+            Connection(pin_id="R1.2", net_id="GND"),
+        ],
+    )
+
+
+def _sem_for(conns, pin_id: str) -> dict:
+    conn = next(c for c in conns if c.pin_id == pin_id)
+    return conn.metadata["edge_semantic"]
+
+
+def test_edge_semantic_enricher_classifies_directions():
+    from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
+
+    result = run_enrichers(_ic_ir(), [NetClassifier(), EdgeSemanticEnricher()])
+    conns = result.ir.connections
+
+    # IC input on signal net → load
+    assert _sem_for(conns, "U1.3")["direction"] == "load"
+    # IC output on signal net → source
+    assert _sem_for(conns, "U1.4")["direction"] == "source"
+    # Power pin → bidirectional regardless of name
+    assert _sem_for(conns, "U1.5")["direction"] == "bidirectional"
+    # GND pin → bidirectional
+    assert _sem_for(conns, "U1.2")["direction"] == "bidirectional"
+    # Resistor on signal net → bidirectional (current flows through)
+    assert _sem_for(conns, "R1.1")["direction"] == "bidirectional"
+    # Resistor on GND net → bidirectional
+    assert _sem_for(conns, "R1.2")["direction"] == "bidirectional"
+
+
+def test_edge_semantic_enricher_classifies_roles_and_levels():
+    from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
+
+    result = run_enrichers(_ic_ir(), [NetClassifier(), EdgeSemanticEnricher()])
+    conns = result.ir.connections
+
+    assert _sem_for(conns, "U1.5")["role"] == "power"
+    assert _sem_for(conns, "U1.5")["level"] == "5V"
+    assert _sem_for(conns, "U1.2")["role"] == "gnd"
+    assert _sem_for(conns, "U1.2")["level"] is None  # no voltage on GND name
+    assert _sem_for(conns, "U1.3")["role"] == "digital"
+    assert _sem_for(conns, "U1.3")["level"] is None
+
+
+def test_edge_semantic_propagates_to_graph_edge_metadata():
+    """Connection.metadata['edge_semantic'] must reach GraphEdge.metadata."""
+    from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
+    from circuit_graph.graph import create_graph
+
+    ir = NetClassifier().enrich(_ic_ir())
+    ir = EdgeSemanticEnricher().enrich(ir)
+    g = create_graph()
+    g.load(ir)
+
+    # Locate the U1.4 → SIG edge (U1.OUT named pin)
+    sem_edges = [
+        e
+        for e in g.edges()
+        if e.kind == EdgeKind.CONNECTS_TO and e.source == "U1.4"
+    ]
+    assert len(sem_edges) == 1
+    sem = sem_edges[0].metadata.get("edge_semantic")
+    assert sem is not None
+    assert sem["direction"] == "source"
+    assert sem["role"] == "digital"
+
+
+def test_edge_semantic_enricher_is_idempotent():
+    from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
+
+    ir = NetClassifier().enrich(_ic_ir())
+    enricher = EdgeSemanticEnricher()
+    once = enricher.enrich(ir)
+    twice = enricher.enrich(once)
+    # Second run should be a no-op (can_enrich returns False, ir passes through)
+    assert once.connections == twice.connections

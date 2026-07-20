@@ -17,6 +17,7 @@ from pathlib import Path
 import click
 
 from circuit_graph.enrichers import run_enrichers
+from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
 from circuit_graph.enrichers.net_classifier import NetClassifier
 from circuit_graph.enrichers.pin_resolver import PinNameResolver
 from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
@@ -284,6 +285,7 @@ def _parse_and_enrich(file: Path) -> CircuitIR:
             ValueNormalizer(),
             NetClassifier(),
             PinNameResolver(),
+            EdgeSemanticEnricher(),
             TopologyRecognizer(),
         ],
     ).ir

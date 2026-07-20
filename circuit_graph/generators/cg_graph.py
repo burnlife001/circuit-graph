@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from circuit_graph.enrichers import run_enrichers
+from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
 from circuit_graph.enrichers.net_classifier import NetClassifier
 from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
 from circuit_graph.enrichers.value_normalizer import ValueNormalizer
@@ -206,6 +207,11 @@ def _ensure_enriched(ir: CircuitIR) -> CircuitIR:
         enrichers.append(ValueNormalizer())
     if any(n.type is None for n in ir.nets):
         enrichers.append(NetClassifier())
+    # EdgeSemanticEnricher only adds work when connections lack metadata; the
+    # `can_enrich` predicate inside run_enrichers will skip it if everything is
+    # already annotated.
+    if any(not (c.metadata or {}).get("edge_semantic") for c in ir.connections):
+        enrichers.append(EdgeSemanticEnricher())
     # TopologyRecognizer is idempotent by block id, so it is safe to run when
     # no blocks have been emitted yet.
     if not ir.blocks:

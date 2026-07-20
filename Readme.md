@@ -6,8 +6,8 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
 
 - 解析 Protel .NET 网表（`[...]` 元件块 / `(...)` 网络块）
 - 构建组件 / 引脚 / 网络 / 功能块 异构图（NetworkX）
-- 数值标准化、网络分类、引脚名补全、拓扑识别增强器（按 priority 串行 + `requires` 依赖）
-- 元件追踪、网络追踪、邻居查询、BFS/DFS 遍历、引脚间最短路径
+- 数值标准化、网络分类、引脚名补全、边语义标注（`direction` / `role` / `level`）、拓扑识别增强器（按 priority 串行 + `requires` 依赖）
+- 元件追踪、网络追踪、邻居查询、BFS/DFS 遍历（支持 `net_types` / `device_kinds` 过滤）、引脚间最短路径
 - 拓扑识别：**基元库 + VF2 子图匹配 + 四源融合评分**（structural / naming / parametric / type）；新增拓扑 = 追加 `primitives/*.json`
 - 元件型号知识库：**SQLite 数据库**（`circuit_graph/knowledge/circuit_graph.db`）维护 part-number → 类别 / 引脚定义 / 属性
 - PDF 数据手册引脚提取：Camelot lattice 模式自动搜索引脚表页面，提取 `{引脚号: 引脚名}` 映射
@@ -404,7 +404,7 @@ circuit_graph/
 ├── comm_topology.py            # 通信总线识别（I2C/UART/SPI/PWM）
 ├── visualization.py            # 供电树 SVG 渲染
 ├── parsers/protel.py           # Protel .NET 解析器
-├── enrichers/                  # value_normalizer / net_classifier / pin_resolver / topology_recognizer
+├── enrichers/                  # value_normalizer / net_classifier / pin_resolver / edge_semantic / topology_recognizer
 ├── generators/cg_graph.py       # cg-graph JSON 生成器（v2.1）
 ├── exporters/graphml.py        # yEd 兼容 GraphML
 ├── layout/                     # 原理图自动布局引擎

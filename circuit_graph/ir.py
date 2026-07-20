@@ -211,6 +211,31 @@ class SemanticEdge:
 
 
 @dataclass(frozen=True)
+class EdgeSemantic:
+    """Per-pin-to-net edge semantics attached to GraphEdge.metadata['edge_semantic'].
+
+    Populated by the EdgeSemanticEnricher; lets traversal predicates filter
+    by direction (source/load/bidirectional) and role (power/gnd/analog/digital/clock)
+    without re-deriving them on every query.
+
+    direction: signal flow from the component's perspective
+      - source: pin drives the net (op-amp OUT, regulator VOUT)
+      - load: pin sinks from the net (op-amp IN+, MCU GPIO input)
+      - bidirectional: current flows either way (R/C/L passives, power rails)
+
+    role: functional role of the net at this edge
+      - power / gnd / analog / digital / clock
+
+    level: nominal voltage for power/gnd rails (e.g. "5V", "3V3", "1V8");
+           None for signal/clock/role-less edges.
+    """
+
+    direction: Literal["source", "load", "bidirectional"]
+    role: Literal["power", "gnd", "analog", "digital", "clock"]
+    level: str | None = None
+
+
+@dataclass(frozen=True)
 class CircuitMeta:
     source: str
     format: str
