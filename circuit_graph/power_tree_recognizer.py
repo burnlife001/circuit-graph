@@ -33,7 +33,10 @@ from circuit_graph.ir import (
     CircuitIR,
     Component,
     DeviceKind,
+    EdgeKind,
     NetType,
+    NodeKind,
+    TraversalOptions,
 )
 from circuit_graph.knowledge.db import ComponentDatabase
 from circuit_graph.models.power_tree import (
@@ -460,22 +463,34 @@ def _loads_on_net(
     net_id: str,
     skip_component: str,
 ) -> Iterable[Component]:
-    """Yield every component on ``net_id`` other than ``skip_component``.
+    """Yield every non-capacitor component attached to ``net_id``, except ``skip_component``.
 
-    Capacitors are excluded so the tree highlights the regulator's
-    downstream topology rather than each bypass cap. Inductors are excluded
-    only when they are part of the regulator the caller is currently
-    processing — which the helper cannot know, so callers must filter the
-    inductor themselves. For first-pass trees this stays correct.
+    Capacitors (bypass caps) are excluded via the ``device_kinds`` allowlist
+    rather than a runtime ``if``-branch — this is the "recognizer = preset
+    predicate combo" pattern from todolist_fix.md P1-Task3: the recognizer's
+    "what counts as a load" rule lives entirely in the predicate, leaving no
+    hardcoded traversal logic in this helper. Inductors that belong to the
+    regulator the caller is processing are still the caller's responsibility.
     """
+    load_kinds = [k for k in DeviceKind if k != DeviceKind.CAPACITOR]
+    subgraph = graph.traverse_bfs(
+        net_id,
+        TraversalOptions(
+            direction="both",
+            edge_kinds=[EdgeKind.CONNECTS_TO, EdgeKind.HAS_PIN],
+            device_kinds=load_kinds,
+            include_start=False,
+            max_depth=2,
+        ),
+    )
     seen: set[str] = set()
-    for entry in graph.trace_net(net_id):
-        comp: Component = entry["component"]
+    for node in subgraph.nodes.values():
+        if node.kind != NodeKind.COMPONENT:
+            continue
+        comp: Component = node.data
         if comp.id == skip_component or comp.id in seen:
             continue
         seen.add(comp.id)
-        if comp.device_kind == DeviceKind.CAPACITOR:
-            continue
         yield comp
 
 
