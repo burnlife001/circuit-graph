@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "name": "default",
+    "unit_type": "default",
+    "version": "1.0"
+  },
+  "grid": {
+    "size_mm": 2.54,
+    "char_unit_mm": 1.27
+  },
+  "placement": {
+    "input_x_mm": 38.1,
+    "output_x_mm": 152.4,
+    "column_step_mm": 25.4,
+    "row_step_mm": 12.7,
+    "direction": "left_to_right"
+  },
+  "io": {
+    "inputs": [],
+    "outputs": [],
+    "power_top": [],
+    "power_bottom": []
+  },
+  "symbols": {},
+  "labels": {
+    "reference": {"offset_mm": [0, -2.54], "font_height_mm": 1.27},
+    "value": {"offset_mm": [0, 2.54], "font_height_mm": 1.27}
+  }
+}

@@ -1,0 +1,220 @@
+from pathlib import Path
+
+import pytest
+
+from circuit_graph.enrichers import run_enrichers
+from circuit_graph.enrichers.net_classifier import NetClassifier
+from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
+from circuit_graph.enrichers.value_normalizer import ValueNormalizer
+from circuit_graph.ir import (
+    BlockRole,
+    CapacitanceValue,
+    CircuitIR,
+    Component,
+    Connection,
+    DeviceKind,
+    Net,
+    NetType,
+    Pin,
+    ResistanceValue,
+    UnknownValue,
+)
+from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
+
+FIXTURE_DIR = Path(__file__).resolve().parents[2] / "fixtures" / "protel"
+
+
+def _sample_ir() -> CircuitIR:
+    return CircuitIR(
+        meta={"source": "test", "format": "manual"},
+        components=[
+            Component(
+                id="R70",
+                device_kind=DeviceKind.RESISTOR,
+                raw_value="5.1K%1",
+                pins=[Pin(id="R70.1", number="1"), Pin(id="R70.2", number="2")],
+            ),
+            Component(
+                id="C1",
+                device_kind=DeviceKind.CAPACITOR,
+                raw_value="4.7UF16V",
+                pins=[Pin(id="C1.1", number="1"), Pin(id="C1.2", number="2")],
+            ),
+            Component(
+                id="L1",
+                device_kind=DeviceKind.INDUCTOR,
+                raw_value="4.7uH",
+                pins=[Pin(id="L1.1", number="1"), Pin(id="L1.2", number="2")],
+            ),
+            Component(
+                id="R71",
+                device_kind=DeviceKind.RESISTOR,
+                raw_value="NC",
+                pins=[Pin(id="R71.1", number="1"), Pin(id="R71.2", number="2")],
+            ),
+        ],
+        nets=[
+            Net(id="CC2", name="CC2"),
+            Net(id="PGND", name="PGND"),
+            Net(id="VBUS", name="VBUS"),
+            Net(id="Mystery", name="Mystery"),
+        ],
+        connections=[
+            Connection(pin_id="R70.1", net_id="CC2"),
+            Connection(pin_id="R70.2", net_id="PGND"),
+            Connection(pin_id="R71.1", net_id="CC2"),
+            Connection(pin_id="R71.2", net_id="PGND"),
+        ],
+    )
+
+
+def test_value_normalizer():
+    ir = _sample_ir()
+    result = run_enrichers(ir, [ValueNormalizer()])
+    assert not result.warnings
+    r70 = next(c for c in result.ir.components if c.id == "R70")
+    assert r70.value == ResistanceValue(magnitude=5100.0, unit="Ω", tolerance=0.01)
+    c1 = next(c for c in result.ir.components if c.id == "C1")
+    assert c1.value == CapacitanceValue(magnitude=4.7, unit="µF", voltage_rating=16.0)
+    l1 = next(c for c in result.ir.components if c.id == "L1")
+    assert l1.value.magnitude == 4.7
+    r71 = next(c for c in result.ir.components if c.id == "R71")
+    assert r71.value == UnknownValue(raw="NC")
+
+
+def test_value_normalizer_resistor_kilo_mega_suffixes():
+    """K/M suffixes must be treated as unit multipliers, not tolerance codes."""
+    ir = CircuitIR(
+        meta={"source": "test", "format": "manual"},
+        components=[
+            Component(
+                id="R100",
+                device_kind=DeviceKind.RESISTOR,
+                raw_value="100K",
+                pins=[Pin(id="R100.1", number="1"), Pin(id="R100.2", number="2")],
+            ),
+            Component(
+                id="R101",
+                device_kind=DeviceKind.RESISTOR,
+                raw_value="3K",
+                pins=[Pin(id="R101.1", number="1"), Pin(id="R101.2", number="2")],
+            ),
+            Component(
+                id="R97",
+                device_kind=DeviceKind.RESISTOR,
+                raw_value="1K",
+                pins=[Pin(id="R97.1", number="1"), Pin(id="R97.2", number="2")],
+            ),
+            Component(
+                id="R1M",
+                device_kind=DeviceKind.RESISTOR,
+                raw_value="1M",
+                pins=[Pin(id="R1M.1", number="1"), Pin(id="R1M.2", number="2")],
+            ),
+            Component(
+                id="R10R",
+                device_kind=DeviceKind.RESISTOR,
+                raw_value="10R%1",
+                pins=[Pin(id="R10R.1", number="1"), Pin(id="R10R.2", number="2")],
+            ),
+            Component(
+                id="R002",
+                device_kind=DeviceKind.RESISTOR,
+                raw_value="0.02R%1",
+                pins=[Pin(id="R002.1", number="1"), Pin(id="R002.2", number="2")],
+            ),
+        ],
+        nets=[],
+        connections=[],
+    )
+    result = run_enrichers(ir, [ValueNormalizer()])
+    values = {c.id: c.value for c in result.ir.components}
+    assert values["R100"] == ResistanceValue(magnitude=100_000.0, unit="Ω")
+    assert values["R101"] == ResistanceValue(magnitude=3000.0, unit="Ω")
+    assert values["R97"] == ResistanceValue(magnitude=1000.0, unit="Ω")
+    assert values["R1M"] == ResistanceValue(magnitude=1_000_000.0, unit="Ω")
+    assert values["R10R"] == ResistanceValue(magnitude=10.0, unit="Ω", tolerance=0.01)
+    assert values["R002"] == ResistanceValue(magnitude=0.02, unit="Ω", tolerance=0.01)
+
+
+def test_net_classifier():
+    ir = _sample_ir()
+    result = run_enrichers(ir, [NetClassifier()])
+    types = {n.id: n.type for n in result.ir.nets}
+    assert types["PGND"] == NetType.GND
+    assert types["VBUS"] == NetType.POWER
+    assert types["CC2"] == NetType.SIGNAL
+    assert types["Mystery"] == NetType.UNKNOWN
+
+
+def test_topology_recognizer_cc_pull_down():
+    ir = _sample_ir()
+    result = run_enrichers(ir, [NetClassifier(), TopologyRecognizer()])
+    block_ids = {b.id for b in result.ir.blocks}
+    assert "type-c-cc-pull-down-r70" in block_ids
+    block = next(b for b in result.ir.blocks if b.id == "type-c-cc-pull-down-r70")
+    assert block.role == BlockRole.PD_CONTROLLER
+    assert "R70" in block.component_ids
+    assert "R71" in block.component_ids
+    assert "confidence=medium" in block.description
+
+
+def test_enricher_dependency_missing():
+    ir = _sample_ir()
+    # TopologyRecognizer requires NetClassifier; running it alone should warn.
+    recognizer = TopologyRecognizer()
+    recognizer.requires = ["NetClassifier"]
+    result = run_enrichers(ir, [recognizer])
+    assert any("ENRICH_DEPENDENCY_MISSING" in w for w in result.warnings)
+
+
+def test_enricher_skips_when_can_enrich_false():
+    ir = _sample_ir()
+    nets = [Net(id=n.id, name=n.name, type=NetType.SIGNAL) for n in ir.nets]
+    ir = CircuitIR(
+        meta=ir.meta,
+        components=ir.components,
+        nets=nets,
+        connections=ir.connections,
+    )
+    result = run_enrichers(ir, [NetClassifier()])
+    assert any("skipped (canEnrich=false)" in w for w in result.warnings)
+
+
+def test_enricher_pipeline_on_t268():
+    fixture = FIXTURE_DIR / "FX-T268-V6-10米-5065.NET"
+    if not fixture.exists():
+        pytest.skip(f"Fixture not found: {fixture}")
+
+    ir = ProtelNetParser().parse(ParserInput(file_path=str(fixture)))
+    result = run_enrichers(ir, [ValueNormalizer(), NetClassifier(), TopologyRecognizer()])
+
+    # Spot-check normalized values.
+    r70 = next((c for c in result.ir.components if c.id == "R70"), None)
+    assert r70 is not None
+    assert r70.value is not None
+    assert r70.value.kind == "resistance"
+
+    # Spot-check net classification.
+    pgnd = next((n for n in result.ir.nets if n.name == "PGND"), None)
+    assert pgnd is not None
+    assert pgnd.type == NetType.GND
+    power = next((n for n in result.ir.nets if n.name == "USB_5V"), None)
+    assert power is not None
+    assert power.type == NetType.POWER
+    cc2 = next((n for n in result.ir.nets if n.name == "CC2"), None)
+    assert cc2 is not None
+    assert cc2.type == NetType.SIGNAL
+
+    # Topology recognizer should create CC pull-down blocks.
+    block_ids = {b.id for b in result.ir.blocks}
+    assert "type-c-cc-pull-down-r1" in block_ids
+    assert "type-c-cc-pull-down-r21" in block_ids
+
+    # Each block should carry confidence and score evidence.
+    for b in result.ir.blocks:
+        assert "confidence=" in b.description
+        assert "score=" in b.description
+
+    # Pipeline should not produce dependency warnings.
+    assert not any("ENRICH_DEPENDENCY_MISSING" in w for w in result.warnings)

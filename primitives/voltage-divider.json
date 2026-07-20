@@ -1,0 +1,65 @@
+{
+  "$schema": "./schema.json",
+  "id": "voltage-divider",
+  "name": "电压分压器",
+  "description": "两电阻串联构成的分压网络：上电阻连接输入与输出，下电阻连接输出与地。",
+  "role": "power",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "vin",
+      "type": "net",
+      "name_pattern": "^(VIN|VCC|VDD|VBUS|VBAT|VSYS|\\+?\\d+\\.?\\d*V|PWR).*",
+      "required": true
+    },
+    {
+      "id": "vout",
+      "type": "net",
+      "name_pattern": "^(VOUT|VO|VFB|FB|VSENSE|VREF|VDIV|ADC|VDET|VTH).*",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "R_top",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "vin"},
+        {"number": "2", "net": "vout"}
+      ]
+    },
+    {
+      "id": "R_bottom",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "vout"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 2,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.35,
+      "naming": 0.25,
+      "parametric": 0.20,
+      "type": 0.20
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.50,
+      "low": 0.0
+    }
+  }
+}

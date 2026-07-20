@@ -1,0 +1,44 @@
+[project]
+name = "circuit-graph"
+version = "0.1.0"
+description = "Python circuit understanding platform with CircuitOps LPG export"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "networkx>=3.0",
+    "click>=8.0",
+    "jlc2kicadlib>=1.2.3",
+    "python-dotenv>=1.2.2",
+    "numpy>=1.24",
+    "sexpdata>=1.0",  # circuit_graph.erc.extractor requires it at module load
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5.0",
+]
+
+[project.scripts]
+cg = "circuit_graph.cli:main"
+pin2json = "circuit_graph.knowledge.chip_resolver:_parse_cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["circuit_graph"]

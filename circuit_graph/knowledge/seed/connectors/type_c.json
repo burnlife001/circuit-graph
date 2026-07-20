@@ -1,0 +1,22 @@
+{
+  "connector_type": "TYPE_C_16PIN",
+  "description": "USB Type-C receptacle, 16-pin (14 signal + 2 mounting tabs)",
+  "package": "TYPE-C",
+  "pin_count": 14,
+  "pins": [
+    {"number": "1", "name": "GND",     "pin_type": "ground"},
+    {"number": "2", "name": "VBUS",    "pin_type": "power_in"},
+    {"number": "4", "name": "VBUS",    "pin_type": "power_in"},
+    {"number": "5", "name": "CC1",     "pin_type": "comm"},
+    {"number": "6", "name": "DP1",     "pin_type": "comm"},
+    {"number": "7", "name": "DN1",     "pin_type": "comm"},
+    {"number": "8", "name": "SBU1",    "pin_type": "comm"},
+    {"number": "10", "name": "SBU2",   "pin_type": "comm"},
+    {"number": "11", "name": "DN2",    "pin_type": "comm"},
+    {"number": "12", "name": "DP2",    "pin_type": "comm"},
+    {"number": "13", "name": "VBUS",   "pin_type": "power_in"},
+    {"number": "14", "name": "VBUS",   "pin_type": "power_in"},
+    {"number": "15", "name": "CC2",    "pin_type": "comm"},
+    {"number": "16", "name": "GND",    "pin_type": "ground"}
+  ]
+}

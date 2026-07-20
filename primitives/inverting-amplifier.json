@@ -1,0 +1,95 @@
+{
+  "$schema": "./schema.json",
+  "id": "inverting-amplifier",
+  "name": "反向比例放大器",
+  "description": "运放反向比例放大：输入信号经Rin接入反相端(-)，反馈电阻Rf跨接输出与反相端，同相端(+)接地，增益=-Rf/Rin。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "vcc",
+      "type": "net",
+      "name_pattern": "^(VCC|VDD|V\\+?|VPOS|AVCC|AVDD|VCCA|\\+5V|\\+3V3|\\+12V|PVCC|VANA)$",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS|VEE|V\\-?|AVSS|VNEG)$",
+      "required": true
+    },
+    {
+      "id": "in_p",
+      "type": "net",
+      "name_pattern": "^(IN\\+|VIN\\+|POS|VP|NON_INV|NINV|\\+IN|PLUS|AINP|VREF|V_REF|VSET).*",
+      "required": true
+    },
+    {
+      "id": "in_n",
+      "type": "net",
+      "name_pattern": "^(IN\\-|VIN\\-|NEG|VN|INV|\\-IN|MINUS|AINN|FB|VFB|NFB).*",
+      "required": true
+    },
+    {
+      "id": "out",
+      "type": "net",
+      "name_pattern": "^(V?OUT|VO|AMP_OUT|OA_OUT|OP_OUT|VOUT|VOUT1|AOUT).*",
+      "required": true
+    },
+    {
+      "id": "sig_in",
+      "type": "net",
+      "name_pattern": "^(SIG|SIGNAL|VSIG|VIN|INPUT|ANALOG|ADC|DAC|AUDIO|SENSOR|V_SIG).*",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "opamp",
+      "type": "IC",
+      "required": true,
+      "pins": [
+        {"number": "V+", "net": "vcc"},
+        {"number": "V-", "net": "gnd"},
+        {"number": "+", "net": "in_p"},
+        {"number": "-", "net": "in_n"},
+        {"number": "OUT", "net": "out"}
+      ]
+    },
+    {
+      "id": "Rin",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "sig_in"},
+        {"number": "2", "net": "in_n"}
+      ]
+    },
+    {
+      "id": "Rf",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "out"},
+        {"number": "2", "net": "in_n"}
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 3,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.35,
+      "naming": 0.25,
+      "parametric": 0.15,
+      "type": 0.25
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.55,
+      "low": 0.0
+    }
+  }
+}

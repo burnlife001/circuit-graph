@@ -1,0 +1,10 @@
+{
+  "connector_type": "CON_2P_1.2MM",
+  "description": "2-pin board-to-board connector, 1.2 mm pitch (typical battery or sensor)",
+  "package": "CON2P-1.254",
+  "pin_count": 2,
+  "pins": [
+    {"number": "1", "name": "VBUS",   "pin_type": "power_in"},
+    {"number": "2", "name": "GND",    "pin_type": "ground"}
+  ]
+}

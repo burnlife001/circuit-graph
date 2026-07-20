@@ -1,0 +1,59 @@
+{
+  "$schema": "./schema.json",
+  "id": "parallel-termination",
+  "name": "并联终端",
+  "description": "多个电阻并联于信号线与地之间，常见于终端匹配、下拉阵列或 ESD 保护。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "sig",
+      "type": "net",
+      "name_pattern": "^.*(?:SIGNAL|IO|GPIO|DATA|CLK|RST|INT|TX|RX|SDA|SCL|MOSI|MISO|SCK|CS).*",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "R1",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "sig"},
+        {"number": "2", "net": "gnd"}
+      ]
+    },
+    {
+      "id": "R2",
+      "type": "Resistor",
+      "required": false,
+      "pins": [
+        {"number": "1", "net": "sig"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": false
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.25,
+      "naming": 0.30,
+      "parametric": 0.20,
+      "type": 0.25
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.55,
+      "low": 0.0
+    }
+  }
+}

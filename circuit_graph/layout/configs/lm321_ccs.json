@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "name": "lm321_ccs_main",
+    "unit_type": "current_source",
+    "version": "1.0"
+  },
+  "grid": {
+    "size_mm": 2.54,
+    "char_unit_mm": 1.27
+  },
+  "placement": {
+    "input_x_mm": 38.1,
+    "output_x_mm": 152.4,
+    "column_step_mm": 25.4,
+    "row_step_mm": 12.7,
+    "direction": "left_to_right"
+  },
+  "io": {
+    "inputs": ["N_REF", "N_SENSE"],
+    "outputs": ["N_GATE_OUT"],
+    "power_top": ["N_VCC"],
+    "power_bottom": ["GND"]
+  },
+  "symbols": {
+    "Device:R": {
+      "rotation": 90,
+      "pin_directions": {"1": "up", "2": "down"}
+    },
+    "Device:C": {
+      "rotation": 90,
+      "pin_directions": {"1": "up", "2": "down"}
+    },
+    "Transistor_BJT:BC547": {
+      "rotation": 0,
+      "pin_directions": {"1": "up", "2": "left", "3": "down"}
+    },
+    "Amplifier_Operational:LM321": {
+      "rotation": 0,
+      "pin_directions": {
+        "1": "left",
+        "2": "down",
+        "3": "left",
+        "4": "right",
+        "5": "up"
+      }
+    }
+  },
+  "labels": {
+    "reference": {"offset_mm": [0, -2.54], "font_height_mm": 1.27},
+    "value": {"offset_mm": [0, 2.54], "font_height_mm": 1.27}
+  }
+}
