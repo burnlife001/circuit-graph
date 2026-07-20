@@ -65,8 +65,10 @@ def neighbors_of(graph: CircuitGraph, node_id: str) -> list[NeighborResult]:
         return []
 
     # Build a quick lookup from neighbor id to connecting edges.
+    # Use the indexed _get_edges(node_id, "both") instead of scanning all
+    # graph edges — cost is O(deg(node)) rather than O(E).
     edges_by_neighbor: dict[str, list[GraphEdge]] = {}
-    for edge in graph.edges():
+    for edge in graph._get_edges(node_id, "both", None):
         if edge.source == node_id:
             edges_by_neighbor.setdefault(edge.target, []).append(edge)
         elif edge.target == node_id:
