@@ -279,11 +279,27 @@ class CircuitGraph:
             node = self._node_map.get(node_id)
             if node is None:
                 continue
+            is_start = node_id == start_id
             if node_kinds and node.kind not in node_kinds:
-                if node_id == start_id and not include_start:
+                if is_start and not include_start:
                     continue
-                if node_id != start_id:
+                if not is_start:
                     continue
+            if options.net_types is not None and node.kind == NodeKind.NET:
+                net_type = getattr(node.data, "type", None)
+                if net_type not in options.net_types:
+                    if is_start and include_start:
+                        # Preserve the anchor node even if filtered
+                        pass
+                    else:
+                        continue
+            if options.device_kinds is not None and node.kind == NodeKind.COMPONENT:
+                comp_kind = getattr(node.data, "device_kind", None)
+                if comp_kind not in options.device_kinds:
+                    if is_start and include_start:
+                        pass
+                    else:
+                        continue
 
             result_nodes[node_id] = node
 

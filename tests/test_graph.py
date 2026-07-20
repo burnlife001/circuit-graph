@@ -10,6 +10,7 @@ from circuit_graph.ir import (
     DeviceKind,
     EdgeKind,
     Net,
+    NetType,
     NodeKind,
     Pin,
     Provenance,
@@ -122,6 +123,73 @@ def test_traverse_with_node_filter():
     subgraph = graph.traverse_bfs("R70", TraversalOptions(node_kinds=[NodeKind.NET]))
     assert "R70" in subgraph.nodes
     assert all(n.kind == NodeKind.NET for n in subgraph.nodes.values() if n.id != "R70")
+
+
+def _typed_ir() -> CircuitIR:
+    """IR with mixed net types and device kinds for predicate tests."""
+    r70 = Component(
+        id="R70",
+        device_kind=DeviceKind.RESISTOR,
+        pins=[Pin(id="R70.1", number="1"), Pin(id="R70.2", number="2")],
+    )
+    c1 = Component(
+        id="C1",
+        device_kind=DeviceKind.CAPACITOR,
+        pins=[Pin(id="C1.1", number="1"), Pin(id="C1.2", number="2")],
+    )
+    vbus = Net(id="VBUS", name="VBUS", type=NetType.POWER)
+    gnd = Net(id="GND", name="GND", type=NetType.GND)
+    sig = Net(id="SIG", name="SIG", type=NetType.SIGNAL)
+    return CircuitIR(
+        meta={"source": "test", "format": "manual"},
+        components=[r70, c1],
+        nets=[vbus, gnd, sig],
+        connections=[
+            Connection(pin_id="R70.1", net_id="VBUS", provenance=Provenance.NETLIST),
+            Connection(pin_id="R70.2", net_id="SIG", provenance=Provenance.NETLIST),
+            Connection(pin_id="C1.1", net_id="VBUS", provenance=Provenance.NETLIST),
+            Connection(pin_id="C1.2", net_id="GND", provenance=Provenance.NETLIST),
+        ],
+    )
+
+
+def test_traverse_with_net_type_filter():
+    graph = create_graph()
+    graph.load(_typed_ir())
+    # Restrict to POWER nets only — SIG must be excluded
+    subgraph = graph.traverse_bfs(
+        "R70",
+        TraversalOptions(net_types=[NetType.POWER]),
+    )
+    # R70 is the start node, so it's always included
+    assert "R70" in subgraph.nodes
+    net_nodes = {
+        n.id: n.data.type for n in subgraph.nodes.values() if n.kind == NodeKind.NET
+    }
+    assert "SIG" not in net_nodes
+    # Whatever non-start nets made it in must be POWER
+    for nid, ntype in net_nodes.items():
+        assert ntype == NetType.POWER, f"{nid} had type {ntype}"
+
+
+def test_traverse_with_device_kind_filter():
+    graph = create_graph()
+    graph.load(_typed_ir())
+    # Restrict to RESISTOR-only expansion
+    subgraph = graph.traverse_bfs(
+        "R70",
+        TraversalOptions(device_kinds=[DeviceKind.RESISTOR]),
+    )
+    assert "R70" in subgraph.nodes
+    comp_nodes = {
+        n.id: n.data.device_kind
+        for n in subgraph.nodes.values()
+        if n.kind == NodeKind.COMPONENT
+    }
+    # C1 (CAPACITOR) must be excluded
+    assert "C1" not in comp_nodes
+    for cid, kind in comp_nodes.items():
+        assert kind == DeviceKind.RESISTOR, f"{cid} had kind {kind}"
 
 
 def test_to_dot():

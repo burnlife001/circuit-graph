@@ -252,6 +252,8 @@ class TraversalOptions:
     direction: Literal["outgoing", "incoming", "both"] = "both"
     edge_kinds: list[EdgeKind] | None = None
     node_kinds: list[NodeKind] | None = None
+    net_types: list[NetType] | None = None
+    device_kinds: list[DeviceKind] | None = None
     max_depth: int | None = None
     limit: int | None = None
     include_start: bool = True
