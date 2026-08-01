@@ -377,6 +377,21 @@ cd output
 .\pretty.ps1
 ```
 
+## 全局 SKILL（供其它项目调用）
+
+本项目随附一个全局 Claude Skill，路径 `~/.claude/skills/circuit-graph-analysis/SKILL.md`，
+供**其它项目**的 agent 在处理电路相关问题时自动发现并选用 `cg` 命令：
+
+- **触发词**：`R100 是什么` / `电路分析` / `netlist` / `.NET file` / `kicad_sch` / `ERC` / `稳压器链` / `I2C 总线` / `chip pinout` / `元件数据库` 等
+- **典型工作流**（"R100 是什么"）：
+  ```powershell
+  cg view R100 E:\__electric\__workspace\stacking\circuit-graph\fixtures\protel\FX-T268-V6-10米-5065.NET --pretty
+  ```
+  需要供电上下文加 `--with-power`，需要通信总线上下文加 `--with-comm`，同时需要两者加 `--with-all`。
+- **路由总览**（决策树 + 反模式 + 默认 fixture）见 SKILL.md 自身。
+
+外部项目只需保证 `cg.exe` 在 PATH（`uv pip install -e .` 即可），agent 会自动按 SKILL 路由到正确子命令，无需手抄 README。
+
 ## 测试
 
 ```bash
