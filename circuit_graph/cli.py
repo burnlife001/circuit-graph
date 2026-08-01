@@ -1089,9 +1089,10 @@ def erc_check(
 # ---------------------------------------------------------------------------
 
 # Skill ships as a data directory under the Python package. The directory name
-# contains a hyphen (invalid Python identifier), so we resolve via __file__
-# rather than importlib.resources.
-_BUNDLED_SKILL_DIR = Path(__file__).resolve().parent / "skills" / "circuit-graph-analysis"
+# is the skill name registered in SKILL.md frontmatter; resolve via __file__
+# rather than importlib.resources because the package layout does not match a
+# Python-importable name.
+_BUNDLED_SKILL_DIR = Path(__file__).resolve().parent / "skills" / "cg"
 
 
 @main.command(name="init")
@@ -1104,7 +1105,7 @@ _BUNDLED_SKILL_DIR = Path(__file__).resolve().parent / "skills" / "circuit-graph
 @click.option(
     "--force",
     is_flag=True,
-    help="Overwrite existing skill files at <target>/.claude/skills/circuit-graph-analysis.",
+    help="Overwrite existing skill files at <target>/.claude/skills/cg.",
 )
 @click.option(
     "--dry-run",
@@ -1112,14 +1113,14 @@ _BUNDLED_SKILL_DIR = Path(__file__).resolve().parent / "skills" / "circuit-graph
     help="Print what would be copied without writing any files.",
 )
 def init_cmd(target: Path, force: bool, dry_run: bool) -> None:
-    """Copy the circuit-graph-analysis skill into <target>/.claude/skills/.
+    """Copy the cg skill into <target>/.claude/skills/.
 
     Run this in OTHER projects to bootstrap them with circuit-graph analysis
     capabilities. The skill ships inside the circuit-graph Python package, so
     no network access is required.
 
     TARGET defaults to the current directory. The skill is installed at
-    <TARGET>/.claude/skills/circuit-graph-analysis/.
+    <TARGET>/.claude/skills/cg/.
     """
     skill_md = _BUNDLED_SKILL_DIR / "SKILL.md"
     if not skill_md.is_file():
@@ -1139,7 +1140,7 @@ def init_cmd(target: Path, force: bool, dry_run: bool) -> None:
         sys.exit(2)
 
     target_root = target.resolve()
-    target_dir = target_root / ".claude" / "skills" / "circuit-graph-analysis"
+    target_dir = target_root / ".claude" / "skills" / "cg"
 
     files = sorted(p for p in _BUNDLED_SKILL_DIR.rglob("*") if p.is_file())
 

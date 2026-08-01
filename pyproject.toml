@@ -44,4 +44,4 @@ select = ["E", "F", "I", "N", "W"]
 packages = ["circuit_graph"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"circuit_graph/skills/circuit-graph-analysis/SKILL.md" = "circuit_graph/skills/circuit-graph-analysis/SKILL.md"
+"circuit_graph/skills/cg/SKILL.md" = "circuit_graph/skills/cg/SKILL.md"

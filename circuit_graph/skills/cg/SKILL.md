@@ -1,9 +1,9 @@
 ---
-name: circuit-graph-analysis
+name: cg
 description: Use when analyzing electronic circuits — Protel .NET netlists, KiCad .kicad_sch, ERC checks, component knowledge base, power/communication context, or chip pinouts. Triggers on "R100 是什么", "电路分析", "netlist", ".NET file", "kicad_sch", "ERC", "稳压器链", "I2C 总线", "chip pinout", "元件数据库".
 ---
 
-# circuit-graph-analysis
+# cg (circuit-graph analysis)
 
 ## Overview
 

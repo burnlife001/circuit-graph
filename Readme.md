@@ -380,8 +380,8 @@ cd output
 ## 全局 SKILL（供其它项目调用）
 
 本项目随附一个 Claude Skill，**随 Python 包一起分发**，路径
-`circuit_graph/skills/circuit-graph-analysis/SKILL.md`（已通过 `pyproject.toml`
-的 `force-include` 打包进 wheel）。
+`circuit_graph/skills/cg/SKILL.md`（已通过 `pyproject.toml`
+的 `force-include` 打包进 wheel）。Skill 注册名（SKILL.md frontmatter）为 `cg`。
 
 供**其它项目**的 agent 在处理电路相关问题时自动发现并选用 `cg` 命令：
 
@@ -395,7 +395,7 @@ cd output
 
 ### 在其它项目中启用该 Skill
 
-在目标项目目录里执行 `cg init`，把 skill 复制到 `<项目根>/.claude/skills/circuit-graph-analysis/`：
+在目标项目目录里执行 `cg init`，把 skill 复制到 `<项目根>/.claude/skills/cg/`：
 
 ```powershell
 # 在目标项目目录运行
@@ -470,7 +470,7 @@ CLI 命令速查：
 
 | 命令 | 说明 |
 |------|------|
-| `cg init [TARGET] [--force] [--dry-run]` | 把 circuit-graph-analysis skill 复制到 `<TARGET>/.claude/skills/` |
+| `cg init [TARGET] [--force] [--dry-run]` | 把 cg skill 复制到 `<TARGET>/.claude/skills/cg/` |
 | `cg export graph <file>` | 生成 cg-graph JSON（`output/circuit.graph.json`） |
 | `cg export graphml <file>` | 生成 yEd GraphML（`output/circuit.graphml`） |
 | `cg view <id> <file> [--hops N] [--pretty]` | 元件 ego-subgraph（默认 2 hops） |

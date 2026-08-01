@@ -30,7 +30,7 @@ def test_bundled_skill_exists() -> None:
 
 def test_init_installs_skill_into_target(runner: CliRunner, tmp_path: Path) -> None:
     """Default behaviour on a fresh target: copy SKILL.md into
-    <target>/.claude/skills/circuit-graph-analysis/."""
+    <target>/.claude/skills/cg/."""
     result = runner.invoke(main, ["init", str(tmp_path)])
     assert result.exit_code == 0, result.stderr or result.stdout
 
@@ -38,7 +38,7 @@ def test_init_installs_skill_into_target(runner: CliRunner, tmp_path: Path) -> N
     assert payload["status"] == "installed"
     assert payload["file_count"] >= 1
 
-    installed = tmp_path / ".claude" / "skills" / "circuit-graph-analysis"
+    installed = tmp_path / ".claude" / "skills" / "cg"
     assert installed.is_dir()
     assert (installed / "SKILL.md").is_file()
     # Byte-identical to source.
@@ -52,7 +52,7 @@ def test_init_defaults_to_cwd_when_target_omitted(
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(main, ["init"])
     assert result.exit_code == 0, result.stderr or result.stdout
-    assert (tmp_path / ".claude" / "skills" / "circuit-graph-analysis" / "SKILL.md").is_file()
+    assert (tmp_path / ".claude" / "skills" / "cg" / "SKILL.md").is_file()
 
 
 def test_init_refuses_to_overwrite_without_force(
@@ -60,7 +60,7 @@ def test_init_refuses_to_overwrite_without_force(
 ) -> None:
     """Re-running on an existing install should refuse (exit 0) without --force."""
     runner.invoke(main, ["init", str(tmp_path)])
-    assert (tmp_path / ".claude" / "skills" / "circuit-graph-analysis" / "SKILL.md").is_file()
+    assert (tmp_path / ".claude" / "skills" / "cg" / "SKILL.md").is_file()
 
     result = runner.invoke(main, ["init", str(tmp_path)])
     assert result.exit_code == 0
@@ -74,7 +74,7 @@ def test_init_force_overwrites_existing(runner: CliRunner, tmp_path: Path) -> No
     runner.invoke(main, ["init", str(tmp_path)])
 
     # Tamper with the existing file to verify --force actually re-copies.
-    target_md = tmp_path / ".claude" / "skills" / "circuit-graph-analysis" / "SKILL.md"
+    target_md = tmp_path / ".claude" / "skills" / "cg" / "SKILL.md"
     target_md.write_text("tampered", encoding="utf-8")
 
     result = runner.invoke(main, ["init", str(tmp_path), "--force"])
