@@ -379,7 +379,10 @@ cd output
 
 ## 全局 SKILL（供其它项目调用）
 
-本项目随附一个全局 Claude Skill，路径 `~/.claude/skills/circuit-graph-analysis/SKILL.md`，
+本项目随附一个 Claude Skill，**随 Python 包一起分发**，路径
+`circuit_graph/skills/circuit-graph-analysis/SKILL.md`（已通过 `pyproject.toml`
+的 `force-include` 打包进 wheel）。
+
 供**其它项目**的 agent 在处理电路相关问题时自动发现并选用 `cg` 命令：
 
 - **触发词**：`R100 是什么` / `电路分析` / `netlist` / `.NET file` / `kicad_sch` / `ERC` / `稳压器链` / `I2C 总线` / `chip pinout` / `元件数据库` 等
@@ -390,7 +393,23 @@ cd output
   需要供电上下文加 `--with-power`，需要通信总线上下文加 `--with-comm`，同时需要两者加 `--with-all`。
 - **路由总览**（决策树 + 反模式 + 默认 fixture）见 SKILL.md 自身。
 
-外部项目只需保证 `cg.exe` 在 PATH（`uv pip install -e .` 即可），agent 会自动按 SKILL 路由到正确子命令，无需手抄 README。
+### 在其它项目中启用该 Skill
+
+在目标项目目录里执行 `cg init`，把 skill 复制到 `<项目根>/.claude/skills/circuit-graph-analysis/`：
+
+```powershell
+# 在目标项目目录运行
+cd <other-project>
+cg init                     # 默认装到当前目录的 .claude/skills/
+cg init <other-project>     # 或显式指定
+cg init <other-project> --force     # 已存在时强制覆盖
+cg init <other-project> --dry-run   # 只预览，不写盘
+```
+
+退出码：成功 `0`，目标已有未传 `--force` 时 `0`（拒写并提示），源缺失时 `2`。
+
+外部项目只需保证 `cg.exe` 在 PATH（`uv pip install -e .` 即可），
+agent 会自动按 SKILL 路由到正确子命令，无需手抄 README。
 
 ## 测试
 
@@ -451,6 +470,7 @@ CLI 命令速查：
 
 | 命令 | 说明 |
 |------|------|
+| `cg init [TARGET] [--force] [--dry-run]` | 把 circuit-graph-analysis skill 复制到 `<TARGET>/.claude/skills/` |
 | `cg export graph <file>` | 生成 cg-graph JSON（`output/circuit.graph.json`） |
 | `cg export graphml <file>` | 生成 yEd GraphML（`output/circuit.graphml`） |
 | `cg view <id> <file> [--hops N] [--pretty]` | 元件 ego-subgraph（默认 2 hops） |

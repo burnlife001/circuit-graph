@@ -11,6 +11,7 @@ available programmatically.
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -1081,6 +1082,111 @@ def erc_check(
             click.echo("")
 
     sys.exit(1 if report.error_count > 0 else 0)
+
+
+# ---------------------------------------------------------------------------
+# cg init — bootstrap another project with the circuit-graph-analysis skill
+# ---------------------------------------------------------------------------
+
+# Skill ships as a data directory under the Python package. The directory name
+# contains a hyphen (invalid Python identifier), so we resolve via __file__
+# rather than importlib.resources.
+_BUNDLED_SKILL_DIR = Path(__file__).resolve().parent / "skills" / "circuit-graph-analysis"
+
+
+@main.command(name="init")
+@click.argument(
+    "target",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=".",
+    metavar="[TARGET]",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite existing skill files at <target>/.claude/skills/circuit-graph-analysis.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Print what would be copied without writing any files.",
+)
+def init_cmd(target: Path, force: bool, dry_run: bool) -> None:
+    """Copy the circuit-graph-analysis skill into <target>/.claude/skills/.
+
+    Run this in OTHER projects to bootstrap them with circuit-graph analysis
+    capabilities. The skill ships inside the circuit-graph Python package, so
+    no network access is required.
+
+    TARGET defaults to the current directory. The skill is installed at
+    <TARGET>/.claude/skills/circuit-graph-analysis/.
+    """
+    skill_md = _BUNDLED_SKILL_DIR / "SKILL.md"
+    if not skill_md.is_file():
+        click.echo(
+            json.dumps(
+                {
+                    "error": (
+                        f"bundled skill not found at {_BUNDLED_SKILL_DIR}. "
+                        "Reinstall circuit-graph with `uv pip install -e .` "
+                        "to refresh package data."
+                    )
+                },
+                ensure_ascii=False,
+            ),
+            err=True,
+        )
+        sys.exit(2)
+
+    target_root = target.resolve()
+    target_dir = target_root / ".claude" / "skills" / "circuit-graph-analysis"
+
+    files = sorted(p for p in _BUNDLED_SKILL_DIR.rglob("*") if p.is_file())
+
+    if dry_run:
+        plan = {
+            "dry_run": True,
+            "source": str(_BUNDLED_SKILL_DIR),
+            "target": str(target_dir),
+            "would_overwrite": target_dir.exists(),
+            "file_count": len(files),
+            "files": [str(f.relative_to(_BUNDLED_SKILL_DIR)) for f in files],
+        }
+        click.echo(json.dumps(plan, indent=2, ensure_ascii=False))
+        return
+
+    if target_dir.exists() and not force:
+        click.echo(
+            json.dumps(
+                {
+                    "status": "already_installed",
+                    "path": str(target_dir),
+                    "hint": "pass --force to overwrite",
+                },
+                ensure_ascii=False,
+            )
+        )
+        sys.exit(0)
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for src in files:
+        rel = src.relative_to(_BUNDLED_SKILL_DIR)
+        dest = target_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        copied += 1
+
+    click.echo(
+        json.dumps(
+            {
+                "status": "installed",
+                "path": str(target_dir),
+                "file_count": copied,
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 if __name__ == "__main__":
