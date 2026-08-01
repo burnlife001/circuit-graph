@@ -17,13 +17,6 @@
 - datasheet目录:.env文件中的DATASHEET_DIR
 - 主项目仓库不混入调研性克隆或临时构建
 
-## 实施工作流
-- 当前处于 OpenSpec 多 change 并行开发阶段。
-- 新会话从 `openspec/changes/` 的 active changes 继续，按 OpenSpec 流程创建、归档。
-- Active changes:
-  - `2026-07-01-knowledge-base-redesign` — 元件型号知识库 SQLite 迁移与收尾
-- **归档 change 只用 `openspec archive <name>`**：它会把 delta specs 合并进 `openspec/specs/`。🚫 不要手动 `git mv` 或用 `--skip-specs` 归档（除非确无 delta specs），否则主 specs 不会更新、`openspec/specs/` 形同虚设。归档后用 `openspec validate --specs --strict` 确认。
-- 每完成一个小任务都 `修Readme.md + git commit + git push` 
-
 ## 用户测试约定(默认用"fixtures\protel\FX-T268-V6-10米-5065.NET"进行分析)
 - 用户输入:测试：R100是干什么的,就使用cg view <id> <file> [--hops N] [--pretty]`
+- 每完成一个小任务都 `修Readme.md + git commit + git push`
