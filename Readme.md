@@ -379,9 +379,23 @@ cd output
 
 ## 全局 SKILL（供其它项目调用）
 
-本项目随附一个 Claude Skill，**随 Python 包一起分发**，路径
-`circuit_graph/skills/cg/SKILL.md`（已通过 `pyproject.toml`
-的 `force-include` 打包进 wheel）。Skill 注册名（SKILL.md frontmatter）为 `cg`。
+本项目随附 **11 个 Claude Skill**，**随 Python 包一起分发**，全部位于
+`circuit_graph/skills/<name>/SKILL.md`（已通过 `pyproject.toml` 的 `force-include`
+打包进 wheel）。`skills/SKILL.md`（eetool 路由）保留在仓库根目录，仅供本仓库内部使用，不外发。
+
+| Skill | 用途 |
+|---|---|
+| `cg` | 电路分析路由器（cg view / export / erc / kb / sim） |
+| `atk-logic-capture` | ATK 逻辑分析仪波形捕获 + 协议解码 |
+| `hardware-diff-by-codes` | 两份固件判断是否同一 PCB |
+| `keil-batch-gen` | Keil 编译/烧录脚本生成 |
+| `keil-init` | Keil 项目初始化（CLAUDE.md + 禁区 + 钩子） |
+| `mm32-armgcc-build` | MM32 ARM GCC 编译脚本 |
+| `netlist-signalmap` | Protel/DXP 网表 → 引脚信号映射 |
+| `pdf-pin-extract` | 数据手册 PDF → 引脚 JSON |
+| `pin2json` | KiCad `.kicad_sym` / LCSC id → 引脚 JSON |
+| `schmd-from-netlist` | 网表 → 原理图信号映射 |
+| `serial-monitor` | pyserial CH340 串口监听 |
 
 供**其它项目**的 agent 在处理电路相关问题时自动发现并选用 `cg` 命令：
 
@@ -391,22 +405,24 @@ cd output
   cg view R100 E:\__electric\__workspace\stacking\circuit-graph\fixtures\protel\FX-T268-V6-10米-5065.NET --pretty
   ```
   需要供电上下文加 `--with-power`，需要通信总线上下文加 `--with-comm`，同时需要两者加 `--with-all`。
-- **路由总览**（决策树 + 反模式 + 默认 fixture）见 SKILL.md 自身。
+- **路由总览**（决策树 + 反模式 + 默认 fixture）见 `cg` skill 的 SKILL.md 自身。
 
-### 在其它项目中启用该 Skill
+### 在其它项目中启用全部 Skill
 
-在目标项目目录里执行 `cg init`，把 skill 复制到 `<项目根>/.claude/skills/cg/`：
+在目标项目目录里执行 `cg init`，把 **所有** skill 复制到 `<项目根>/.claude/skills/<name>/`：
 
 ```powershell
 # 在目标项目目录运行
 cd <other-project>
 cg init                     # 默认装到当前目录的 .claude/skills/
-cg init <other-project>     # 或显式指定
-cg init <other-project> --force     # 已存在时强制覆盖
-cg init <other-project> --dry-run   # 只预览，不写盘
+cg init <other-project>     # 或显式指定目标
+cg init <other-project> --force     # 已存在时强制覆盖（覆盖全部 skill）
+cg init <other-project> --dry-run   # 只预览每个 skill 的安装计划，不写盘
 ```
 
-退出码：成功 `0`，目标已有未传 `--force` 时 `0`（拒写并提示），源缺失时 `2`。
+退出码：成功 `0`；至少一个 skill 复制失败时 `1`；源缺失时 `2`。
+
+输出是 JSON 数组，逐个 skill 报告 `installed` / `skipped` / `would_install` / `would_overwrite` / `failed` 状态 + 文件数。
 
 外部项目只需保证 `cg.exe` 在 PATH（`uv pip install -e .` 即可），
 agent 会自动按 SKILL 路由到正确子命令，无需手抄 README。
@@ -470,7 +486,7 @@ CLI 命令速查：
 
 | 命令 | 说明 |
 |------|------|
-| `cg init [TARGET] [--force] [--dry-run]` | 把 cg skill 复制到 `<TARGET>/.claude/skills/cg/` |
+| `cg init [TARGET] [--force] [--dry-run]` | 把全部 11 个 bundled skill 复制到 `<TARGET>/.claude/skills/<name>/` |
 | `cg export graph <file>` | 生成 cg-graph JSON（`output/circuit.graph.json`） |
 | `cg export graphml <file>` | 生成 yEd GraphML（`output/circuit.graphml`） |
 | `cg view <id> <file> [--hops N] [--pretty]` | 元件 ego-subgraph（默认 2 hops） |

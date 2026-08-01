@@ -1085,14 +1085,30 @@ def erc_check(
 
 
 # ---------------------------------------------------------------------------
-# cg init — bootstrap another project with the circuit-graph-analysis skill
+# cg init — bootstrap another project with all bundled skills
 # ---------------------------------------------------------------------------
 
-# Skill ships as a data directory under the Python package. The directory name
-# is the skill name registered in SKILL.md frontmatter; resolve via __file__
-# rather than importlib.resources because the package layout does not match a
-# Python-importable name.
-_BUNDLED_SKILL_DIR = Path(__file__).resolve().parent / "skills" / "cg"
+# Skills ship as data directories under the Python package. Each immediate
+# subdirectory that contains a SKILL.md is treated as one skill. Top-level
+# files (router docs, comparisons) are skipped.
+_BUNDLED_SKILLS_DIR = Path(__file__).resolve().parent / "skills"
+
+
+def _discover_bundled_skills() -> list[Path]:
+    """Return absolute paths of every bundled skill directory.
+
+    A skill is any immediate subdirectory of ``_BUNDLED_SKILLS_DIR`` that
+    contains a ``SKILL.md``. Returns them sorted by name for stable output.
+    """
+    if not _BUNDLED_SKILLS_DIR.is_dir():
+        return []
+    skills: list[Path] = []
+    for entry in sorted(_BUNDLED_SKILLS_DIR.iterdir()):
+        if not entry.is_dir():
+            continue
+        if (entry / "SKILL.md").is_file():
+            skills.append(entry)
+    return skills
 
 
 @main.command(name="init")
@@ -1105,7 +1121,7 @@ _BUNDLED_SKILL_DIR = Path(__file__).resolve().parent / "skills" / "cg"
 @click.option(
     "--force",
     is_flag=True,
-    help="Overwrite existing skill files at <target>/.claude/skills/cg.",
+    help="Overwrite existing skill files at <target>/.claude/skills/<name>/.",
 )
 @click.option(
     "--dry-run",
@@ -1113,22 +1129,24 @@ _BUNDLED_SKILL_DIR = Path(__file__).resolve().parent / "skills" / "cg"
     help="Print what would be copied without writing any files.",
 )
 def init_cmd(target: Path, force: bool, dry_run: bool) -> None:
-    """Copy the cg skill into <target>/.claude/skills/.
+    """Copy every bundled skill into <target>/.claude/skills/<name>/.
 
-    Run this in OTHER projects to bootstrap them with circuit-graph analysis
-    capabilities. The skill ships inside the circuit-graph Python package, so
-    no network access is required.
+    Run this in OTHER projects to bootstrap them with the full circuit-graph
+    skill set (cg circuit analysis, atk-logic-capture, keil-init, …). Skills
+    ship inside the circuit-graph Python package, so no network access is
+    required.
 
-    TARGET defaults to the current directory. The skill is installed at
-    <TARGET>/.claude/skills/cg/.
+    TARGET defaults to the current directory. Each skill is installed under
+    <TARGET>/.claude/skills/<skill-name>/. Already-installed skills are
+    skipped unless --force is passed.
     """
-    skill_md = _BUNDLED_SKILL_DIR / "SKILL.md"
-    if not skill_md.is_file():
+    skills = _discover_bundled_skills()
+    if not skills:
         click.echo(
             json.dumps(
                 {
                     "error": (
-                        f"bundled skill not found at {_BUNDLED_SKILL_DIR}. "
+                        f"no bundled skills found under {_BUNDLED_SKILLS_DIR}. "
                         "Reinstall circuit-graph with `uv pip install -e .` "
                         "to refresh package data."
                     )
@@ -1140,54 +1158,71 @@ def init_cmd(target: Path, force: bool, dry_run: bool) -> None:
         sys.exit(2)
 
     target_root = target.resolve()
-    target_dir = target_root / ".claude" / "skills" / "cg"
+    target_base = target_root / ".claude" / "skills"
 
-    files = sorted(p for p in _BUNDLED_SKILL_DIR.rglob("*") if p.is_file())
+    results: list[dict[str, object]] = []
+    installed = 0
+    skipped = 0
+    failed = 0
 
-    if dry_run:
-        plan = {
-            "dry_run": True,
-            "source": str(_BUNDLED_SKILL_DIR),
+    for skill_src in skills:
+        name = skill_src.name
+        target_dir = target_base / name
+        files = sorted(p for p in skill_src.rglob("*") if p.is_file())
+        exists = target_dir.exists()
+
+        entry: dict[str, object] = {
+            "name": name,
+            "source": str(skill_src),
             "target": str(target_dir),
-            "would_overwrite": target_dir.exists(),
             "file_count": len(files),
-            "files": [str(f.relative_to(_BUNDLED_SKILL_DIR)) for f in files],
+            "existed": exists,
         }
-        click.echo(json.dumps(plan, indent=2, ensure_ascii=False))
-        return
 
-    if target_dir.exists() and not force:
-        click.echo(
-            json.dumps(
-                {
-                    "status": "already_installed",
-                    "path": str(target_dir),
-                    "hint": "pass --force to overwrite",
-                },
-                ensure_ascii=False,
-            )
-        )
-        sys.exit(0)
+        if dry_run:
+            entry["status"] = "would_overwrite" if exists else "would_install"
+            results.append(entry)
+            continue
 
-    target_dir.mkdir(parents=True, exist_ok=True)
-    copied = 0
-    for src in files:
-        rel = src.relative_to(_BUNDLED_SKILL_DIR)
-        dest = target_dir / rel
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dest)
-        copied += 1
+        if exists and not force:
+            entry["status"] = "skipped"
+            skipped += 1
+            results.append(entry)
+            continue
 
-    click.echo(
-        json.dumps(
-            {
-                "status": "installed",
-                "path": str(target_dir),
-                "file_count": copied,
-            },
-            ensure_ascii=False,
-        )
-    )
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            copied = 0
+            for src in files:
+                rel = src.relative_to(skill_src)
+                dest = target_dir / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dest)
+                copied += 1
+            entry["status"] = "installed"
+            entry["copied"] = copied
+            installed += 1
+        except OSError as exc:  # noqa: BLE001
+            entry["status"] = "failed"
+            entry["error"] = str(exc)
+            failed += 1
+
+        results.append(entry)
+
+    summary = {
+        "status": "ok" if failed == 0 else "partial",
+        "target": str(target_base),
+        "installed": installed,
+        "skipped": skipped,
+        "failed": failed,
+        "dry_run": dry_run,
+        "skills": results,
+    }
+    click.echo(json.dumps(summary, indent=2, ensure_ascii=False))
+
+    # Exit non-zero if any skill failed to copy.
+    if failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
