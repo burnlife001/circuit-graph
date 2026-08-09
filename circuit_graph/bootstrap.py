@@ -158,3 +158,93 @@ def delegate(cmd: list[str], cwd: Path | None = None) -> str:
         "stderr": completed.stderr,
         "duration_s": duration,
     }, ensure_ascii=False)
+
+
+def init_orchestrator(
+    target: Path,
+    *,
+    skip_config: bool = False,
+    skip_kb: bool = False,
+    skip_skill: bool = False,
+    yes: bool = False,
+    force: bool = False,
+    dry_run: bool = False,
+) -> str:
+    """Top-level orchestrator. Returns a JSON InitReport string.
+
+    Flow: detect -> propose -> [confirm] -> write_config -> delegate kb init
+    -> delegate initskill. Honors skip_config/skip_kb/skip_skill, force,
+    yes, dry_run.
+    """
+    start = time.time()
+    target = target.resolve()
+    ctx_str = detect_project(target)
+    ctx = json.loads(ctx_str)
+    if ctx.get("status") == "failed":
+        return json.dumps({
+            "target": str(target),
+            "status": "failed",
+            "dry_run": dry_run,
+            "config": None,
+            "kb": None,
+            "skill": None,
+            "error": ctx["error"],
+            "duration_s": round(time.time() - start, 3),
+        }, ensure_ascii=False)
+
+    cfg_str = propose_config(ctx_str)
+
+    if not dry_run and not skip_config and not yes:
+        import click
+        if not click.confirm(f"Write proposed .cg.toml to {target}?", default=True):
+            return json.dumps({
+                "target": str(target),
+                "status": "aborted",
+                "dry_run": False,
+                "config": None,
+                "kb": None,
+                "skill": None,
+                "duration_s": round(time.time() - start, 3),
+            }, ensure_ascii=False)
+
+    config_report = None
+    if dry_run:
+        config_report = {"written": False, "path": None, "was_overwritten": False, "dry_run": True}
+    elif skip_config:
+        config_report = {"written": False, "path": None, "was_overwritten": False, "skipped": True}
+    else:
+        config_report = json.loads(write_config(cfg_str, target, force=force))
+
+    kb_report = None
+    skill_report = None
+    sub_statuses: list[str] = []
+
+    if not dry_run:
+        if skip_kb:
+            kb_report = {"status": "skipped"}
+        else:
+            kb_report = json.loads(delegate([sys.executable, "-m", "circuit_graph.cli", "kb", "init"], cwd=target))
+            sub_statuses.append(kb_report["status"])
+
+        if skip_skill:
+            skill_report = {"status": "skipped"}
+        else:
+            skill_report = json.loads(delegate([sys.executable, "-m", "circuit_graph.cli", "initskill", str(target)], cwd=target))
+            sub_statuses.append(skill_report["status"])
+
+    if dry_run:
+        overall = "dry_run"
+    elif any(s == "failed" for s in sub_statuses):
+        overall = "partial"
+    else:
+        overall = "ok"
+
+    return json.dumps({
+        "target": str(target),
+        "status": overall,
+        "dry_run": dry_run,
+        "config": config_report,
+        "kb": kb_report,
+        "skill": skill_report,
+        "duration_s": round(time.time() - start, 3),
+    }, ensure_ascii=False)

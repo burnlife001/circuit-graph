@@ -168,3 +168,62 @@ def test_delegate_initskill_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
     result = json.loads(out)
     assert result["exit_code"] == 0
     assert "initskill" in result["cmd"]
+
+
+@pytest.fixture
+def mock_delegate(monkeypatch: pytest.MonkeyPatch):
+    """Replace bootstrap.delegate with a recorder. Returns a list that
+    each fake invocation appends its cmd to, so tests can assert what
+    was called."""
+    calls: list[list[str]] = []
+    def fake(cmd, cwd=None):
+        calls.append(list(cmd))
+        return json.dumps({
+            "cmd": list(cmd),
+            "exit_code": 0,
+            "status": "ok",
+            "stdout": "{\"status\":\"ok\"}",
+            "stderr": "",
+            "duration_s": 0.0,
+        })
+    monkeypatch.setattr(bootstrap, "delegate", fake)
+    return calls
+
+
+def test_init_writes_cg_toml_default_path(tmp_path: Path, mock_delegate) -> None:
+    out = bootstrap.init_orchestrator(tmp_path, yes=True)
+    report = json.loads(out)
+    assert report["status"] == "ok"
+    assert report["config"]["written"] is True
+    assert (tmp_path / ".cg.toml").is_file()
+
+
+def test_init_runs_all_three_steps_by_default(tmp_path: Path, mock_delegate) -> None:
+    bootstrap.init_orchestrator(tmp_path, yes=True)
+    cmds_str = " ".join(" ".join(c) for c in mock_delegate)
+    assert "kb init" in cmds_str
+    assert "initskill" in cmds_str
+
+
+def test_init_skip_config_only_runs_kb_and_skill(tmp_path: Path, mock_delegate) -> None:
+    bootstrap.init_orchestrator(tmp_path, yes=True, skip_config=True)
+    assert not (tmp_path / ".cg.toml").exists()
+    cmds_str = " ".join(" ".join(c) for c in mock_delegate)
+    assert "kb init" in cmds_str
+    assert "initskill" in cmds_str
+
+
+def test_init_skip_kb_only_runs_config_and_skill(tmp_path: Path, mock_delegate) -> None:
+    bootstrap.init_orchestrator(tmp_path, yes=True, skip_kb=True)
+    assert (tmp_path / ".cg.toml").is_file()
+    cmds_str = " ".join(" ".join(c) for c in mock_delegate)
+    assert "kb init" not in cmds_str
+    assert "initskill" in cmds_str
+
+
+def test_init_skip_skill_only_runs_config_and_kb(tmp_path: Path, mock_delegate) -> None:
+    bootstrap.init_orchestrator(tmp_path, yes=True, skip_skill=True)
+    assert (tmp_path / ".cg.toml").is_file()
+    cmds_str = " ".join(" ".join(c) for c in mock_delegate)
+    assert "kb init" in cmds_str
+    assert "initskill" not in cmds_str
