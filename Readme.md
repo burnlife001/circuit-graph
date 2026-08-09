@@ -427,6 +427,22 @@ cg initskill <other-project> --dry-run   # 只预览每个 skill 的安装计划
 外部项目只需保证 `cg.exe` 在 PATH（`uv pip install -e .` 即可），
 agent 会自动按 SKILL 路由到正确子命令，无需手抄 README。
 
+### 项目引导 `cg init`（规划中）
+
+在新项目首次接入 circuit-graph 时，一键完成「写 `.cg.toml` + 初始化知识库 + 安装 bundled skills」三件事。
+当前 `cg init` 槽位由 `cg initskill` 让出（见 commit `59c86cd`），计划用作项目级引导编排器。
+
+设计要点（详见 [`docs/superpowers/specs/2026-08-09-cg-init-orchestrator-design.md`](docs/superpowers/specs/2026-08-09-cg-init-orchestrator-design.md)）：
+
+- **一站式编排**：默认依次跑 detect → 写 `.cg.toml` → 调 `cg kb init` → 调 `cg initskill`
+- **检测 + 提议**：扫描 cwd 里的 `.NET` / `.kicad_sch` / KiCad 项目文件，把探测到的路径提议到 `.cg.toml`，交互式确认（或 `-y` 跳过）
+- **默认全开**：`--skip-config` / `--skip-kb` / `--skip-skill` 反向跳过
+- **幂等重跑**：第二次跑只刷新检测、不重装 skills / KB；`--force` 强制覆盖
+- **跨函数返回 JSON 字符串**：方便 `print` 调试，与 `cg initskill` / `cg kb init` 的输出风格一致
+- **错误简洁**：每步 JSON 里 `error` 字段是一句话 + 建议动作，不堆结构
+
+> 该命令尚未实现 — 目前首次接入项目请按 `cg initskill` + `cg kb init` 手动跑。
+
 ## 测试
 
 ```bash
@@ -487,6 +503,7 @@ CLI 命令速查：
 | 命令 | 说明 |
 |------|------|
 | `cg initskill [TARGET] [--force] [--dry-run]` | 把全部 11 个 bundled skill 复制到 `<TARGET>/.claude/skills/<name>/` |
+| `cg init [TARGET] [--skip-config\|--skip-kb\|--skip-skill] [-y] [--force] [--dry-run]` | **规划中**：项目级引导（写 `.cg.toml` + KB init + 装 skills） |
 | `cg export graph <file>` | 生成 cg-graph JSON（`output/circuit.graph.json`） |
 | `cg export graphml <file>` | 生成 yEd GraphML（`output/circuit.graphml`） |
 | `cg view <id> <file> [--hops N] [--pretty]` | 元件 ego-subgraph（默认 2 hops） |
