@@ -11,6 +11,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "numpy>=1.24",
     "sexpdata>=1.0",  # circuit_graph.erc.extractor requires it at module load
+    "tomli_w>=1.0",  # circuit_graph.bootstrap writes .cg.toml via tomli_w
 ]
 
 [project.optional-dependencies]
