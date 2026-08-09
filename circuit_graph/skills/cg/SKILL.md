@@ -27,6 +27,8 @@ cg init . --skip-skill        # only config + KB, don't install skills
 
 Equivalent manual flow (if `cg init` is unavailable): `cg initskill <path>` then `cg kb init`.
 
+`cg initskill` installs every skill under `<target>/.claude/skills/<name>/` and also copies the bundle-level `README.md` (the skill routing table) to `<target>/.claude/skills/README.md`, so the receiving project gets the full skills/ directory snapshot. Re-runs are skipped without `--force`.
+
 ## Routing — pick the right command
 
 ```dot

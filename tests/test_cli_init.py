@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from circuit_graph.cli import _BUNDLED_SKILLS_DIR, _discover_bundled_skills, main
+from circuit_graph.cli import (
+    _BUNDLED_SKILLS_DIR,
+    _discover_bundled_docs,
+    _discover_bundled_skills,
+    main,
+)
 
 
 @pytest.fixture
@@ -144,3 +149,71 @@ def test_init_target_must_be_directory(runner: CliRunner, tmp_path: Path) -> Non
     bad.write_text("hello", encoding="utf-8")
     result = runner.invoke(main, ["initskill", str(bad)])
     assert result.exit_code != 0
+
+
+def test_init_copies_top_level_readme(runner: CliRunner, tmp_path: Path) -> None:
+    """The skills/ directory's top-level README.md (the routing table) must
+    be copied alongside the per-skill subdirectories."""
+    assert any(p.name == "README.md" for p in _discover_bundled_docs()), (
+        "fixture: skills/README.md must exist for this test to be meaningful"
+    )
+
+    result = runner.invoke(main, ["initskill", str(tmp_path)])
+    assert result.exit_code == 0, result.stderr or result.stdout
+
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["docs_installed"] >= 1
+
+    target_readme = tmp_path / ".claude" / "skills" / "README.md"
+    assert target_readme.is_file(), (
+        f"{target_readme} not copied (bundle-level README.md missing)"
+    )
+    assert target_readme.read_text(encoding="utf-8") == (
+        _BUNDLED_SKILLS_DIR / "README.md"
+    ).read_text(encoding="utf-8")
+
+
+def test_init_skips_existing_top_level_readme_without_force(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    """Re-running without --force must leave a previously-copied README.md
+    untouched."""
+    runner.invoke(main, ["initskill", str(tmp_path)])
+    target_readme = tmp_path / ".claude" / "skills" / "README.md"
+    assert target_readme.is_file()
+    target_readme.write_text("tampered", encoding="utf-8")
+
+    result = runner.invoke(main, ["initskill", str(tmp_path)])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["docs_skipped"] >= 1
+    assert target_readme.read_text(encoding="utf-8") == "tampered"
+
+
+def test_init_force_overwrites_top_level_readme(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    """--force must overwrite a previously-copied README.md."""
+    runner.invoke(main, ["initskill", str(tmp_path)])
+    target_readme = tmp_path / ".claude" / "skills" / "README.md"
+    target_readme.write_text("tampered", encoding="utf-8")
+
+    result = runner.invoke(main, ["initskill", str(tmp_path), "--force"])
+    assert result.exit_code == 0, result.stderr or result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["docs_installed"] >= 1
+    assert target_readme.read_text(encoding="utf-8") != "tampered"
+
+
+def test_init_dry_run_reports_top_level_readme(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    """--dry-run must report README.md as would_install without writing."""
+    result = runner.invoke(main, ["initskill", str(tmp_path), "--dry-run"])
+    assert result.exit_code == 0, result.stderr or result.stdout
+
+    payload = json.loads(result.stdout)
+    docs_statuses = {d["status"] for d in payload["docs"]}
+    assert "would_install" in docs_statuses, docs_statuses
+    assert not (tmp_path / ".claude" / "skills" / "README.md").exists()

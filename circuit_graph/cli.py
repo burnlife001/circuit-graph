@@ -1090,7 +1090,7 @@ def erc_check(
 
 # Skills ship as data directories under the Python package. Each immediate
 # subdirectory that contains a SKILL.md is treated as one skill. Top-level
-# files (router docs, comparisons) are skipped.
+# files (router docs, comparisons) are copied alongside the skills.
 _BUNDLED_SKILLS_DIR = Path(__file__).resolve().parent / "skills"
 
 
@@ -1109,6 +1109,20 @@ def _discover_bundled_skills() -> list[Path]:
         if (entry / "SKILL.md").is_file():
             skills.append(entry)
     return skills
+
+
+def _discover_bundled_docs() -> list[Path]:
+    """Return absolute paths of top-level files in the bundled skills tree.
+
+    Files directly under ``_BUNDLED_SKILLS_DIR`` (e.g. the README routing
+    table) are not skills themselves but are copied to the target so the
+    consumer of ``cg initskill`` gets the full directory snapshot.
+    """
+    if not _BUNDLED_SKILLS_DIR.is_dir():
+        return []
+    return sorted(
+        p for p in _BUNDLED_SKILLS_DIR.iterdir() if p.is_file()
+    )
 
 
 @main.command(name="initskill")
@@ -1218,10 +1232,50 @@ def init_cmd(target: Path, force: bool, dry_run: bool) -> None:
         "dry_run": dry_run,
         "skills": results,
     }
-    click.echo(json.dumps(summary, indent=2, ensure_ascii=False))
 
-    # Exit non-zero if any skill failed to copy.
-    if failed:
+    # Copy top-level bundled files (e.g. the SKILL router README) so the
+    # target receives the full skills/ directory snapshot, not just the
+    # per-skill subdirectories.
+    bundled_docs = _discover_bundled_docs()
+    docs: list[dict[str, object]] = []
+    for doc_src in bundled_docs:
+        dest = target_base / doc_src.name
+        exists = dest.exists()
+        entry: dict[str, object] = {
+            "name": doc_src.name,
+            "source": str(doc_src),
+            "target": str(dest),
+            "existed": exists,
+        }
+        if dry_run:
+            entry["status"] = "would_overwrite" if exists else "would_install"
+            docs.append(entry)
+            continue
+        if exists and not force:
+            entry["status"] = "skipped"
+            docs.append(entry)
+            continue
+        try:
+            target_base.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(doc_src, dest)
+            entry["status"] = "installed"
+        except OSError as exc:  # noqa: BLE001
+            entry["status"] = "failed"
+            entry["error"] = str(exc)
+        docs.append(entry)
+
+    summary["docs"] = docs
+    summary["docs_installed"] = sum(
+        1 for d in docs if d["status"] == "installed"
+    )
+    summary["docs_skipped"] = sum(1 for d in docs if d["status"] == "skipped")
+    summary["docs_failed"] = sum(1 for d in docs if d["status"] == "failed")
+    summary["failed"] = summary["failed"] + summary["docs_failed"]
+    if summary["docs_failed"]:
+        summary["status"] = "partial"
+
+    click.echo(json.dumps(summary, indent=2, ensure_ascii=False))
+    if summary["failed"]:
         sys.exit(1)
 
 
