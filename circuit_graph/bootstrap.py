@@ -208,10 +208,19 @@ def init_orchestrator(
             }, ensure_ascii=False)
 
     config_report = None
+    cg_toml = target / ".cg.toml"
     if dry_run:
         config_report = {"written": False, "path": None, "was_overwritten": False, "dry_run": True}
     elif skip_config:
         config_report = {"written": False, "path": None, "was_overwritten": False, "skipped": True}
+    elif cg_toml.is_file() and not force:
+        # Idempotent: existing .cg.toml, no --force -> skip
+        config_report = {
+            "written": False,
+            "path": str(cg_toml),
+            "was_overwritten": False,
+            "skipped": True,
+        }
     else:
         config_report = json.loads(write_config(cfg_str, target, force=force))
 
@@ -220,14 +229,21 @@ def init_orchestrator(
     sub_statuses: list[str] = []
 
     if not dry_run:
+        kb_db = target / "circuit_graph" / "knowledge" / "circuit_graph.db"
+        skills_dir = target / ".claude" / "skills"
+
         if skip_kb:
             kb_report = {"status": "skipped"}
+        elif kb_db.is_file() and not force:
+            kb_report = {"status": "skipped", "reason": "KB already exists; pass --force to re-run"}
         else:
             kb_report = json.loads(delegate([sys.executable, "-m", "circuit_graph.cli", "kb", "init"], cwd=target))
             sub_statuses.append(kb_report["status"])
 
         if skip_skill:
             skill_report = {"status": "skipped"}
+        elif skills_dir.is_dir() and not force:
+            skill_report = {"status": "skipped", "reason": "skills already installed; pass --force to re-run"}
         else:
             skill_report = json.loads(delegate([sys.executable, "-m", "circuit_graph.cli", "initskill", str(target)], cwd=target))
             sub_statuses.append(skill_report["status"])

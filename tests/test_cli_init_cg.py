@@ -227,3 +227,62 @@ def test_init_skip_skill_only_runs_config_and_kb(tmp_path: Path, mock_delegate) 
     cmds_str = " ".join(" ".join(c) for c in mock_delegate)
     assert "kb init" in cmds_str
     assert "initskill" not in cmds_str
+
+
+def test_init_force_overwrites_existing_config(tmp_path: Path, mock_delegate) -> None:
+    (tmp_path / ".cg.toml").write_text('project_name = "old"\n', encoding="utf-8")
+    bootstrap.init_orchestrator(tmp_path, yes=True, force=True)
+    out = (tmp_path / ".cg.toml").read_text(encoding="utf-8")
+    assert "old" not in out
+
+
+def test_init_dry_run_prints_plan_no_writes(tmp_path: Path, mock_delegate) -> None:
+    out = bootstrap.init_orchestrator(tmp_path, yes=True, dry_run=True)
+    report = json.loads(out)
+    assert report["status"] == "dry_run"
+    assert report["dry_run"] is True
+    assert not (tmp_path / ".cg.toml").exists()
+    assert mock_delegate == []  # no subprocess calls in dry-run
+
+
+def test_init_idempotent_second_run_no_changes(tmp_path: Path, mock_delegate) -> None:
+    bootstrap.init_orchestrator(tmp_path, yes=True)
+    # Simulate the side-effects of the first run having succeeded
+    # (mock_delegate does not actually write to disk), so the orchestrator
+    # can detect existing artifacts on the second run.
+    (tmp_path / "circuit_graph" / "knowledge").mkdir(parents=True)
+    (tmp_path / "circuit_graph" / "knowledge" / "circuit_graph.db").write_text("", encoding="utf-8")
+    (tmp_path / ".claude" / "skills").mkdir(parents=True)
+    # Second run: config, kb, skill should all be skipped
+    mock_delegate.clear()
+    out = bootstrap.init_orchestrator(tmp_path, yes=True)
+    report = json.loads(out)
+    assert report["status"] == "ok"
+    assert report["config"]["written"] is False
+    assert report["config"].get("skipped") is True
+    assert report["kb"]["status"] == "skipped"
+    assert report["skill"]["status"] == "skipped"
+    assert mock_delegate == []  # no delegate calls on idempotent re-run
+
+
+def test_init_yes_flag_skips_interactive_confirm(tmp_path: Path, monkeypatch, mock_delegate) -> None:
+    import click
+    confirm_calls: list[str] = []
+    def fake_confirm(text, default=True):
+        confirm_calls.append(text)
+        return True
+    monkeypatch.setattr(click, "confirm", fake_confirm)
+    bootstrap.init_orchestrator(tmp_path, yes=True)
+    # yes=True means we never call click.confirm
+    assert confirm_calls == []
+
+
+def test_init_returns_json_string_at_top_level(tmp_path: Path, mock_delegate) -> None:
+    out = bootstrap.init_orchestrator(tmp_path, yes=True)
+    assert isinstance(out, str)
+    parsed = json.loads(out)
+    assert "status" in parsed
+    assert "target" in parsed
+    assert "config" in parsed
+    assert "kb" in parsed
+    assert "skill" in parsed
