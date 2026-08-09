@@ -1,4 +1,4 @@
-"""Tests for `cg init` — bootstrap another project with the bundled skills."""
+"""Tests for `cg initskill` — bootstrap another project with the bundled skills."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def test_discover_bundled_skills_finds_multiple() -> None:
 def test_init_copies_all_bundled_skills(runner: CliRunner, tmp_path: Path) -> None:
     """Default behaviour: copy every bundled skill to
     <target>/.claude/skills/<name>/."""
-    result = runner.invoke(main, ["init", str(tmp_path)])
+    result = runner.invoke(main, ["initskill", str(tmp_path)])
     assert result.exit_code == 0, result.stderr or result.stdout
 
     payload = json.loads(result.stdout)
@@ -58,14 +58,14 @@ def test_init_skips_existing_skills_without_force(
 ) -> None:
     """Re-running on a populated target should skip already-installed skills
     (not error)."""
-    runner.invoke(main, ["init", str(tmp_path)])
+    runner.invoke(main, ["initskill", str(tmp_path)])
 
     # Tamper with one installed skill so we can detect the skip vs overwrite.
     sample = tmp_path / ".claude" / "skills" / "cg" / "SKILL.md"
     assert sample.is_file()
     sample.write_text("tampered", encoding="utf-8")
 
-    result = runner.invoke(main, ["init", str(tmp_path)])
+    result = runner.invoke(main, ["initskill", str(tmp_path)])
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["installed"] == 0
@@ -80,12 +80,12 @@ def test_init_force_overwrites_existing_skills(
     runner: CliRunner, tmp_path: Path
 ) -> None:
     """--force must replace all existing skill files."""
-    runner.invoke(main, ["init", str(tmp_path)])
+    runner.invoke(main, ["initskill", str(tmp_path)])
 
     sample = tmp_path / ".claude" / "skills" / "cg" / "SKILL.md"
     sample.write_text("tampered", encoding="utf-8")
 
-    result = runner.invoke(main, ["init", str(tmp_path), "--force"])
+    result = runner.invoke(main, ["initskill", str(tmp_path), "--force"])
     assert result.exit_code == 0, result.stderr or result.stdout
     payload = json.loads(result.stdout)
     assert payload["installed"] >= 2
@@ -97,7 +97,7 @@ def test_init_force_overwrites_existing_skills(
 
 def test_init_dry_run_does_not_write(runner: CliRunner, tmp_path: Path) -> None:
     """--dry-run prints the per-skill plan and creates no files."""
-    result = runner.invoke(main, ["init", str(tmp_path), "--dry-run"])
+    result = runner.invoke(main, ["initskill", str(tmp_path), "--dry-run"])
     assert result.exit_code == 0, result.stderr or result.stdout
 
     payload = json.loads(result.stdout)
@@ -114,12 +114,12 @@ def test_init_dry_run_after_install_reports_would_overwrite(
 ) -> None:
     """--dry-run on a populated target should mark each skill as
     would_overwrite (no short-circuit, no actual writes)."""
-    runner.invoke(main, ["init", str(tmp_path)])
+    runner.invoke(main, ["initskill", str(tmp_path)])
 
     sample = tmp_path / ".claude" / "skills" / "cg" / "SKILL.md"
     sample.write_text("tampered", encoding="utf-8")
 
-    result = runner.invoke(main, ["init", str(tmp_path), "--dry-run"])
+    result = runner.invoke(main, ["initskill", str(tmp_path), "--dry-run"])
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     statuses = {e["status"] for e in payload["skills"]}
@@ -133,7 +133,7 @@ def test_init_defaults_to_cwd_when_target_omitted(
 ) -> None:
     """Omitting TARGET defaults to the current working directory."""
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(main, ["init"])
+    result = runner.invoke(main, ["initskill"])
     assert result.exit_code == 0, result.stderr or result.stdout
     assert (tmp_path / ".claude" / "skills" / "cg" / "SKILL.md").is_file()
 
@@ -142,5 +142,5 @@ def test_init_target_must_be_directory(runner: CliRunner, tmp_path: Path) -> Non
     """TARGET must not be an existing file (click.Path file_okay=False)."""
     bad = tmp_path / "not_a_dir"
     bad.write_text("hello", encoding="utf-8")
-    result = runner.invoke(main, ["init", str(bad)])
+    result = runner.invoke(main, ["initskill", str(bad)])
     assert result.exit_code != 0

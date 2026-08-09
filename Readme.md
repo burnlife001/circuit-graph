@@ -409,15 +409,15 @@ cd output
 
 ### 在其它项目中启用全部 Skill
 
-在目标项目目录里执行 `cg init`，把 **所有** skill 复制到 `<项目根>/.claude/skills/<name>/`：
+在目标项目目录里执行 `cg initskill`，把 **所有** skill 复制到 `<项目根>/.claude/skills/<name>/`：
 
 ```powershell
 # 在目标项目目录运行
 cd <other-project>
-cg init                     # 默认装到当前目录的 .claude/skills/
-cg init <other-project>     # 或显式指定目标
-cg init <other-project> --force     # 已存在时强制覆盖（覆盖全部 skill）
-cg init <other-project> --dry-run   # 只预览每个 skill 的安装计划，不写盘
+cg initskill                     # 默认装到当前目录的 .claude/skills/
+cg initskill <other-project>     # 或显式指定目标
+cg initskill <other-project> --force     # 已存在时强制覆盖（覆盖全部 skill）
+cg initskill <other-project> --dry-run   # 只预览每个 skill 的安装计划，不写盘
 ```
 
 退出码：成功 `0`；至少一个 skill 复制失败时 `1`；源缺失时 `2`。
@@ -486,7 +486,7 @@ CLI 命令速查：
 
 | 命令 | 说明 |
 |------|------|
-| `cg init [TARGET] [--force] [--dry-run]` | 把全部 11 个 bundled skill 复制到 `<TARGET>/.claude/skills/<name>/` |
+| `cg initskill [TARGET] [--force] [--dry-run]` | 把全部 11 个 bundled skill 复制到 `<TARGET>/.claude/skills/<name>/` |
 | `cg export graph <file>` | 生成 cg-graph JSON（`output/circuit.graph.json`） |
 | `cg export graphml <file>` | 生成 yEd GraphML（`output/circuit.graphml`） |
 | `cg view <id> <file> [--hops N] [--pretty]` | 元件 ego-subgraph（默认 2 hops） |

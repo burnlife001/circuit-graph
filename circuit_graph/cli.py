@@ -1085,7 +1085,7 @@ def erc_check(
 
 
 # ---------------------------------------------------------------------------
-# cg init — bootstrap another project with all bundled skills
+# cg initskill — bootstrap another project with all bundled skills
 # ---------------------------------------------------------------------------
 
 # Skills ship as data directories under the Python package. Each immediate
@@ -1111,7 +1111,7 @@ def _discover_bundled_skills() -> list[Path]:
     return skills
 
 
-@main.command(name="init")
+@main.command(name="initskill")
 @click.argument(
     "target",
     type=click.Path(file_okay=False, path_type=Path),
