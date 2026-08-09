@@ -1225,5 +1225,39 @@ def init_cmd(target: Path, force: bool, dry_run: bool) -> None:
         sys.exit(1)
 
 
+# ---------------------------------------------------------------------------
+# cg init — project bootstrap orchestrator
+# ---------------------------------------------------------------------------
+
+@main.command(name="init")
+@click.argument("target", type=click.Path(file_okay=False, path_type=Path),
+                default=".", metavar="[TARGET]")
+@click.option("--skip-config", is_flag=True, help="Don't write .cg.toml.")
+@click.option("--skip-kb",     is_flag=True, help="Don't call `cg kb init`.")
+@click.option("--skip-skill",  is_flag=True, help="Don't call `cg initskill`.")
+@click.option("-y", "--yes",   is_flag=True, help="Auto-accept proposed config; skip interactive confirm.")
+@click.option("--force",       is_flag=True, help="Overwrite existing .cg.toml; re-run kb/skill sub-commands.")
+@click.option("--dry-run",     is_flag=True, help="Print full plan (detection, config diff, sub-cmd invocations); no writes.")
+def init_orchestrator_cmd(target: Path, skip_config: bool, skip_kb: bool, skip_skill: bool,
+                          yes: bool, force: bool, dry_run: bool) -> None:
+    """Bootstrap a project for circuit-graph.
+
+    By default writes .cg.toml, runs `cg kb init`, and runs `cg initskill`.
+    Use --skip-* to opt out. Re-running is idempotent; pass --force to overwrite.
+    """
+    from circuit_graph import bootstrap
+    report = bootstrap.init_orchestrator(
+        target=Path(target),
+        skip_config=skip_config, skip_kb=skip_kb, skip_skill=skip_skill,
+        yes=yes, force=force, dry_run=dry_run,
+    )
+    click.echo(report)
+    parsed = json.loads(report)
+    if parsed.get("status") == "failed":
+        sys.exit(2 if parsed.get("error", "").startswith("target") else 1)
+    if parsed.get("status") == "partial":
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     main()

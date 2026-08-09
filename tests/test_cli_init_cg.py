@@ -286,3 +286,25 @@ def test_init_returns_json_string_at_top_level(tmp_path: Path, mock_delegate) ->
     assert "config" in parsed
     assert "kb" in parsed
     assert "skill" in parsed
+
+
+from click.testing import CliRunner  # noqa: E402
+
+from circuit_graph.cli import main  # noqa: E402
+
+
+def test_cli_init_listed_in_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(main, ["--help"])
+    assert result.exit_code == 0
+    assert "init" in result.stdout
+
+
+def test_cli_init_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(main, ["init", "--help"])
+    assert result.exit_code == 0
+    assert "Bootstrap" in result.stdout
+    assert "--skip-config" in result.stdout
+    assert "--skip-kb" in result.stdout
+    assert "--skip-skill" in result.stdout
