@@ -91,3 +91,39 @@ def propose_config(json_ctx: str) -> str:
         "skills": [],
     }
     return json.dumps(cfg, ensure_ascii=False)
+
+
+def write_config(json_cfg: str, target: Path, *, force: bool = False) -> str:
+    """Write a CgConfig JSON to `<target>/.cg.toml` (TOML format).
+
+    Returns JSON:
+    {"written": bool, "path": "<abs>", "was_overwritten": bool, "reason": str}
+    """
+    cfg = json.loads(json_cfg)
+    cfg_path = (target.resolve() / ".cg.toml")
+    existed = cfg_path.is_file()
+    if existed and not force:
+        return json.dumps({
+            "written": False,
+            "path": str(cfg_path),
+            "was_overwritten": False,
+            "reason": "exists; pass --force to overwrite",
+        })
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import tomli_w
+        with cfg_path.open("wb") as f:
+            tomli_w.dump(cfg, f)
+    except (OSError, ImportError) as exc:
+        return json.dumps({
+            "written": False,
+            "path": str(cfg_path),
+            "was_overwritten": False,
+            "reason": f"write failed: {exc}",
+        })
+    return json.dumps({
+        "written": True,
+        "path": str(cfg_path),
+        "was_overwritten": existed,
+        "reason": "ok",
+    }, ensure_ascii=False)

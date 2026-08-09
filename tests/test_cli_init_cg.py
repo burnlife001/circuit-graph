@@ -86,3 +86,41 @@ def test_propose_config_returns_json_string() -> None:
     out = bootstrap.propose_config(ctx)
     assert isinstance(out, str)
     json.loads(out)  # must parse without error
+
+
+def test_write_config_creates_cg_toml(tmp_path: Path) -> None:
+    cfg = json.dumps({"project_name": "demo", "default_graph_file": "output/x.json",
+                      "default_graphml_file": "output/x.graphml",
+                      "default_kb_path": "kb.db", "schematics": [], "skills": []})
+    result = json.loads(bootstrap.write_config(cfg, tmp_path))
+    assert result["written"] is True
+    assert result["was_overwritten"] is False
+    assert result["reason"] == "ok"
+    out = (tmp_path / ".cg.toml").read_text(encoding="utf-8")
+    assert "project_name" in out
+    assert "demo" in out
+
+
+def test_write_config_refuses_overwrite_without_force(tmp_path: Path) -> None:
+    (tmp_path / ".cg.toml").write_text('project_name = "old"\n', encoding="utf-8")
+    cfg = json.dumps({"project_name": "new", "default_graph_file": "",
+                      "default_graphml_file": "", "default_kb_path": "",
+                      "schematics": [], "skills": []})
+    result = json.loads(bootstrap.write_config(cfg, tmp_path))
+    assert result["written"] is False
+    assert result["was_overwritten"] is False
+    assert "--force" in result["reason"]
+    assert (tmp_path / ".cg.toml").read_text(encoding="utf-8") == 'project_name = "old"\n'
+
+
+def test_write_config_force_overwrites(tmp_path: Path) -> None:
+    (tmp_path / ".cg.toml").write_text('project_name = "old"\n', encoding="utf-8")
+    cfg = json.dumps({"project_name": "new", "default_graph_file": "",
+                      "default_graphml_file": "", "default_kb_path": "",
+                      "schematics": [], "skills": []})
+    result = json.loads(bootstrap.write_config(cfg, tmp_path, force=True))
+    assert result["written"] is True
+    assert result["was_overwritten"] is True
+    out = (tmp_path / ".cg.toml").read_text(encoding="utf-8")
+    assert "new" in out
+    assert "old" not in out
