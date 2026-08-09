@@ -58,3 +58,31 @@ def test_detect_project_target_is_file(tmp_path: Path) -> None:
     result = json.loads(bootstrap.detect_project(f))
     assert result["status"] == "failed"
     assert "not a directory" in result["error"]
+
+
+def test_propose_config_picks_up_detected_schematics() -> None:
+    ctx = json.dumps({
+        "protel_nets": ["/abs/board1.NET", "/abs/board2.net"],
+        "kicad_schematics": ["/abs/main.kicad_sch"],
+        "kicad_projects": [],
+    })
+    result = json.loads(bootstrap.propose_config(ctx))
+    assert "board1.NET" in result["schematics"]
+    assert "board2.net" in result["schematics"]
+    assert "main.kicad_sch" in result["schematics"]
+    assert result["project_name"]  # non-empty
+
+
+def test_propose_config_uses_defaults_when_empty() -> None:
+    ctx = json.dumps({"protel_nets": [], "kicad_schematics": [], "kicad_projects": []})
+    result = json.loads(bootstrap.propose_config(ctx))
+    assert result["schematics"] == []
+    assert result["default_graph_file"] == "output/circuit.graph.json"
+    assert result["default_kb_path"] == "circuit_graph/knowledge/circuit_graph.db"
+
+
+def test_propose_config_returns_json_string() -> None:
+    ctx = json.dumps({"protel_nets": [], "kicad_schematics": [], "kicad_projects": []})
+    out = bootstrap.propose_config(ctx)
+    assert isinstance(out, str)
+    json.loads(out)  # must parse without error

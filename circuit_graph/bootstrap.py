@@ -55,3 +55,39 @@ def detect_project(target: Path) -> str:
         "existing_skills_dir": str(existing_skills_dir) if existing_skills_dir.is_dir() else None,
     }
     return json.dumps(result, ensure_ascii=False)
+
+
+def propose_config(json_ctx: str) -> str:
+    """Turn a detect_project JSON into a proposed CgConfig (JSON string).
+
+    Returns:
+    {
+      "project_name": "<target.basename>",
+      "default_graph_file": "output/circuit.graph.json",
+      "default_graphml_file": "output/circuit.graphml",
+      "default_kb_path": "circuit_graph/knowledge/circuit_graph.db",
+      "schematics": ["<relative>", ...],
+      "skills": []
+    }
+    """
+    ctx = json.loads(json_ctx)
+    target = Path(ctx.get("target", "."))
+    project_name = target.name or Path.cwd().name or "untitled"
+    schematics: list[str] = []
+    for p in ctx.get("protel_nets", []) + ctx.get("kicad_schematics", []):
+        p_path = Path(p)
+        try:
+            rel = str(p_path.relative_to(target))
+        except ValueError:
+            # path is absolute and outside target, or relative — fall back to filename
+            rel = p_path.name
+        schematics.append(rel)
+    cfg = {
+        "project_name": project_name,
+        "default_graph_file": "output/circuit.graph.json",
+        "default_graphml_file": "output/circuit.graphml",
+        "default_kb_path": "circuit_graph/knowledge/circuit_graph.db",
+        "schematics": sorted(schematics),
+        "skills": [],
+    }
+    return json.dumps(cfg, ensure_ascii=False)
