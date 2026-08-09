@@ -127,3 +127,34 @@ def write_config(json_cfg: str, target: Path, *, force: bool = False) -> str:
         "was_overwritten": existed,
         "reason": "ok",
     }, ensure_ascii=False)
+
+
+def delegate(cmd: list[str], cwd: Path | None = None) -> str:
+    """Run a subprocess, return a JSON result.
+
+    JSON shape:
+    {"cmd": [...], "exit_code": int, "status": "ok"|"failed",
+     "stdout": "...", "stderr": "...", "duration_s": float}
+    """
+    start = time.time()
+    try:
+        completed = subprocess.run(cmd, cwd=str(cwd) if cwd else None,
+                                   capture_output=True, text=True, check=False)
+    except (OSError, FileNotFoundError) as exc:
+        return json.dumps({
+            "cmd": cmd,
+            "exit_code": -1,
+            "status": "failed",
+            "stdout": "",
+            "stderr": str(exc),
+            "duration_s": round(time.time() - start, 3),
+        })
+    duration = round(time.time() - start, 3)
+    return json.dumps({
+        "cmd": list(cmd),
+        "exit_code": completed.returncode,
+        "status": "ok" if completed.returncode == 0 else "failed",
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "duration_s": duration,
+    }, ensure_ascii=False)

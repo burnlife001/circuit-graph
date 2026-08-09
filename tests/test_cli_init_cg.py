@@ -124,3 +124,47 @@ def test_write_config_force_overwrites(tmp_path: Path) -> None:
     out = (tmp_path / ".cg.toml").read_text(encoding="utf-8")
     assert "new" in out
     assert "old" not in out
+
+
+def test_delegate_kb_init_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeCompleted:
+        returncode = 0
+        stdout = "{\"status\": \"ok\"}"
+        stderr = ""
+    def fake_run(cmd, **kwargs):
+        return FakeCompleted()
+    monkeypatch.setattr(bootstrap.subprocess, "run", fake_run)
+    out = bootstrap.delegate(["cg", "kb", "init"])
+    result = json.loads(out)
+    assert result["exit_code"] == 0
+    assert result["status"] == "ok"
+    assert "kb" in result["cmd"]
+
+
+def test_delegate_kb_init_captures_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeCompleted:
+        returncode = 1
+        stdout = ""
+        stderr = "no bundled skills found"
+    def fake_run(cmd, **kwargs):
+        return FakeCompleted()
+    monkeypatch.setattr(bootstrap.subprocess, "run", fake_run)
+    out = bootstrap.delegate(["cg", "kb", "init"])
+    result = json.loads(out)
+    assert result["exit_code"] == 1
+    assert result["status"] == "failed"
+    assert "no bundled skills" in result["stderr"]
+
+
+def test_delegate_initskill_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeCompleted:
+        returncode = 0
+        stdout = "{\"status\": \"ok\"}"
+        stderr = ""
+    def fake_run(cmd, **kwargs):
+        return FakeCompleted()
+    monkeypatch.setattr(bootstrap.subprocess, "run", fake_run)
+    out = bootstrap.delegate(["cg", "initskill", "/tmp/target"])
+    result = json.loads(out)
+    assert result["exit_code"] == 0
+    assert "initskill" in result["cmd"]
