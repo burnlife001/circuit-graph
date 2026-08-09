@@ -308,3 +308,14 @@ def test_cli_init_help() -> None:
     assert "--skip-config" in result.stdout
     assert "--skip-kb" in result.stdout
     assert "--skip-skill" in result.stdout
+
+
+def test_cli_init_end_to_end_dry_run(tmp_path: Path) -> None:
+    (tmp_path / "board.NET").write_text("(NET1 R1-1 R2-1)", encoding="utf-8")
+    runner = CliRunner()
+    result = runner.invoke(main, ["init", str(tmp_path), "--dry-run", "--yes"])
+    assert result.exit_code == 0, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    assert report["status"] == "dry_run"
+    assert report["config"]["written"] is False
+    assert not (tmp_path / ".cg.toml").exists()

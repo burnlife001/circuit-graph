@@ -11,6 +11,22 @@ Use the `cg` CLI from the **circuit-graph** project (`E:\__electric\__workspace\
 
 Other projects can pull `cg` in via `uv pip install -e ".[dev]"` once the circuit-graph repo is on disk and reachable.
 
+## First-time setup — `cg init`
+
+When onboarding `cg` into a fresh project, run `cg init` once at the project root. It writes `.cg.toml`, initializes the SQLite KB, and installs the bundled skills in one shot. Re-runs are idempotent (existing `.cg.toml` / KB / skills are detected and skipped); pass `--force` to overwrite.
+
+```powershell
+# In a fresh project that has no cg setup yet:
+cd <other-project>
+cg init                       # writes .cg.toml + cg kb init + cg initskill
+cg init . --yes               # skip interactive confirm (CI / scripts)
+cg init . --force             # overwrite existing .cg.toml + re-run sub-steps
+cg init . --dry-run           # print the plan, no writes
+cg init . --skip-skill        # only config + KB, don't install skills
+```
+
+Equivalent manual flow (if `cg init` is unavailable): `cg initskill <path>` then `cg kb init`.
+
 ## Routing — pick the right command
 
 ```dot
