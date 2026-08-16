@@ -6,6 +6,8 @@ description: Capture and analyze waveforms from ATK-Logic USB logic analyzer. Re
 # ATK-Logic Capture & Waveform Analyzer
 
 Capture data from ATK-Logic USB logic analyzer and analyze .atkdl waveform files.
+**Architecture:** PostMessage + SendMessage to the official Qt GUI via a tiny
+C# helper (`atk_bg.exe`). No DLL injection, no fake DLL, no TCP server.
 
 ## Scripts Inventory
 
@@ -15,41 +17,56 @@ SKILL_SCRIPTS = `C:/Users/yg/.claude/skills/atk-logic-capture/scripts/`
 | File | Purpose |
 |------|---------|
 | `__init__.py` | Package marker |
-| `_config.py` | Centralized path configuration — GUI, DLL, data/log dirs, TCP settings. **Edit this file to relocate dependencies.** |
+| `_config.py` | Centralized path configuration — GUI, DATA_DIR, atk_bg.exe, log dirs. |
 
 ### Shared modules (scripts/)
 | File | Purpose |
 |------|---------|
 | `capture_reader.py` | `.atkdl` / `.bin` file reader — `CaptureReader`, `EdgeEvent`, `parse_time()` |
-| `config_sync.py` | Syncs capture params (channels, setHz, threshold) between config.ini and set.ini with backup. |
-| `analyze/_proto_common.py` | `ProtoFrame`, `_EdgeHelper`, `normalize_options` shared by all native decoders. |
+| `config_sync.py` | Syncs capture params (channels, setHz, threshold) between CLI args and set.ini. Backup-on-change. |
+| `session_state.py` | Persistence of `preflight_ok` + `is_ctrl_s_pressed` to `%APPDATA%\ALIENTEK\ATK-LogicView\skill_state.json`. GUI-session-scoped via `gui_pid` + `gui_start` matching. |
+| `analyze/_proto_common.py` | `ProtoFrame`, `_EdgeHelper`, `normalize_options` shared by native decoders. |
 
 ### User-facing Entry Points
 | File | Purpose |
 |------|---------|
 | `atk_cli.py` | Main CLI — `info`, `export`, `decode`, `capture`, `config`, `list-decoders` |
-| `capture/atk_preflight.py` | Pre-flight self-check (6 items) with `--fix` auto-repair |
-| `capture/uia_save.py` | UIA automation companion — fills filename + clicks Save in native save picker |
-| `analyze/atk_classify.py` | **Main analysis entry** — auto-scans channels, classifies signal types, auto-dispatches to per-protocol analyzers |
+| `capture/atk_preflight.py` | DLL-free preflight (6 checks + atk_bg.exe + set.ini shortcuts + GUI window) |
+| `analyze/atk_classify.py` | **Main analysis entry** — auto-scans channels, classifies signal types, dispatches to per-protocol analyzers |
 
 ### Per-protocol analyzers (auto-invoked by `atk_classify.py`)
 | File | Purpose |
 |------|---------|
-| `analyze/atk_pwm.py` | PWM / breathing LED analyzer — carrier freq, duty range, modulation detection |
+| `analyze/atk_pwm.py` | PWM / breathing LED analyzer — carrier freq, duty range, modulation |
 | `analyze/atk_uart.py` | Native UART decoder — supports baud/data-bits/parity/stop-bits/polarity |
 | `analyze/atk_i2c.py` | Native I²C decoder |
 | `analyze/atk_spi.py` | Native SPI decoder |
 
 These can also be invoked directly, or via `atk_cli.py decode --decoder <uart|i2c|spi>`.
 
+### Drivers (C# .NET 4.0)
+| File | Purpose |
+|------|---------|
+| `tools/atk_bg/atk_bg.cs` | Source: PostMessage/SendMessage helper. |
+| `tools/atk_bg/atk_bg.exe` | Compiled binary (12.5 KB). Invoked by `atk_cli.py` for F1/F2/F12 key delivery and Save-As dialog handling. |
+| `tools/atk_bg/build.ps1` | `pwsh build.ps1` rebuilds via `csc.exe` (v4.0.30319, C# 5). |
+
+### Reference spikes (kept as documented validation — do NOT delete)
+| File | Purpose |
+|------|---------|
+| `capture/spike_e2e.py` | End-to-end spike: F1 → 3s → F2 → 3s → F12 + Save-As dialog fill via raw Win32. Proved the non-disturbing path before productionizing into `atk_bg.exe`. |
+| `capture/spike_dialog.py` | Dumps the ATK-Logic Save-As dialog's #32770 child tree (Edit/Button ids/text). Used to confirm control ids `Edit=1001`, `Button id=1 text="保存(&S)"`. |
+
 ### Dependency Graph
 ```
-_config.py ────► atk_cli.py, capture/atk_preflight.py, capture/uia_save.py
-config_sync.py ─► atk_cli.py, capture/atk_preflight.py
-capture_reader.py ──► atk_cli.py, analyze/atk_classify.py, analyze/atk_pwm.py, analyze/atk_uart.py, analyze/atk_i2c.py, analyze/atk_spi.py
-capture/uia_save.py ◄─── atk_cli.py (subprocess)
-analyze/atk_pwm.py ◄─── analyze/atk_classify.py (auto-dispatch via subprocess)
-analyze/atk_uart.py ◄─── analyze/atk_classify.py (auto-dispatch via in-process import)
+_config.py        ─► atk_cli.py, capture/atk_preflight.py
+session_state.py  ─► atk_cli.py, capture/atk_preflight.py
+config_sync.py    ─► atk_cli.py
+capture_reader.py ─► atk_cli.py, analyze/atk_classify.py, analyze/atk_pwm.py, analyze/atk_uart.py,
+                    analyze/atk_i2c.py, analyze/atk_spi.py
+atk_bg.exe (C#)   ◄── atk_cli.py (subprocess for F1/F2/F12/save)
+analyze/atk_pwm.py ◄── analyze/atk_classify.py (auto-dispatch via subprocess)
+analyze/atk_uart.py ◄── analyze/atk_classify.py (auto-dispatch in-process)
 ```
 
 ## Key Locations
@@ -57,55 +74,45 @@ analyze/atk_uart.py ◄─── analyze/atk_classify.py (auto-dispatch via in-p
 | Path | Purpose |
 |------|---------|
 | `D:/Programs/ATK-Logic/ATK-Logic.exe` | Official ATK-Logic GUI (closed source) — **always use this, never other builds** |
-| `D:/Programs/ATK-Logic/Qt5Network.dll` | Proxy DLL deployed via DLL hijacking (compiled from `E:/__electric/atk-logic/proxy_dll/`) |
+| `D:/Programs/ATK-Logic/Qt5Network.dll` | **Original Qt5Network runtime** — must match Qt's expected size (1.3 MB); NOT a proxy DLL. |
 | `E:/__electric/atk-logic-data/` | Capture data output (auto-timestamped .atkdl files) |
-| `E:/__electric/atk-logic-data/logs/` | UIA save debug logs |
+| `%APPDATA%\ALIENTEK\ATK-LogicView\set.ini` | Capture settings, channel config, keyboard shortcuts (`startCollecting=F1`, `stopCollecting=F2`, `saveFile=F12`), savePath. |
+| `%APPDATA%\ALIENTEK\ATK-LogicView\skill_state.json` | Session state — `gui_pid`, `gui_start` (ISO8601), `is_ctrl_s_pressed`, `preflight_ok`. Reset implicitly when GUI restarts. |
+| `%APPDATA%\ALIENTEK\ATK-LogicView\log\` | GUI session logs (GBK encoding); the ground-truth surface for "did atk_bg's hotkey actually fire?". |
 
 ## Capture Workflow
 
-**Agent behavior**: When the user says "捕获波形" / "capture waveform" without specifying parameters, just run the default capture immediately — no config display, no confirmation prompts. Only ask for clarification if the user explicitly mentions a non-standard scenario (e.g., "special setup", "custom settings").
+**Agent behavior**: When the user says "捕获波形" / "capture waveform" without specifying parameters, just run the default capture immediately — no config display, no confirmation prompts. Only ask for clarification if the user explicitly mentions a non-standard scenario.
 
 ### Step 1: Capture waveform
 
-`cmd_capture` handles preflight automatically — no manual preflight step needed. It queries the DLL-persisted `g_preflight_ok` flag:
-- **Already set** → skips preflight (validated earlier in this GUI session)
-- **Not set** → auto-runs `atk_preflight.py --fix --json` before capturing
+`cmd_capture` handles preflight automatically — no manual preflight step needed. It consults `skill_state.json`:
 
-Just pass the channels the user requested and duration:
+- **`preflight_ok == true`** (current GUI session) → skip preflight, go straight to capture.
+- **`preflight_ok == false`** or session mismatch → auto-run `atk_preflight.py --fix --json`, then continue.
 
 ```bash
 # Default: 3s
 python C:/Users/yg/.claude/skills/atk-logic-capture/scripts/atk_cli.py capture start
 
 # Custom channels + duration
-python C:/Users/yg/.claude/skills/atk-logic-capture/scripts/atk_cli.py capture start --ch 2,3 --duration 10s
+python .../atk_cli.py capture start --ch 2,3 --duration 10s
 ```
 
-**Save flow (config sync is opt-in)** (optimized for speed):
+**Save flow with state-file flag (`is_ctrl_spressed`)**
 
-Before capture, the CLI:
-1. Reads `config.ini` → `trgDir` (default save directory)
-2. Reads current GUI state from `set.ini` for informational display (channels, rate, threshold)
-3. **If `--sync` flag or explicit `--ch`/`--sample-rate-hz`/`--threshold` are passed**: syncs the specified params to `set.ini`, syncs `savePath` to `trgDir`, and restarts GUI if needed so changes take effect
-4. **If no config params are passed**: skips all `set.ini` modification — captures with whatever the GUI currently has configured (no restart)
-5. Queries `isCtrlSPressed` state from Qt5Network.dll via TCP
+Before F1, the CLI reads `is_ctrl_s_pressed` from state. The drive sequence is fixed: `F1 → sleep duration → F2 → sleep 3 s → F12`.
 
-During capture, the proxy DLL:
-- F1 → start capture
-- F2 → stop capture (after duration)
-- **Ctrl+S** (not Ctrl+Shift+S) → save
+After F12, the GUI behavior branches:
 
-After capture, the CLI branches on `isCtrlSPressed`:
-- **First save** (`isCtrlSPressed == false`): Ctrl+S opens "Save As" picker → `uia_save.py` fills `--output` filename → sets `isCtrlSPressed = true` in DLL → verifies file exists at expected path
-- **Subsequent saves** (`isCtrlSPressed == true`): Ctrl+S saves directly to GUI's last-used path (no picker). The `--output` filename is **not used** — instead, the CLI records the newest `.atkdl` mtime *before* capture, then finds the file that appeared after capture. This is the real output file.
+- **`is_ctrl_s_pressed == false`** (first save in this GUI session): the GUI opens the Save-As picker. `atk_bg.exe save <path>` then locates the picker, fills the Edit (`id=1001`), clicks the Save Button (`id=1`, text `"保存(&S)"`), and verifies the file lands. On success, the flag is set true.
+- **`is_ctrl_s_pressed == true`** (subsequent saves): the GUI direct-saves to its last-used path with no picker. The CLI mtime-scans `DATA_DIR` for the newest `.atkdl` after F12.
 
-The `isCtrlSPressed` flag survives within one ATK-Logic session (reset on restart). This eliminates the UIA picker-filling step for all saves after the first, significantly speeding up repeated captures.
-
-**Important: `--output` filename** only applies to the first save (picker case). For subsequent saves, the GUI chooses the filename; the CLI detects it by scanning for new files in `trgDir`. The printed `Save name:` line is informational for the first-save case only.
+> The `--output` filename only matters in mode (a); in mode (b) the GUI chooses the filename and the CLI detects it by mtime. If you need a specific filename, delete `is_ctrl_s_pressed` from the state file before capturing.
 
 ### Step 2: If capture fails (stuck at 1% or save picker not found)
 
-The GUI data is still in buffer. Do NOT force-kill — close gracefully instead:
+The GUI data is still in buffer. Do NOT force-kill — close gracefully:
 
 ```bash
 # Graceful close: send WM_CLOSE via taskkill without /f flag
@@ -113,7 +120,7 @@ taskkill /im ATK-Logic.exe
 # Only if it hangs for >3s, use /f as last resort
 ```
 
-**Why not /f**: `taskkill /f` calls `TerminateProcess()` which skips Qt cleanup, leaving `temp/memory/` markers. On next close or restart, ATK-Logic shows a blocking "恢复数据" dialog. The code in `_restart_gui()` now auto-cleans these markers before `WM_CLOSE` to break this cycle.
+**Why not /f**: `taskkill /f` calls `TerminateProcess()` which skips Qt cleanup, leaving `temp/memory/` markers. On next close or restart, ATK-Logic shows a blocking "恢复数据" dialog.
 
 ### Capture parameters:
 
@@ -121,11 +128,11 @@ taskkill /im ATK-Logic.exe
 |-----------|---------|-------------|
 | `--ch` | GUI current | Comma-separated channel IDs. Passing this triggers set.ini sync + possible GUI restart. |
 | `--duration` | 3s | Capture duration (ns/us/ms/s) |
-| `--sample-rate-hz` | GUI current | Sample rate (Hz). Passing this triggers set.ini sync + possible GUI restart. |
+| `--sample-rate-hz` | GUI current | Sample rate in Hz. Passing this triggers set.ini sync + possible GUI restart. |
 | `--threshold` | GUI current | Logic threshold voltage. Passing this triggers set.ini sync + possible GUI restart. |
 | `--sync` / `-S` | off | Force sync capture params + savePath to GUI before capture (will restart GUI if values differ). |
 | `--rle` | off | FPGA RLE compression |
-| `--output` | auto-timestamp | Output filename (first-save picker only). Subsequent saves: GUI chooses name, CLI detects newest file in trgDir. |
+| `--output` | auto-timestamp | Output filename (mode-a save only). Mode-b save: GUI chooses; CLI detects by mtime. |
 
 ### Config management (manual):
 
@@ -140,9 +147,55 @@ python .../atk_cli.py config set --ch 0,1,2,3 --hz 20000000 --threshold 1.5
 python .../atk_cli.py config set --ch 0,1 --dry-run
 ```
 
+## Driver: atk_bg.exe (C# .NET 4.0)
+
+The non-disturbing replacement for the previous proxy DLL. Built from
+`tools/atk_bg/atk_bg.cs` via `csc.exe` (no managed runtime, just .NET
+Framework 4.0 reference assemblies). ~12.5 KB compiled binary.
+
+It talks to the official ATK-Logic GUI window via Win32 messages — *no* keybd_event,
+*no* SendInput, *no* SetForegroundWindow, *no* DLL injection. The user's
+foreground window stays exactly as it was.
+
+Commands:
+- `atk_bg.exe key F1|F2|F12` — locate GUI (`Qt5152QWindowOwnDCIcon` /
+  title `ATK-LogicView - DL16`), PostMessage `WM_ACTIVATE(WA_ACTIVE)` +
+  `WM_SETFOCUS` to enable Qt's shortcut routing, then PostMessage
+  `WM_KEYDOWN` / `WM_KEYUP` with proper lparam (scan code via MapVirtualKeyW).
+  Outputs `{"status":"ok","cmd":"key","key":"F1","hwnd":...}` on stdout.
+- `atk_bg.exe save <path> [--timeout N]` — wait for the #32770 Save-As
+  dialog to be owned by the GUI process (≤N seconds). Walk ComboBoxEx32
+  → ComboBox → Edit to find the filename field. `WM_SETTEXT` with the
+  target filename, click the Save button (`id=1`, text `"保存(&S)"`),
+  click any overwrite-confirm Button (`id=6` or text containing `"是"`).
+  Internally normalises `/` → `\` because the picker rejects forward slashes
+  with "提示文件名无效".
+
+Both commands are pure-message; neither steals foreground focus from the user.
+
+## State file: `%APPDATA%\ALIENTEK\ATK-LogicView\skill_state.json`
+
+```json
+{
+  "gui_pid": 15352,
+  "gui_start": "2026-08-16T14:30:53.2847735Z",
+  "is_ctrl_s_pressed": false,
+  "preflight_ok": true
+}
+```
+
+Lifecycle:
+- Written by `atk_preflight.py` on success (sets `preflight_ok=true`) and
+  by `atk_cli.py` after first-save succeeds (sets `is_ctrl_s_pressed=true`).
+- Read on every CLI invocation; if the running GUI's pid + start time
+  don't match the file, all flags default to False.
+- To reset: stop ATK-Logic.exe (`taskkill /im ATK-Logic.exe` without `/f`)
+  before next capture, or delete the file.
+
 ## Analysis Workflow
 
-`atk_classify.py` is the single entry point. It auto-scans channels, classifies the signal type, and **auto-dispatches** detected protocols to the matching analyzer.
+`atk_classify.py` is the single entry point. It auto-scans channels, classifies
+the signal type, and **auto-dispatches** detected protocols to the matching analyzer.
 
 **Note on Windows**: use the full path — `~` does NOT expand in `python ~/...` commands.
 
@@ -173,7 +226,7 @@ Auto-dispatch behavior:
 # Run a specific protocol decoder directly (skip classification)
 python .../atk_cli.py decode <file> --decoder uart --rx 0 --option baudrate=115200
 python .../atk_cli.py decode <file> --decoder i2c  --scl 0 --sda 1
-python .../atk_cli.py decode <file> --decoder spi  --clk 0 --mosi 1
+python .../atk_cli.py decode <file> --decoder spi  --clk 0 --mosi 0 --miso 1
 
 # Or call the decoder script directly
 python .../analyze/atk_uart.py <file> --rx 4 --baudrate 115200
@@ -196,11 +249,11 @@ GUI_DIR = D:/Programs/ATK-Logic
 ```python
 from _config import (
     SCRIPTS_DIR,          # self-location (auto-detected)
+    SKILL_DIR,            # parent of SCRIPTS_DIR
+    ATK_BG_EXE,           # tools/atk_bg/atk_bg.exe (used by atk_cli.py)
     get_data_dir,         # from config.ini DATA_DIR
     get_log_dir,          # get_data_dir() / "logs"
     get_gui_dir,          # from config.ini GUI_DIR
-    TCP_HOST,             # 127.0.0.1
-    TCP_PORT,             # 9876
 )
 ```
 
@@ -208,44 +261,69 @@ from _config import (
 
 | Key | Action |
 |-----|--------|
-| F1 | Start capture (开始采集) |
-| F2 | Stop capture (停止采集) |
-| Ctrl+S | Save (保存) — proxy DLL uses this. First save opens Save As picker, subsequent saves overwrite in-place. |
+| F1 | Start capture (开始采集) — `startCollecting=F1` |
+| F2 | Stop capture (停止采集) — `stopCollecting=F2` |
+| F12 | Save (保存) — `saveFile=F12` (remapped from Ctrl+S to a single key so PostMessage works without modifier injection). |
 
-## TCP API (Qt5Network.dll proxy)
-
-| Command | Description |
-|---------|-------------|
-| `{"cmd":"start",...}` | Start capture: F1 → wait → F2 → Ctrl+S |
-| `{"cmd":"stop"}` | Stop capture: F2 |
-| `{"cmd":"status"}` | Get capturing state |
-| `{"cmd":"file"}` | Find newest .atkdl in WATCH_DIR |
-| `{"cmd":"get_isCtrlSPressed"}` | Get isCtrlSPressed state → `{"status":"ok","value":"0"|"1"}` |
-| `{"cmd":"set_isCtrlSPressed","value":0|1}` | Set isCtrlSPressed state |
-| `{"cmd":"get_preflight_status"}` | Get preflight status → `{"status":"ok","value":"0"|"1"}` |
-| `{"cmd":"set_preflight_status","value":0|1}` | Set preflight status (persists until DLL unload) |
+Modifiers (`Ctrl+S`) cannot be reliably synthesised via PostMessage because the Qt
+app reads physical-key state. Keeping save on a plain F12 is the design constraint.
 
 ## Reference: Config
 
-- `%APPDATA%\ALIENTEK\ATK-LogicView\set.ini` — capture settings, channel config, keyboard shortcuts, savePath
-- `scripts/config.ini` — paths only (`[atk-logic] DATA_DIR = ..., GUI_DIR = ...`). No capture params — those are set via CLI args and pushed to `set.ini`.
-- Shortcuts are user-configurable via GUI: Functions → Settings → Keyboard Shortcuts
-- `%APPDATA%\ALIENTEK\ATK-LogicView\temp\memory\` — crash-recovery markers (left by `/f` kill; triggers "恢复数据" dialog if not cleaned before close/startup)
+- `%APPDATA%\ALIENTEK\ATK-LogicView\set.ini` — capture settings, channel
+  config, keyboard shortcuts, savePath. GUI reads on launch; writes on
+  exit / capture. **Closed on save edits** — atk_cli restarts the GUI when
+  it has to change a value.
+- `%APPDATA%\ALIENTEK\ATK-LogicView\skill_state.json` — atk-cli CLI
+  session state. Does not affect GUI behaviour.
+- `scripts/config.ini` — paths only (`[atk-logic] DATA_DIR = ...,
+  GUI_DIR = ...`). No capture params — those are set via CLI args and
+  pushed to `set.ini`.
+- Shortcuts are user-configurable via GUI: Functions → Settings → Keyboard Shortcuts.
+- `%APPDATA%\ALIENTEK\ATK-LogicView\temp\memory\` — crash-recovery markers
+  (left by `/f` kill; triggers "恢复数据" dialog if not cleaned before close/startup).
 
 ## Known Issues
 
-1. **FPGA capture stuck at 1%**: If progress never advances, restart the GUI and try again. May need USB device power-cycle.
+1. **FPGA capture stuck at 1%**: If progress never advances, restart the GUI
+   and try again. May need USB device power-cycle.
 
-2. **Capture params decision rule**: Follow Step 1 decision table strictly — `gui_was_running=true` → capture without `--ch`/`--sample-rate-hz`/`--threshold`; `false` → AI passes needed params. Passing params when GUI already runs triggers unnecessary GUI kill+restart. Use `--sync` to force-sync all params + savePath regardless of GUI state (e.g. after manual GUI changes or on first setup).
+2. **Capture params decision rule**: Follow Step 1 decision table strictly —
+   `gui_was_running=true` → capture without `--ch`/`--sample-rate-hz`/
+   `--threshold`; `false` → AI passes needed params. Passing params when
+   GUI already runs triggers unnecessary GUI kill+restart. Use `--sync` to
+   force-sync all params + savePath regardless of GUI state (e.g. after
+   manual GUI changes or on first setup).
 
-3. **Ctrl+S save behavior**: The proxy DLL uses Ctrl+S (standard Save). First save per session opens "Save As" picker (handled by `uia_save.py`). Subsequent saves overwrite directly — if the GUI uses a QML FileDialog instead of the native `#32770` picker, the first-save detection will fail with `save_prompt: "none"` and the file won't be saved at the correct path.
+3. **First save filename is not guaranteed**: When `is_ctrl_s_pressed==false`,
+   `atk_bg save <path>` tries to fill the Save-As picker; if the GUI did a
+   direct save anyway (e.g., it remembered `savePath` and a default name),
+   the CLI falls back to mtime scan and the printed `File:` line may
+   differ from `--output`. The actual capture data is correct either way.
 
-4. **Recovery dialog on startup** ✅ Fixed: `taskkill /f` → `TerminateProcess()` → skips Qt cleanup → `temp/memory/` + `lock` markers left → "恢复数据" dialog blocks next close/startup → forced into another `/f` kill (vicious cycle). Fix: `_cleanup_unsaved_markers()` runs before `WM_CLOSE` and before GUI launch, removing the markers so the dialog never appears.
+4. **GUI forward-slash rejection**: The native `#32770` picker rejects path
+   strings with `/` (it answers "提示文件名无效"). `atk_bg save` internally
+   normalises `/` → `\` before WM_SETTEXT; callers using `PosixPath` don't
+   need to do anything.
 
-5. **Window class name**: ~~The official ATK-Logic uses window class `Qt5152QWindowOwnDCIcon`, NOT `FramelessWindow_QML_51`.~~ **✅ Fixed**: proxy DLL source updated to `Qt5152QWindowOwnDCIcon` + recompiled.
+5. **Recovery dialog on startup** ✅ Fixed: `taskkill /f` → `TerminateProcess()`
+   → skips Qt cleanup → `temp/memory/` + `lock` markers left → "恢复数据"
+   dialog blocks next close/startup → forced into another `/f` kill.
+   Fix: `_cleanup_unsaved_markers()` runs before `WM_CLOSE` and before GUI launch.
 
-6. **Full path pasted into Save As picker**: uia_save.py pastes the full output path into the filename field. Windows Save As picker accepts this, so the file lands directly at the target location. No copy step needed.
+6. **Window class name**: The official ATK-Logic uses window class
+   `Qt5152QWindowOwnDCIcon` (verified in spike_dialog.py via EnumWindows).
+   Title is `ATK-LogicView - DL16`. atk_bg.exe tries the class first,
+   then title-only as fallback.
 
-7. **TCP-ready ≠ GUI-ready race**: The DLL's TCP server starts in `DllMain` (process attach), which runs BEFORE Qt creates the main window. `_restart_gui()` now waits for both TCP connect AND a visible GUI window (`MainWindowTitle != ''`) before returning, plus a 1s settle time. This prevents F1 keybd_event from landing on nothing and producing "Capture complete (no new .atkdl found)".
+7. **Pre-paint windows**: Qt creates the QWindow before the MainWindowTitle
+   is set. atk_bg requires `gui_running()` (which checks
+   `MainWindowTitle -ne ''`) before delivering keys. The CLI uses the
+   same condition during `_restart_gui()` to gate startup.
 
-8. **Preflight status reset on restart**: `_restart_gui()` reloads the DLL, which resets `g_preflight_ok` to 0 in `DllMain`. `cmd_capture()` now tracks `gui_restarted` and re-runs preflight after restart if needed.
+8. **Architecture goal — no DLL injection, no TCP server** ✅ Achieved.
+   Previous design deployed a proxy Qt5Network.dll that hosted a TCP server
+   on `127.0.0.1:9876`. That DLL has been retired (`skill/proxy_dll/`
+   removed from repo); atk_cli now drives the GUI entirely through
+   Win32 PostMessage / SendMessage via atk_bg.exe. No code runs inside
+   the ATK-Logic process; no extra listen sockets; no interception.

@@ -1,9 +1,12 @@
-# ATK-Logic Capture — One-shot deployment script
+# atk-logic-capture — One-shot deployment script.
+# Architecture: atk_bg.exe (C# .NET 4.0, 12.5 KB) drives the ATK-LogicView
+# GUI via PostMessage. NO proxy DLL, NO TCP server, NO DLL injection.
+#
 # Run from the skill source directory (where this script lives).
-# Requires: PowerShell 7+, Python 3.12+ on PATH
+# Requires: PowerShell 7+, Python 3.12+ on PATH, .NET Framework 4.0 (for csc.exe).
 
 $ErrorActionPreference = 'Stop'
-$Host.UI.RawUI.WindowTitle = 'ATK-Logic Capture — Installer'
+$Host.UI.RawUI.WindowTitle = 'atk-logic-capture — Installer'
 
 # ── helpers ────────────────────────────────────────────────────────────────
 
@@ -22,8 +25,8 @@ function Test-Admin {
 Write-Host @'
 
 ╔══════════════════════════════════════════════════════════════╗
-║          ATK-Logic Capture — 一键部署脚本                    ║
-║          https://github.com/burnlife001/atk-logic-capture    ║
+║          atk-logic-capture — 一键部署脚本                    ║
+║          PostMessage-based, no DLL injection                ║
 ╚══════════════════════════════════════════════════════════════╝
 '@
 
@@ -33,11 +36,10 @@ if ($env:USERNAME -eq 'root') {
 
 # ── 0. menu ──────────────────────────────────────────────────────────────────
 
-Write-Host "`n  1. Install all (skills + proxy DLL)"
-Write-Host '  2. Install proxy DLL only'
+Write-Host "`n  1. Install all (skill + atk_bg.exe)"
 Write-Host '  0. Exit'
 $choice = Read-Host "`n  Select"
-if ($choice -notin '1', '2') {
+if ($choice -ne '1') {
     Write-Host '  Bye.' -ForegroundColor Gray
     exit 0
 }
@@ -82,42 +84,60 @@ function Find-ATKLogicGUI {
     return $null
 }
 
-# ── shared: deploy proxy DLL ────────────────────────────────────────────────
+# ── shared: build atk_bg.exe ──────────────────────────────────────────────
 
-function Deploy-ProxyDLL($guiDir) {
-    # kill any running ATK-Logic process
-    $atkProcs = Get-Process -Name 'ATK-Logic' -ErrorAction SilentlyContinue
-    if ($atkProcs) {
-        Write-Warn "ATK-Logic is running (PID: $($atkProcs.Id -join ', ')); stopping..."
-        $atkProcs | Stop-Process -Force
-        Start-Sleep -Milliseconds 500
-        Write-OK 'ATK-Logic process(es) terminated'
+function Build-AtkBg($rootDir) {
+    $srcCs   = Join-Path $rootDir 'tools\atk_bg\atk_bg.cs'
+    $exeOut  = Join-Path $rootDir 'tools\atk_bg\atk_bg.exe'
+    $buildPs = Join-Path $rootDir 'tools\atk_bg\build.ps1'
+
+    if (-not (Test-Path $srcCs)) {
+        Write-Fail "Source not found: $srcCs"
+        return $false
     }
-
-    $srcDll     = "$SRC_DIR\proxy_dll\Qt5Network.dll"
-    $realDll    = "$guiDir\Qt5Network_real.dll"
-    $targetDll  = "$guiDir\Qt5Network.dll"
-
-    if (-not (Test-Path $srcDll)) {
-        Write-Fail "Proxy DLL not found at $srcDll — build it first with proxy_dll\src\build.ps1"
-        exit 1
+    if (-not (Test-Path $buildPs)) {
+        Write-Fail "Build script not found: $buildPs"
+        return $false
     }
-
-    if (Test-Path $realDll) {
-        Write-OK "Qt5Network_real.dll already exists — overwriting Qt5Network.dll directly"
-        Copy-Item -Force $srcDll $targetDll
-    } elseif (Test-Path $targetDll) {
-        Write-OK 'Backing up original Qt5Network.dll → Qt5Network_real.dll'
-        Rename-Item $targetDll 'Qt5Network_real.dll'
-        Copy-Item $srcDll $targetDll
-    } else {
-        Write-Warn "Qt5Network.dll not found in $guiDir — copying proxy DLL anyway"
-        Copy-Item $srcDll $targetDll
+    if (Test-Path $exeOut) {
+        Write-OK "atk_bg.exe already present: $exeOut"
+        return $true
     }
-    Write-OK "Proxy DLL deployed: $targetDll"
+    Write-OK 'Building atk_bg.exe (csc.exe, .NET 4.0)...'
+    & pwsh -NoProfile -ExecutionPolicy Bypass -File $buildPs
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "atk_bg build failed (exit $LASTEXITCODE)"
+        return $false
+    }
+    if (-not (Test-Path $exeOut)) {
+        Write-Fail "Build script reported success but $exeOut is missing."
+        return $false
+    }
+    Write-OK "Built: $exeOut"
+    return $true
 }
 
-# ── shared: draw done box ───────────────────────────────────────────────────
+# ── shared: verify Qt5Network.dll is the original (no proxy) ───────────────
+
+function Verify-Qt5NetworkOriginal($guiDir) {
+    # The old proxy was ~250–400 KB; original Qt5Network.dll is ~1.3 MB.
+    $dll = Join-Path $guiDir 'Qt5Network.dll'
+    if (-not (Test-Path $dll)) {
+        Write-Warn "$dll not found — GUI install may be incomplete."
+        return
+    }
+    $size = (Get-Item $dll).Length
+    if ($size -lt 800000) {
+        Write-Warn ("Qt5Network.dll size is {0} KB — this looks like the OLD proxy DLL!" -f [int]($size/1024))
+        Write-Warn "If you migrated from the old proxy-based installer, restore the original:"
+        Write-Warn "  Rename $guiDir\Qt5Network.dll → Qt5Network_proxy.dll.bak"
+        Write-Warn "  Rename $guiDir\Qt5Network_real.dll → Qt5Network.dll"
+    } else {
+        Write-OK "Qt5Network.dll is the original ($([math]::Round($size/1024, 1)) KB) — no proxy present."
+    }
+}
+
+# ── shared: draw done box ──────────────────────────────────────────────────
 
 function Get-DisplayWidth([string]$s) {
     $w = 0
@@ -132,12 +152,13 @@ function Show-DoneBox($skillDir, $guiDir, $dataDir) {
         '',
         '部署完成！',
         '',
-        "Skill 目录:  $skillDir",
-        "ATK-Logic:   $guiDir",
-        "数据目录:    $dataDir",
+        "Skill 目录:    $skillDir",
+        "atk_bg.exe:    $skillDir\tools\atk_bg\atk_bg.exe",
+        "ATK-Logic:     $guiDir",
+        "数据目录:      $dataDir",
         '',
         '快速测试:',
-        '  atk_cli.py capture start --duration 2s',
+        '  python atk_cli.py capture start --duration 2s',
         ''
     )
 
@@ -161,194 +182,103 @@ function Show-DoneBox($skillDir, $guiDir, $dataDir) {
 # Option 1 — Install ALL
 # ══════════════════════════════════════════════════════════════════════════════
 
-if ($choice -eq '1') {
+# ── locate / create target SKILL_DIR ──────────────────────────────────────
 
-    # ── locate / create target SKILL_DIR ──────────────────────────────────
+Write-Step '1/5  Locating target Claude skills directory'
 
-    Write-Step '1/5  Locating target Claude skills directory'
+$SKILL_SEARCH = @(
+    "$env:USERPROFILE\.claude\skills"
+    "$env:LOCALAPPDATA\Claude\skills"
+    "$env:APPDATA\Claude\skills"
+    "$home\.claude\skills"
+    ([Environment]::GetFolderPath('UserProfile') + '\.claude\skills')
+)
 
-    $SKILL_SEARCH = @(
-        "$env:USERPROFILE\.claude\skills"
-        "$env:LOCALAPPDATA\Claude\skills"
-        "$env:APPDATA\Claude\skills"
-        "$home\.claude\skills"
-        ([Environment]::GetFolderPath('UserProfile') + '\.claude\skills')
-    )
-
-    $SKILL_DIR = $null
-    foreach ($p in $SKILL_SEARCH) {
-        if ($p -and (Test-Path $p)) {
-            $SKILL_DIR = $p
-            Write-OK "Found skills root: $SKILL_DIR"
-            break
-        }
+$SKILL_DIR = $null
+foreach ($p in $SKILL_SEARCH) {
+    if ($p -and (Test-Path $p)) {
+        $SKILL_DIR = $p
+        Write-OK "Found skills root: $SKILL_DIR"
+        break
     }
-
-    if (-not $SKILL_DIR) {
-        Write-Warn 'No existing .claude\skills found; creating one.'
-        $SKILL_DIR = "$env:USERPROFILE\.claude\skills"
-        New-Item -ItemType Directory -Force -Path $SKILL_DIR | Out-Null
-        Write-OK "Created: $SKILL_DIR"
-    }
-
-    $DST_DIR = "$SKILL_DIR\atk-logic-capture"
-
-    # ── copy skill files ──────────────────────────────────────────────────
-
-    Write-Step '2/5  Copying skill files'
-
-    if (Test-Path $DST_DIR) {
-        Write-Warn "Target already exists: $DST_DIR"
-        $answer = Read-Host 'Overwrite? (y/n)'
-        if ($answer -ne 'y') {
-            Write-Warn 'User cancelled overwrite — aborting.'
-            exit 0
-        }
-        Remove-Item -Recurse -Force $DST_DIR
-        Write-OK "Removed old copy"
-    }
-
-    $exclude = @('__pycache__', '.codegraph', '.git')
-    $toCopy = Get-ChildItem $SRC_DIR -Force | Where-Object { $exclude -notcontains $_.Name }
-    foreach ($item in $toCopy) {
-        Copy-Item -Recurse -Force $item.FullName $DST_DIR
-    }
-    Write-OK "Copied to $DST_DIR"
-
-    # ── proxy DLL ─────────────────────────────────────────────────────────
-
-    Write-Step '3/5  Locating ATK-Logic GUI & deploying proxy DLL'
-
-    $gui = Find-ATKLogicGUI
-    if ($gui) {
-        Write-OK "Found ATK-Logic: $($gui.Exe)"
-        Deploy-ProxyDLL $gui.Dir
-    } else {
-        Write-Warn 'Skipping proxy DLL — ATK-Logic not found.'
-    }
-
-    # ── update _config.py ─────────────────────────────────────────────────
-
-    Write-Step "4/5  Updating _config.py with local paths"
-
-    $configFile = "$DST_DIR\scripts\_config.py"
-    if (-not (Test-Path $configFile)) {
-        Write-Fail "_config.py not found at $configFile"
-        exit 1
-    }
-
-    $config = Get-Content $configFile -Raw -Encoding UTF8
-
-    if ($gui) {
-        $guiDirFwd = $gui.Dir.Replace('\', '/')
-        $guiExeFwd = "$guiDirFwd/ATK-Logic.exe"
-        $config = $config -replace 'GUI_EXE = Path\("[^"]*"\)', "GUI_EXE = Path(`"$guiExeFwd`")"
-        $config = $config -replace 'GUI_DIR = Path\("[^"]*"\)', "GUI_DIR = Path(`"$guiDirFwd`")"
-    }
-
-    $dataDir = 'E:\__electric\atk-logic-data'
-    $logDir  = 'E:\__electric\atk-logic-data\logs'
-    $dataDirFwd = $dataDir.Replace('\', '/')
-    $logDirFwd  = $logDir.Replace('\', '/')
-    $config = $config -replace 'DATA_DIR = Path\("[^"]*"\)', "DATA_DIR = Path(`"$dataDirFwd`")"
-    $config = $config -replace 'LOG_DIR = Path\("[^"]*"\)',  "LOG_DIR = Path(`"$logDirFwd`")"
-
-    $appdataAtk = "$env:APPDATA\ALIENTEK\ATK-LogicView".Replace('\', '/')
-    $config = $config -replace 'APPDATA_ATK = Path\("[^"]*"\)', "APPDATA_ATK = Path(`"$appdataAtk`")"
-
-    Set-Content -Path $configFile -Value $config -Encoding UTF8 -NoNewline
-    Write-OK "Updated: $configFile"
-
-    New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $logDir  | Out-Null
-    Write-OK "Created: $dataDir / logs"
-
-    # ── Python dependency ─────────────────────────────────────────────────
-
-    Write-Step '5/5  Installing Python dependency (uiautomation)'
-    $pipCmd = Get-Command pip -ErrorAction SilentlyContinue
-    if (-not $pipCmd) { $pipCmd = Get-Command pip3 -ErrorAction SilentlyContinue }
-    if (-not $pipCmd) {
-        Write-Fail 'pip not found on PATH. Install Python 3.12+ and add it to PATH.'
-        exit 1
-    }
-    & $pipCmd.Source install uiautomation 2>&1 | ForEach-Object { Write-Host "  $_" }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warn 'pip install returned non-zero; check the output above.'
-    } else {
-        Write-OK 'uiautomation installed'
-    }
-
-    # ── preflight ─────────────────────────────────────────────────────────
-
-    Write-Step 'Running preflight check'
-
-    $preflight = "$DST_DIR\scripts\atk_preflight.py"
-    if (Test-Path $preflight) {
-        python $preflight --fix 2>&1 | ForEach-Object { Write-Host "  $_" }
-        if ($LASTEXITCODE -eq 0) {
-            Write-OK 'Preflight PASSED — deployment complete!'
-        } else {
-            Write-Warn 'Preflight reported issues; review the output above.'
-        }
-    } else {
-        Write-Warn 'Preflight script not found; skipping.'
-    }
-
-    # ── done ──────────────────────────────────────────────────────────────
-
-    Show-DoneBox $DST_DIR ($gui.Dir ?? '(未找到)') $dataDir
-    Pause
 }
 
-# ══════════════════════════════════════════════════════════════════════════════
-# Option 2 — Proxy DLL only
-# ══════════════════════════════════════════════════════════════════════════════
+if (-not $SKILL_DIR) {
+    Write-Warn 'No existing .claude\skills found; creating one.'
+    $SKILL_DIR = "$env:USERPROFILE\.claude\skills"
+    New-Item -ItemType Directory -Force -Path $SKILL_DIR | Out-Null
+    Write-OK "Created: $SKILL_DIR"
+}
 
-if ($choice -eq '2') {
+$DST_DIR = "$SKILL_DIR\atk-logic-capture"
 
-    Write-Step 'Deploying proxy DLL'
+# ── copy skill files ─────────────────────────────────────────────────────
 
-    $gui = Find-ATKLogicGUI
-    if (-not $gui) {
-        Write-Fail 'ATK-Logic not found — cannot deploy proxy DLL.'
-        exit 1
+Write-Step '2/5  Copying skill files'
+
+if (Test-Path $DST_DIR) {
+    Write-Warn "Target already exists: $DST_DIR"
+    $answer = Read-Host 'Overwrite? (y/n)'
+    if ($answer -ne 'y') {
+        Write-Warn 'User cancelled overwrite — aborting.'
+        exit 0
     }
+    Remove-Item -Recurse -Force $DST_DIR
+    Write-OK "Removed old copy"
+}
+
+$exclude = @('__pycache__', '.codegraph', '.git')
+$toCopy = Get-ChildItem $SRC_DIR -Force | Where-Object { $exclude -notcontains $_.Name }
+foreach ($item in $toCopy) {
+    Copy-Item -Recurse -Force $item.FullName $DST_DIR
+}
+Write-OK "Copied to $DST_DIR"
+
+# ── build atk_bg.exe ─────────────────────────────────────────────────────
+
+Write-Step '3/5  Building atk_bg.exe'
+
+$atkBgBuilt = Build-AtkBg $DST_DIR
+if (-not $atkBgBuilt) {
+    Write-Fail 'atk_bg.exe build failed — cannot continue.'
+    exit 1
+}
+
+# ── locate ATK-Logic + sanity-check Qt5Network.dll ───────────────────────
+
+Write-Step '4/5  Locating ATK-Logic and sanity-checking Qt5Network.dll'
+
+$gui = Find-ATKLogicGUI
+if ($gui) {
     Write-OK "Found ATK-Logic: $($gui.Exe)"
-    Deploy-ProxyDLL $gui.Dir
-
-    # ── preflight ─────────────────────────────────────────────────────────
-
-    Write-Step 'Running preflight check'
-
-    $SKILL_SEARCH = @(
-        "$env:USERPROFILE\.claude\skills"
-        "$env:LOCALAPPDATA\Claude\skills"
-        "$env:APPDATA\Claude\skills"
-        "$home\.claude\skills"
-        ([Environment]::GetFolderPath('UserProfile') + '\.claude\skills')
-    )
-
-    $preflight = $null
-    foreach ($p in $SKILL_SEARCH) {
-        $candidate = "$p\atk-logic-capture\scripts\atk_preflight.py"
-        if ($p -and (Test-Path $candidate)) {
-            $preflight = $candidate
-            break
-        }
-    }
-
-    if ($preflight) {
-        python $preflight --fix 2>&1 | ForEach-Object { Write-Host "  $_" }
-        if ($LASTEXITCODE -eq 0) {
-            Write-OK 'Preflight PASSED — deployment complete!'
-        } else {
-            Write-Warn 'Preflight reported issues; review the output above.'
-        }
-    } else {
-        Write-Warn 'Preflight script not found; skipping.'
-    }
-
-    Show-DoneBox '(unchanged)' $gui.Dir '(unchanged)'
-    Pause
+    Verify-Qt5NetworkOriginal $gui.Dir
+} else {
+    Write-Warn 'ATK-Logic not found — install the GUI from the official site, then re-run.'
 }
+
+$dataDir = 'E:\__electric\atk-logic-data'
+$logDir  = 'E:\__electric\atk-logic-data\logs'
+New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+New-Item -ItemType Directory -Force -Path $logDir  | Out-Null
+Write-OK "Ensured: $dataDir / logs"
+
+# ── preflight ────────────────────────────────────────────────────────────
+
+Write-Step '5/5  Running preflight check'
+
+$preflight = "$DST_DIR\scripts\capture\atk_preflight.py"
+if (Test-Path $preflight) {
+    python $preflight --fix --json 2>&1 | ForEach-Object { Write-Host "  $_" }
+    if ($LASTEXITCODE -eq 0) {
+        Write-OK 'Preflight PASSED — deployment complete!'
+    } else {
+        Write-Warn 'Preflight reported issues; review the output above.'
+    }
+} else {
+    Write-Warn "Preflight script not found at $preflight"
+}
+
+# ── done ──────────────────────────────────────────────────────────────────
+
+Show-DoneBox $DST_DIR ($gui.Dir ?? '(未找到)') $dataDir
+Pause

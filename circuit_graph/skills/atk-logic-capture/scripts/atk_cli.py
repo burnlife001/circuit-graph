@@ -23,12 +23,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
 
-from _config import SCRIPTS_DIR, APPDATA_ATK, CONFIG_INI, get_data_dir, get_gui_dir, TCP_HOST, TCP_PORT
+from _config import (
+    APPDATA_ATK, CONFIG_INI, SCRIPTS_DIR, get_data_dir, get_gui_dir, ATK_BG_EXE,
+)
 from config_sync import sync_set_ini, get_set_ini_params
+import session_state
 
 from capture_reader import CaptureReader, parse_time
 
@@ -150,40 +155,31 @@ def _err(msg):
 
 
 # ---------------------------------------------------------------------------
-# preflight status helpers (DLL-persisted, lifetime = GUI process)
+# preflight status helpers — backed by skill_state.json on disk (was: DLL TCP)
 # ---------------------------------------------------------------------------
 
 def api_get_preflight_status() -> bool:
-    """Query DLL for preflight status. Returns True if preflight passed in this GUI session."""
-    import socket as _socket
-    try:
-        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
-        s.settimeout(3)
-        s.connect((TCP_HOST, TCP_PORT))
-        s.sendall(b'{"cmd":"get_preflight_status"}\n')
-        raw = s.recv(4096).decode().strip()
-        s.close()
-        if raw:
-            resp = json.loads(raw)
-            return resp.get("value") == "1"
-    except Exception:
-        pass
-    return False
+    """True if preflight passed in the current GUI session.
+
+    Wraps session_state.read_state() so older callers keep working.
+    """
+    pid = session_state.gui_running()
+    if pid <= 0:
+        return False
+    state = session_state.read_state(pid, session_state.gui_start_iso(pid))
+    return bool(state.get("preflight_ok", False))
 
 
 def api_set_preflight_status(ok: bool):
-    """Set preflight status in DLL. Survives within one GUI session."""
-    import socket as _socket
-    try:
-        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
-        s.settimeout(3)
-        s.connect((TCP_HOST, TCP_PORT))
-        val = "1" if ok else "0"
-        s.sendall(f'{{"cmd":"set_preflight_status","value":{val}}}\n'.encode())
-        s.recv(256)
-        s.close()
-    except Exception:
-        pass
+    """Persist preflight_ok in skill_state.json (replaces DLL TCP)."""
+    pid = session_state.gui_running()
+    if pid <= 0:
+        return
+    session_state.write_state(
+        pid,
+        session_state.gui_start_iso(pid),
+        preflight_ok=bool(ok),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -331,26 +327,22 @@ def _cleanup_unsaved_markers():
 
 
 def _restart_gui():
-    """Kill ATK-Logic.exe, restart it, and wait for TCP + GUI window ready.
+    """Restart ATK-Logic.exe and wait for its main window to appear.
 
-    Exits on timeout.
+    Replaces the old version that polled TCP. The TCP server lived in
+    Qt5Network.dll proxy and is gone; we now poll for the GUI window title
+    appearing (MainWindowTitle != ''), which is the same signal we use to
+    detect a "ready" GUI for atk_bg hotkey delivery.
 
-    Cleans up unsaved-data markers first so WM_CLOSE doesn't trigger a
-    blocking "recover data?" dialog.  Tries graceful close first, falls back
-    to /f only if the process survives >3s.  After restart, waits for BOTH
-    the TCP server AND a visible GUI window before returning — otherwise F1
-    keybd_event lands on nothing (window not yet created) and the capture
-    silently produces no data.
+    Cleans up unsaved-data markers first so WM_CLOSE does not trigger the
+    blocking "recover data?" dialog.
     """
-    import socket
     import subprocess as sp
 
     # ── Step 0: clean up markers from any previous force-kill ──
-    # Without this, ATK-Logic shows a "recover unsaved data?" dialog on
-    # WM_CLOSE, which blocks the graceful close and causes another /f kill.
     _cleanup_unsaved_markers()
 
-    # ── Step 1: graceful close first (WM_CLOSE), force-kill only as last resort ──
+    # ── Step 1: graceful close first, force-kill only as last resort ──
     print(f"  [sync] gracefully closing ATK-Logic.exe...")
     try:
         sp.run(["taskkill", "/im", "ATK-Logic.exe"],
@@ -358,7 +350,7 @@ def _restart_gui():
     except sp.TimeoutExpired:
         pass
 
-    # Poll for process exit (up to 3 s) — WM_CLOSE may take a moment
+    # Poll for process exit (up to 3 s).
     poll_deadline = time.time() + 3
     still_alive = False
     while time.time() < poll_deadline:
@@ -383,10 +375,9 @@ def _restart_gui():
             time.sleep(0.5)
         except Exception:
             pass
-        # Clean up again — /f kill may have left fresh markers
         _cleanup_unsaved_markers()
 
-    # ── Step 1: restart GUI ──
+    # ── Step 2: restart GUI ──
     gui_exe = get_gui_dir() / "ATK-Logic.exe"
     print(f"  [sync] restarting GUI: {gui_exe}")
     sp.Popen(
@@ -395,73 +386,19 @@ def _restart_gui():
         creationflags=sp.DETACHED_PROCESS if sys.platform == "win32" else 0
     )
 
-    # ── Step 2: poll TCP until ready ──
-    deadline = time.time() + 15
-    tcp_ready = False
-    while time.time() < deadline:
-        try:
-            s = socket.socket()
-            s.settimeout(1)
-            s.connect((TCP_HOST, TCP_PORT))
-            s.close()
-            tcp_ready = True
-            break
-        except Exception:
-            time.sleep(0.5)
-    if not tcp_ready:
-        print(f"  [error] TCP not ready after 15s, cannot proceed")
-        sys.exit(1)
-    print(f"  [sync] TCP {TCP_HOST}:{TCP_PORT} ready")
-
-    # ── Step 3: wait for GUI window to become visible ──
-    # DLL server starts in DllMain (process attach), which runs BEFORE Qt
-    # creates the main window.  If we return immediately after TCP connect,
-    # the next capture's F1 keybd_event can land on nothing — producing
-    # "Capture complete (no new .atkdl found)".
+    # ── Step 3: wait for GUI window title to appear ──
+    # Qt needs a moment to instantiate its main window after the process
+    # starts.  Polling for MainWindowTitle != '' is the readiness signal
+    # before any atk_bg hotkey delivery.
     print(f"  [sync] waiting for GUI window...")
-    win_deadline = time.time() + 15
-    window_found = False
-    while time.time() < win_deadline:
-        try:
-            r = sp.run(
-                ["powershell", "-NoProfile", "-Command",
-                 "(Get-Process -Name 'ATK-Logic' -ErrorAction SilentlyContinue |"
-                 " Where-Object { $_.MainWindowTitle -ne '' }).Count"],
-                capture_output=True, text=True, timeout=5
-            )
-            count = r.stdout.strip()
-            if count and count != "0":
-                window_found = True
-                break
-        except Exception:
-            pass
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        if session_state.gui_running() > 0:
+            print(f"  [sync] GUI window visible")
+            time.sleep(1.0)  # settle for Qt focus
+            return
         time.sleep(0.5)
-    if window_found:
-        print(f"  [sync] GUI window visible")
-        # Extra settling time for Qt to finish painting + keyboard focus
-        time.sleep(1.0)
-    else:
-        print(f"  [warn] GUI window not visible within 15s, proceeding anyway")
-
-
-def _get_gui_start_time():
-    """Get ATK-Logic.exe process start time as Unix timestamp. Returns 0 if unknown."""
-    import subprocess as _sp
-    try:
-        r = _sp.run(
-            ["powershell", "-NoProfile", "-Command",
-             "(Get-Process -Name 'ATK-Logic' -ErrorAction SilentlyContinue |"
-             " Select-Object -First 1).StartTime.ToUniversalTime().ToString('o')"],
-            capture_output=True, text=True, timeout=5
-        )
-        ts_str = r.stdout.strip()
-        if ts_str:
-            from datetime import datetime, timezone
-            dt = datetime.fromisoformat(ts_str)
-            return dt.timestamp()
-    except Exception:
-        pass
-    return 0.0
+    print(f"  [warn] GUI window not visible within 15s, proceeding anyway")
 
 
 def read_path_ini():
@@ -518,25 +455,29 @@ def sync_save_path(trgDir):
 
 
 def cmd_capture(args):
-    import json
-    import socket
-    import time
+    """Run capture using atk_bg.exe + skill_state.json (no DLL injection).
+
+    Flow:
+      preflight (state file) → sync (optional) → F1 → sleep duration →
+      F2 → sleep 3s → F12 → mode (a) fill dialog + click save OR mode (b)
+      mtime scan for the new .atkdl.
+    """
     import subprocess as sp
 
-    # ── Config sync: opt-in only ──
-    # Without --sync or explicit --ch/--sample-rate-hz/--threshold, skip all
-    # set.ini modification and GUI restart. Just capture with whatever the GUI
-    # currently has configured.
+    # ── Step 1: locate trgDir + GUI process ──
     trgDir = read_path_ini()
     print(f"  [pre] trgDir from config.ini: {trgDir}")
 
-    # ── Preflight status (DLL-persisted, lifetime = GUI session) ──
-    # First capture in a GUI session: run preflight + set status.
-    # Subsequent captures: skip preflight (already validated this session).
-    # Pass capture params to preflight so it syncs set.ini BEFORE starting the
-    # GUI — avoids a second GUI restart in cmd_capture's own sync step.
-    preflight_ok = api_get_preflight_status()
-    pf_sync_done = False  # preflight already synced params to set.ini
+    gui_pid = session_state.gui_running()
+    if gui_pid <= 0:
+        _err("ATK-Logic GUI is not running. Start D:/Programs/ATK-Logic/ATK-Logic.exe first.")
+        sys.exit(1)
+    gui_start = session_state.gui_start_iso(gui_pid)
+    state = session_state.read_state(gui_pid, gui_start)
+    preflight_ok = state["preflight_ok"]
+    pf_sync_done = False
+
+    # ── Step 2: preflight if needed ──
     if not preflight_ok:
         print("  [pre] Preflight status: NOT OK — running preflight...")
         preflight_script = str(SCRIPTS_DIR / "capture" / "atk_preflight.py")
@@ -555,27 +496,35 @@ def cmd_capture(args):
             sys.exit(1)
         try:
             pf_json = json.loads(pf_result.stdout.strip().split("\n")[-1])
-            if pf_json.get("all_ok"):
-                api_set_preflight_status(True)
-                pf_sync_done = pf_json.get("sync_done", False)
-                print("  [pre] Preflight passed — status set in DLL")
-            else:
+            if not pf_json.get("all_ok"):
                 _err("Preflight failed — check output above")
                 sys.exit(1)
         except (json.JSONDecodeError, IndexError):
             _err("Preflight output parse error")
             sys.exit(1)
+        # Recompute gui_pid + state — preflight may have restarted GUI
+        gui_pid = session_state.gui_running()
+        if gui_pid > 0:
+            gui_start = session_state.gui_start_iso(gui_pid)
+            session_state.write_state(gui_pid, gui_start, preflight_ok=True)
+            state = session_state.read_state(gui_pid, gui_start)
+            # Re-read whether preflight synced params (no GUI restart unless --fix did it)
+            pf_sync_done = pf_json.get("sync_done", False)
+            preflight_ok = True
+            print("  [pre] Preflight passed — state updated")
+        else:
+            _err("GUI exited during preflight")
+            sys.exit(1)
     else:
         print("  [pre] Preflight status: OK (already verified this GUI session)")
 
+    # ── Step 3: optional sync (--ch/--hz/--threshold/--sync) ──
     explicit_ch = args.ch is not None
     explicit_hz = args.sample_rate_hz is not None
     explicit_threshold = args.threshold is not None
-    # Skip sync if preflight already did it (params were written to set.ini
-    # before GUI start — no restart needed)
     do_sync = (args.sync or explicit_ch or explicit_hz or explicit_threshold) and not pf_sync_done
 
-    gui_restarted = False  # track for post-restart preflight re-check
+    gui_restarted = False
 
     if do_sync:
         ch_list_for_sync = [int(x.strip()) for x in args.ch.split(",") if x.strip()] if explicit_ch else None
@@ -590,56 +539,54 @@ def cmd_capture(args):
             _restart_gui()
         gui_restarted = needs_restart or save_restarted
 
-        # After sync, read back actual values for display
+        # Refresh session after potential restart
+        gui_pid = session_state.gui_running()
+        if gui_pid > 0:
+            gui_start = session_state.gui_start_iso(gui_pid)
+            state = session_state.read_state(gui_pid, gui_start)
+
         actual = get_set_ini_params()
         ch_list = ch_list_for_sync if explicit_ch else actual.get("channels", [0, 1, 2, 3])
         display_hz = args.sample_rate_hz if explicit_hz else actual.get("setHz", 20_000_000)
         display_threshold = args.threshold if explicit_threshold else actual.get("thresholdLevel", 1.5)
     else:
-        # Read set.ini for display only — don't modify anything.
-        # set.ini may be stale if the user changed channels in-GUI without
-        # triggering a save (GUI only writes set.ini on exit/capture).
         actual = get_set_ini_params()
         ch_list = actual.get("channels", [0, 1, 2, 3])
         display_hz = actual.get("setHz", 20_000_000)
         display_threshold = actual.get("thresholdLevel", 1.5)
-        needs_restart = False
 
         if pf_sync_done:
-            # Preflight already synced params before starting GUI — set.ini is
-            # authoritative, no staleness check needed.
             print(f"  [pre] set.ini: ch={ch_list}, {display_hz/1e6:.0f}MHz, {display_threshold}V (synced by preflight)")
         else:
-            # Staleness check: compare set.ini mtime vs GUI process start time.
-            # If set.ini is older, the GUI loaded these values at startup but the
-            # user may have changed them in the GUI since (in-GUI changes don't
-            # write back to set.ini until exit/capture).
             set_ini_path = APPDATA_ATK / "set.ini"
             set_ini_mtime = set_ini_path.stat().st_mtime if set_ini_path.exists() else 0
-            gui_start = _get_gui_start_time()
-            if gui_start > 0 and set_ini_mtime < gui_start:
+            # Compare set.ini mtime vs GUI start time (convert ISO -> ts).
+            gui_start_ts = 0.0
+            if gui_start:
+                try:
+                    from datetime import datetime
+                    gui_start_ts = datetime.fromisoformat(gui_start).timestamp()
+                except Exception:
+                    pass
+            if gui_start_ts > 0 and set_ini_mtime < gui_start_ts:
                 freshness = "⚠ stale (in-GUI changes may not be reflected)"
                 hint = True
-            elif gui_start > 0:
+            elif gui_start_ts > 0:
                 freshness = "(fresh — written after GUI start)"
                 hint = False
             else:
                 freshness = "(GUI not detected)"
                 hint = False
-
             print(f"  [pre] set.ini: ch={ch_list}, {display_hz/1e6:.0f}MHz, {display_threshold}V {freshness}")
             if hint:
                 print(f"  [pre] Pass --ch/--sample-rate-hz/--threshold to enforce known values if in doubt")
 
-    # ── Post-restart preflight re-check ──
-    # _restart_gui() reloads the DLL, which resets g_preflight_ok to 0 in
-    # DllMain.  If the GUI was restarted (for channel / sample-rate /
-    # threshold / savePath changes), re-run preflight to validate the new
-    # GUI instance.  Don't pass capture params — set.ini was already synced
-    # in the do_sync block above.
+    # ── Step 4: post-restart preflight re-check ──
+    # A new GUI process invalidates the preflight_ok stored against the old
+    # pid — the new GUI may be missing DLLs, save dir, etc.  Re-run.
     if gui_restarted:
-        preflight_ok = api_get_preflight_status()
-        if not preflight_ok:
+        # state was just refreshed above against potentially new pid
+        if not state["preflight_ok"]:
             print("  [pre] Post-restart preflight: NOT OK — re-running...")
             preflight_script = str(SCRIPTS_DIR / "capture" / "atk_preflight.py")
             pf_cmd = [sys.executable, preflight_script, "--fix", "--json"]
@@ -652,7 +599,10 @@ def cmd_capture(args):
             try:
                 pf_json = json.loads(pf_result.stdout.strip().split("\n")[-1])
                 if pf_json.get("all_ok"):
-                    api_set_preflight_status(True)
+                    gui_pid = session_state.gui_running()
+                    if gui_pid > 0:
+                        gui_start = session_state.gui_start_iso(gui_pid)
+                        session_state.write_state(gui_pid, gui_start, preflight_ok=True)
                     print("  [pre] Post-restart preflight passed")
                 else:
                     _err("Post-restart preflight failed — check output above")
@@ -661,174 +611,149 @@ def cmd_capture(args):
                 _err("Post-restart preflight output parse error")
                 sys.exit(1)
         else:
-            print("  [pre] Post-restart preflight: OK")
+            print("  [pre] Post-restart preflight: OK (state matched new pid)")
 
-    # ── Query isCtrlSPressed BEFORE opening main sock ──
-    # DLL handles only one client at a time (g_client guard in server_thread).
-    # If sock connects first, qsock is accepted at TCP level but rejected by
-    # InterlockedCompareExchangePointer → closesocket immediately. The query
-    # then fails with ConnectionReset or empty recv, which the old silent
-    # `except: pass` hid. Moving qsock before sock fixes this race.
-    isCtrlSPressed = False
-    try:
-        qsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        qsock.settimeout(3)
-        qsock.connect(("127.0.0.1", 9876))
-        qsock.sendall(b'{"cmd":"get_isCtrlSPressed"}\n')
-        raw = qsock.recv(4096).decode().strip()
-        if raw:
-            qresp = json.loads(raw)
-            if qresp.get("value") == "1":
-                isCtrlSPressed = True
-        qsock.close()
-    except Exception as e:
-        print(f"  [warn] isCtrlSPressed query failed ({e}), assuming False")
+    # ── Step 5: dispatch start | stop ──
+    if args.capture_action == "stop":
+        # Direct key delivery — no save flow needed.
+        print("  [stop] sending F2 (stop capture) to background GUI...")
+        r = sp.run([str(ATK_BG_EXE), "key", "F2"], capture_output=True, timeout=10)
+        if r.returncode != 0:
+            _err(f"atk_bg key F2 failed: {r.stderr.decode('utf-8', 'replace').strip()}")
+            sys.exit(1)
+        print("Capture stopped.")
+        return
 
-    print(f"  [pre] isCtrlSPressed = {isCtrlSPressed}")
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(5)
-
-    try:
-        sock.connect(("127.0.0.1", 9876))
-    except (ConnectionRefusedError, socket.timeout, OSError) as e:
-        _err(f"Cannot connect to ATK-Logic GUI at 127.0.0.1:9876 ({e})")
-        _err("Please start ATK-Logic.exe first, then retry.")
+    if args.capture_action != "start":
+        _err(f"Unknown capture action: {args.capture_action}")
         sys.exit(1)
 
-    try:
-        if args.capture_action == "start":
-            duration_str = args.duration
-            duration_ns = parse_time(duration_str)
-            duration_s = duration_ns / 1_000_000_000
+    # ── Step 6: capture start ──
+    duration_str = args.duration
+    duration_ns = parse_time(duration_str)
+    duration_s = duration_ns / 1_000_000_000
 
-            if args.output is None:
-                ts = time.strftime("%Y%m%d_%H%M%S")
-                output = str(trgDir / f"capture-{ts}.atkdl")
-            else:
-                output = str(trgDir / Path(args.output).name)
+    if args.output is None:
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        output = str(trgDir / f"capture-{ts}.atkdl")
+    else:
+        output = str(trgDir / Path(args.output).name)
 
-            Path(output).parent.mkdir(parents=True, exist_ok=True)
+    Path(output).parent.mkdir(parents=True, exist_ok=True)
 
-            # Record pre-capture newest .atkdl mtime (for non-picker save detection)
-            pre_mtime = 0.0
+    # Pre-capture newest .atkdl mtime (for direct-save detection).
+    pre_mtime = 0.0
+    for f in trgDir.glob("*.atkdl"):
+        mt = f.stat().st_mtime
+        if mt > pre_mtime:
+            pre_mtime = mt
+
+    print(f"=== ATK-Logic Capture ===")
+    print(f"  Sample rate: {display_hz / 1e6:.0f} MHz")
+    print(f"  Duration:    {duration_s:.1f}s")
+    print(f"  Channels:    {ch_list}")
+    print(f"  Threshold:   {display_threshold} V")
+    print(f"  Output:      {Path(output).name}")
+    print(f"  RLE:         {'on' if args.rle else 'off'}")
+
+    is_ctrl_s_pressed = state["is_ctrl_s_pressed"]
+    print(f"  [pre] is_ctrl_s_pressed = {is_ctrl_s_pressed}  (first save opens picker, subsequent are direct)")
+
+    # ── Drive GUI: F1 → wait → F2 → wait → F12 ──
+    if not ATK_BG_EXE.exists():
+        _err(f"atk_bg.exe not found at {ATK_BG_EXE}. Build it: pwsh {ATK_BG_EXE.parent}/build.ps1")
+        sys.exit(1)
+
+    print(f"  [capture] sending F1 (start)...")
+    r = sp.run([str(ATK_BG_EXE), "key", "F1"], capture_output=True, timeout=10)
+    if r.returncode != 0:
+        _err(f"atk_bg key F1 failed: {r.stderr.decode('utf-8', 'replace').strip()}")
+        sys.exit(1)
+
+    print(f"  [capture] waiting {duration_s:.1f}s...", flush=True)
+    time.sleep(duration_s)
+
+    print(f"  [capture] sending F2 (stop)...")
+    r = sp.run([str(ATK_BG_EXE), "key", "F2"], capture_output=True, timeout=10)
+    if r.returncode != 0:
+        _err(f"atk_bg key F2 failed: {r.stderr.decode('utf-8', 'replace').strip()}")
+        sys.exit(1)
+
+    # GUI needs a moment to finish processing data + render post-capture state
+    print(f"  [capture] waiting 1s for GUI to settle before save trigger...")
+    time.sleep(1.0)
+
+    print(f"  [save] sending F12 (save)...")
+    r = sp.run([str(ATK_BG_EXE), "key", "F12"], capture_output=True, timeout=10)
+    if r.returncode != 0:
+        _err(f"atk_bg key F12 failed: {r.stderr.decode('utf-8', 'replace').strip()}")
+        sys.exit(1)
+
+    # Branch on is_ctrl_s_pressed:
+    #   False (first save in this session) → atk_bg fills Save-As picker
+    #   True  (subsequent saves) → GUI does direct save, we mtime-scan
+    if not is_ctrl_s_pressed:
+        print(f"  [save] first save — filling Save-As picker via atk_bg save...")
+        r = sp.run([str(ATK_BG_EXE), "save", str(Path(output)), "--timeout", "2"],
+                   capture_output=True, timeout=15)
+        # atk_bg save may report saved=false (file landed at GUI's choice path)
+        # — don't fail just on that. We verify by file existence + size.
+        if r.returncode not in (0, 7):
+            _err(f"atk_bg save failed: {r.stderr.decode('utf-8', 'replace').strip()}")
+            sys.exit(1)
+
+        # Verify expected file. If it didn't land at output, do mtime scan.
+        dst = Path(output)
+        if dst.exists() and dst.stat().st_size > 1000:
+            size_kb = dst.stat().st_size / 1024
+            # Mark first-save done so subsequent saves skip the picker.
+            if gui_pid > 0:
+                session_state.write_state(gui_pid, gui_start, is_ctrl_s_pressed=True)
+            print(f"Capture complete!")
+            print(f"  File:    {output}")
+            print(f"  Size:    {size_kb:.0f} KB")
+            return
+
+        # Fallback: scan for any new file (GUI may have ignored our filename).
+        newest = None
+        newest_time = pre_mtime
+        for f in trgDir.glob("*.atkdl"):
+            mt = f.stat().st_mtime
+            if mt > newest_time:
+                newest_time = mt
+                newest = f
+        if newest:
+            if gui_pid > 0:
+                session_state.write_state(gui_pid, gui_start, is_ctrl_s_pressed=True)
+            print(f"Capture complete!")
+            print(f"  File:    {newest}")
+            print(f"  Size:    {newest.stat().st_size / 1024:.0f} KB")
+            return
+
+        print(f"Error: no .atkdl file found at {output} or newer than mtime {pre_mtime} in {trgDir}")
+        sys.exit(1)
+
+    else:
+        # Subsequent save: GUI direct-saves to last-used path. Scan mtime.
+        # Wait briefly (≤1.5s) for any new file to appear.
+        deadline = time.time() + 1.5
+        newest = None
+        newest_time = pre_mtime
+        while time.time() < deadline:
             for f in trgDir.glob("*.atkdl"):
                 mt = f.stat().st_mtime
-                if mt > pre_mtime:
-                    pre_mtime = mt
-
-            print(f"=== ATK-Logic Capture ===")
-            print(f"  Sample rate: {display_hz / 1e6:.0f} MHz")
-            print(f"  Duration:    {duration_s:.1f}s")
-            print(f"  Channels:    {ch_list}")
-            print(f"  Threshold:   {display_threshold} V")
-            print(f"  Save name:   {Path(output).name}  (picker only; direct save detected via timestamp)")
-            print(f"  RLE:         {'on' if args.rle else 'off'}")
-
-            req = {
-                "cmd": "start",
-                "chs": ch_list,
-                "duration_s": duration_s,
-                "sample_rate_hz": display_hz,
-                "threshold_v": display_threshold,
-                "rle": args.rle,
-            }
-            # Only pass output filename for first save (picker case).
-            # On subsequent saves the GUI ignores it — it overwrites in-place
-            # at its last-used path. Passing it is harmless but misleading.
-            if not isCtrlSPressed:
-                req["output"] = output
-            sock.sendall((json.dumps(req) + "\n").encode())
-
-            # Wait for responses: progress updates then final result
-            sock.settimeout(duration_s + 30)
-            buf = b""
-            while True:
-                try:
-                    chunk = sock.recv(4096)
-                    if not chunk:
-                        break
-                    buf += chunk
-                    while b"\n" in buf:
-                        line, buf = buf.split(b"\n", 1)
-                        resp = json.loads(line.decode())
-                        status = resp.get("status", "")
-                        if status == "progress":
-                            phase = resp.get("phase", "capture")
-                            schedule = resp.get("schedule", 0)
-                            print(f"\r  [{phase}] {schedule}%", end="", flush=True)
-                        elif status == "ok":
-                            save_prompt = resp.get("save_prompt")
-                            if save_prompt == "open":
-                                # First save — picker opened, use UIA to fill and save
-                                filename = resp.get("filename", "capture.atkdl")
-                                print(f"\r  [save] picker open, filling path via UIA...", flush=True)
-                                uia_script = str(SCRIPTS_DIR / "capture" / "uia_save.py")
-                                try:
-                                    sp.run(
-                                        [sys.executable, uia_script, filename],
-                                        timeout=20, check=False
-                                    )
-                                except sp.TimeoutExpired:
-                                    pass
-                                # Verify file saved
-                                dst = Path(output)
-                                if dst.exists() and dst.stat().st_size > 1000:
-                                    # Mark first save done so subsequent saves skip picker
-                                    try:
-                                        ssock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                                        ssock.settimeout(3)
-                                        ssock.connect(("127.0.0.1", 9876))
-                                        ssock.sendall(b'{"cmd":"set_isCtrlSPressed","value":1}\n')
-                                        ssock.recv(256)
-                                        ssock.close()
-                                    except Exception:
-                                        pass
-                                    print(f"\nCapture complete!")
-                                    print(f"  File:    {output}")
-                                    print(f"  Size:    {dst.stat().st_size / 1024:.0f} KB")
-                                    return
-
-                                print(f"\nError: file not found at {output}")
-                                sys.exit(1)
-                            else:
-                                # save_prompt == "none" — direct save (no picker).
-                                # GUI saves to its last-used path; find files newer
-                                # than the pre-capture newest.
-                                newest = None
-                                newest_time = pre_mtime
-                                for f in trgDir.glob("*.atkdl"):
-                                    mt = f.stat().st_mtime
-                                    if mt > newest_time:
-                                        newest_time = mt
-                                        newest = f
-                                if newest:
-                                    print(f"\nCapture complete!")
-                                    print(f"  File:    {newest}")
-                                    print(f"  Size:    {newest.stat().st_size / 1024:.0f} KB")
-                                else:
-                                    print(f"\nCapture complete (no new .atkdl found in {trgDir})")
-                                return
-                        elif status == "error":
-                            print(f"\nError: {resp.get('msg', 'unknown error')}")
-                            sys.exit(1)
-                except socket.timeout:
-                    print(f"\nError: Capture timed out (no response from GUI)")
-                    sys.exit(1)
-
-        elif args.capture_action == "stop":
-            req = {"cmd": "stop"}
-            sock.sendall((json.dumps(req) + "\n").encode())
-            sock.settimeout(5)
-            resp_data = sock.recv(4096)
-            resp = json.loads(resp_data.decode().strip())
-            if resp.get("status") == "ok":
-                print("Capture stopped.")
-            else:
-                _err(f"Error: {resp.get('msg', 'unknown error')}")
-                sys.exit(1)
-    finally:
-        sock.close()
+                if mt > newest_time:
+                    newest_time = mt
+                    newest = f
+            if newest:
+                break
+            time.sleep(0.05)
+        if newest:
+            print(f"Capture complete!")
+            print(f"  File:    {newest}")
+            print(f"  Size:    {newest.stat().st_size / 1024:.0f} KB")
+        else:
+            print(f"Capture complete (no new .atkdl found in {trgDir})")
 
 
 # ---------------------------------------------------------------------------

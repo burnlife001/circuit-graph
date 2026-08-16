@@ -453,9 +453,33 @@ def classify_signal(edges: list, sample_rate_hz: int) -> dict:
             if len(paired_periods) >= 3:
                 avg_pair = sum(paired_periods) / len(paired_periods)
                 if avg_pair > 0:
-                    pair_var = sum((p - avg_pair) ** 2 for p in paired_periods) / len(paired_periods)
-                    pair_cv = (pair_var ** 0.5) / avg_pair * 100
-                    pair_freq = 1e9 / avg_pair
+                    # ── Robust carrier CV: trim outliers around median ──
+                    # Raw pair CV can be inflated by capture-boundary truncation
+                    # (first/last cycles) or single-cycle glitches (e.g. a 110ms
+                    # burst in a 10ms-period signal causes CV>>30% and pushes an
+                    # otherwise obvious PWM into the 'complex' bucket). Mirror
+                    # the inlier-trim approach used by periods_ns above so the
+                    # carrier stability test reflects the bulk of cycles, not
+                    # a handful of extreme ones.
+                    sorted_pairs = sorted(paired_periods)
+                    median_pair = sorted_pairs[len(sorted_pairs) // 2]
+                    if median_pair > 0:
+                        inlier_pairs = [p for p in paired_periods
+                                        if abs(p - median_pair) / median_pair <= 0.30]
+                        if len(inlier_pairs) >= 3:
+                            trim_avg = sum(inlier_pairs) / len(inlier_pairs)
+                            pair_var = sum((p - trim_avg) ** 2 for p in inlier_pairs) / len(inlier_pairs)
+                            pair_cv = (pair_var ** 0.5) / trim_avg * 100
+                            pair_freq = 1e9 / trim_avg
+                            avg_pair = trim_avg
+                        else:
+                            pair_var = sum((p - avg_pair) ** 2 for p in paired_periods) / len(paired_periods)
+                            pair_cv = (pair_var ** 0.5) / avg_pair * 100
+                            pair_freq = 1e9 / avg_pair
+                    else:
+                        pair_var = sum((p - avg_pair) ** 2 for p in paired_periods) / len(paired_periods)
+                        pair_cv = (pair_var ** 0.5) / avg_pair * 100
+                        pair_freq = 1e9 / avg_pair
                     # Stable carrier + frequency in PWM range → PWM
                     if pair_cv < 30 and 0.5 < pair_freq < 2000:
                         duty = 0

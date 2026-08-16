@@ -1,125 +1,120 @@
 """
-ATK-Logic pre-flight self-check.
-Verifies all prerequisites before attempting waveform capture.
-Usage: python atk_preflight.py [--output <filename>]
-Exit code 0 = all checks passed, non-zero = at least one check failed.
+ATK-Logic pre-flight self-check (DLL-free edition).
+
+Replaces the proxy-DLL / TCP-server checks. Verifies:
+  1. atk_bg.exe exists and runs (the actual driver)
+  2. ATK-Logic GUI is running with a visible main window
+  3. set.ini has saveFile=F12 (required for atk_bg F12 → save flow)
+  4. set.ini savePath matches DATA_DIR from config.ini
+  5. atk_cli.py exists
+  6. atk_classify.py exists
+  7. DATA_DIR is writable, stale .atkdl at output path removed
+
+Side effect on success: writes preflight_ok=true to skill_state.json for the
+current GUI session. cmd_capture reads this flag and skips re-running preflight
+within the same GUI session.
+
+Usage:
+    python atk_preflight.py [--fix] [--output name.atkdl] [--json]
+Exit codes: 0 = all checks passed, non-zero = at least one failed.
 """
+from __future__ import annotations
+
+import argparse
+import json as _json
 import os
+import shutil
+import subprocess
 import sys
 import time
-import socket
-import argparse
-import subprocess
 from pathlib import Path
 
-# Support running from any directory — add parent (scripts/) to path
-_parent_dir = Path(__file__).resolve().parent.parent
-if str(_parent_dir) not in sys.path:
-    sys.path.insert(0, str(_parent_dir))
+# Support running from any directory
+_this_dir = Path(__file__).resolve().parent
+_scripts_dir = _this_dir.parent
+sys.path.insert(0, str(_scripts_dir))
 
-# ----- config (all external paths from _config.py) -----
 from _config import (
-    PROXY_EXPECTED_KB,
-    TCP_HOST, TCP_PORT,
-    SCRIPTS_DIR, APPDATA_ATK, get_data_dir, get_gui_dir,
+    APPDATA_ATK, SCRIPTS_DIR, ATK_BG_EXE, get_data_dir, get_gui_dir,
 )
 from config_sync import sync_set_ini
+import session_state
 
 CLI_SCRIPT = SCRIPTS_DIR / "atk_cli.py"
 WAVE_SCRIPT = SCRIPTS_DIR / "analyze" / "atk_classify.py"
 
 
-def _size_kb(p: Path) -> int:
-    try:
-        return p.stat().st_size // 1024
-    except OSError:
-        return -1
-
-
 def _green(s: str) -> str: return f"\033[32m{s}\033[0m"
 def _red(s: str) -> str:   return f"\033[31m{s}\033[0m"
-def _yellow(s: str) -> str: return f"\033[33m{s}\033[0m"
 
 
-def _set_preflight_status_tcp(ok: bool):
-    """Persist preflight status in proxy DLL memory (lifetime = GUI process)."""
-    try:
-        s = socket.socket()
-        s.settimeout(3)
-        s.connect((TCP_HOST, TCP_PORT))
-        val = "1" if ok else "0"
-        s.sendall(f'{{"cmd":"set_preflight_status","value":{val}}}\n'.encode())
-        s.recv(256)
-        s.close()
-    except Exception:
-        pass  # non-critical — cmd_capture will re-run preflight if needed
+def _ensure_atk_bg():
+    """Verify atk_bg.exe exists and is runnable."""
+    if not ATK_BG_EXE.exists():
+        return False, f"atk_bg.exe NOT found at {ATK_BG_EXE}. Build it: pwsh tools/atk_bg/build.ps1"
+    return True, f"atk_bg.exe OK: {ATK_BG_EXE}"
 
 
-def check_proxy_dll():
-    """Verify proxy DLL is deployed (not the original)."""
-    gui_dir = get_gui_dir()
-    proxy_dll = gui_dir / "Qt5Network.dll"
-    real_dll = gui_dir / "Qt5Network_real.dll"
-    proxy_kb = _size_kb(proxy_dll)
-    real_kb = _size_kb(real_dll)
-
-    if proxy_kb < 0:
-        return False, f"Proxy DLL not found at {proxy_dll}"
-    if PROXY_EXPECTED_KB[0] <= proxy_kb <= PROXY_EXPECTED_KB[1]:
-        if real_kb < 0:
-            return True, f"Proxy DLL OK ({proxy_kb} KB) — real DLL backup not found, but proxy looks correct"
-        return True, f"Proxy DLL OK ({proxy_kb} KB vs real {real_kb} KB)"
-    else:
-        return False, f"Proxy DLL wrong size ({proxy_kb} KB) — expected ~{PROXY_EXPECTED_KB[0]}-{PROXY_EXPECTED_KB[1]} KB. Rebuild proxy_dll/src or check build flags (/MD vs /MT)"
+def _ensure_gui_window():
+    """Verify ATK-Logic GUI is running with a visible main window."""
+    pid = session_state.gui_running()
+    if pid <= 0:
+        gui_dir = get_gui_dir()
+        return False, f"ATK-Logic GUI not running. Start {gui_dir / 'ATK-Logic.exe'}"
+    return True, f"ATK-Logic GUI running pid={pid}"
 
 
-def check_gui_running():
-    """Check ATK-Logic GUI process exists."""
-    try:
-        result = subprocess.run(
-            ["tasklist", "/fi", "IMAGENAME eq ATK-Logic.exe", "/fo", "csv", "/nh"],
-            capture_output=True, text=True, timeout=5
+def _ensure_save_file_shortcut():
+    """set.ini must have saveFile=F12 (and startCollecting=F1 / stopCollecting=F2)."""
+    set_ini = APPDATA_ATK / "set.ini"
+    if not set_ini.exists():
+        return False, f"set.ini NOT found at {set_ini}"
+    text = set_ini.read_text(encoding="utf-8")
+    section_keys = {}
+    cur_section = None
+    for line in text.splitlines():
+        line_s = line.strip()
+        if line_s.startswith("[") and line_s.endswith("]"):
+            cur_section = line_s[1:-1]
+            section_keys.setdefault(cur_section, {})
+        elif "=" in line_s and cur_section:
+            k, _, v = line_s.partition("=")
+            section_keys.setdefault(cur_section, {})[k.strip()] = v.strip()
+    # Look in any section (the GUI's section may vary)
+    flat = {k.lower(): v for s in section_keys.values() for k, v in s.items()}
+    needed = {
+        "saveFile": "F12",
+        "startCollecting": "F1",
+        "stopCollecting": "F2",
+    }
+    missing = []
+    for k, expected in needed.items():
+        actual = flat.get(k.lower(), "")
+        if actual.upper() != expected.upper():
+            missing.append(f"{k}={actual!r} (expected {expected!r})")
+    if missing:
+        return False, (
+            f"set.ini shortcuts: " + ", ".join(missing)
+            + f". set.ini at {set_ini} must have these for atk_bg key flow."
         )
-        if "ATK-Logic.exe" in result.stdout:
-            return True, "ATK-Logic.exe is running"
-        else:
-            return False, f"ATK-Logic.exe NOT running — start it: {get_gui_dir() / 'ATK-Logic.exe'}"
-    except Exception as e:
-        return False, f"Cannot check process list: {e}"
+    return True, "set.ini shortcuts: startCollecting=F1, stopCollecting=F2, saveFile=F12"
 
 
-def check_tcp():
-    """Verify TCP connection to proxy DLL server."""
-    try:
-        s = socket.socket()
-        s.settimeout(3)
-        s.connect((TCP_HOST, TCP_PORT))
-        s.close()
-        return True, f"TCP {TCP_HOST}:{TCP_PORT} OK"
-    except Exception as e:
-        return False, f"TCP {TCP_HOST}:{TCP_PORT} FAILED — {e}. Is ATK-Logic running with proxy DLL?"
-
-
-def check_cli():
-    """Verify atk_cli.py exists."""
+def _check_cli():
     if CLI_SCRIPT.exists():
         return True, f"CLI script OK: {CLI_SCRIPT}"
     return False, f"CLI script NOT found: {CLI_SCRIPT}"
 
 
-def check_classify():
-    """Verify atk_classify.py exists."""
+def _check_classify():
     if WAVE_SCRIPT.exists():
         return True, f"Signal classifier OK: {WAVE_SCRIPT}"
     return False, f"Signal classifier NOT found: {WAVE_SCRIPT}"
 
 
-def check_output(output_name: str | None):
-    """Validate DATA_DIR is writable. output_name is filename-only (no path)."""
+def _check_output(output_name: str | None):
     if not output_name:
         return True, "No --output specified (will use auto-timestamp)"
-
-    # DATA_DIR is read from config.ini
     parent = get_data_dir()
     if not parent.exists():
         try:
@@ -127,22 +122,20 @@ def check_output(output_name: str | None):
             return True, f"Created output directory: {parent}"
         except OSError as e:
             return False, f"Cannot create output directory {parent}: {e}"
-
     if not os.access(str(parent), os.W_OK):
         return False, f"Output directory not writable: {parent}"
-
-    # Clean up stale file at output location
     dst = parent / Path(output_name).name
     warnings = []
     if dst.exists():
         if dst.is_dir():
-            import shutil
-            shutil.rmtree(str(dst))
+            shutil.rmtree(str(dst), ignore_errors=True)
             warnings.append(f"removed stale directory: {dst.name}")
         else:
-            dst.unlink()
-            warnings.append(f"removed stale file: {dst.name}")
-
+            try:
+                dst.unlink()
+                warnings.append(f"removed stale file: {dst.name}")
+            except OSError:
+                pass
     msg = f"Output path OK: {dst}"
     if warnings:
         msg += " — " + ", ".join(warnings)
@@ -150,171 +143,173 @@ def check_output(output_name: str | None):
 
 
 def _cleanup_unsaved_markers():
-    """Remove ATK-Logic temp/memory markers left by a previous force-kill.
+    """Best-effort cleanup of any stale "recover data?" markers.
 
-    These markers cause ATK-Logic to show a "recover unsaved data?" dialog
-    on startup.  Called before starting the GUI so the first launch is clean.
+    ATK-Logic writes temp/memory + lock files when the previous instance was
+    killed without graceful shutdown. Without this cleanup, on next launch
+    the GUI shows a "recover data?" prompt that blocks startup.
     """
-    import shutil
     memory_dir = APPDATA_ATK / "temp" / "memory"
     lock_file = APPDATA_ATK / "temp" / "lock"
     if memory_dir.exists():
         try:
             shutil.rmtree(str(memory_dir), ignore_errors=True)
-        except Exception:
+        except OSError:
             pass
     if lock_file.exists():
         try:
             lock_file.unlink()
-        except Exception:
+        except OSError:
             pass
 
 
-def fix_gui_and_tcp():
-    """Start GUI if not running, then poll TCP until ready (15s timeout).
-    Returns (ok, msg, gui_was_running: bool)."""
-    # Check if GUI already running
+def _start_gui_and_wait():
+    """Launch GUI if not running; wait for its main window to become visible.
+    Returns (ok, msg, gui_was_running)."""
+    pid = session_state.gui_running()
+    if pid > 0:
+        return True, f"GUI already running pid={pid}", True
+
+    # Not running — clean stale markers, then launch.
+    _cleanup_unsaved_markers()
+    gui_exe = get_gui_dir() / "ATK-Logic.exe"
+    if not gui_exe.exists():
+        return False, f"ATK-Logic.exe not found at {gui_exe}", False
+    print(f"  Starting GUI: {gui_exe}", flush=True)
     try:
-        result = subprocess.run(
-            ["tasklist", "/fi", "IMAGENAME eq ATK-Logic.exe", "/fo", "csv", "/nh"],
-            capture_output=True, text=True, timeout=5
+        subprocess.Popen(
+            [str(gui_exe)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=subprocess.DETACHED_PROCESS if sys.platform == "win32" else 0,
         )
-        gui_running = "ATK-Logic.exe" in result.stdout
-    except Exception:
-        gui_running = False
+    except Exception as e:
+        return False, f"Failed to start GUI: {e}", False
 
-    if not gui_running:
-        # Remove unsaved-data markers from any previous force-kill so the
-        # GUI doesn't show a "recover data?" dialog on startup.
-        _cleanup_unsaved_markers()
-
-        gui_exe = get_gui_dir() / "ATK-Logic.exe"
-        print(f"  Starting GUI: {gui_exe}", flush=True)
-        try:
-            subprocess.Popen(
-                [str(gui_exe)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=subprocess.DETACHED_PROCESS if sys.platform == "win32" else 0
-            )
-        except Exception as e:
-            return False, f"Failed to start GUI: {e}", gui_running
-
-    # Poll TCP until ready
-    timeout_s = 15
-    interval_s = 0.5
-    deadline = time.time() + timeout_s
+    # Wait up to 15 s for window to appear.
+    deadline = time.time() + 15
     while time.time() < deadline:
-        try:
-            s = socket.socket()
-            s.settimeout(1)
-            s.connect((TCP_HOST, TCP_PORT))
-            s.close()
-            detail = "already running" if gui_running else "auto-started"
-            return True, f"GUI {detail}, TCP {TCP_HOST}:{TCP_PORT} ready", gui_running
-        except Exception:
-            time.sleep(interval_s)
+        if session_state.gui_running() > 0:
+            time.sleep(1.0)  # Qt focus settle
+            return True, f"GUI auto-started, window visible", False
+        time.sleep(0.5)
+    return False, "GUI start requested but no window appeared within 15 s", False
 
-    return False, (
-        f"TCP {TCP_HOST}:{TCP_PORT} not ready after {timeout_s}s — "
-        "GUI may have failed to start or launched with an unexpected window class"
-    ), gui_running
+
+def _write_state_if_changed(*, gui_pid, gui_start, preflight_ok):
+    session_state.write_state(
+        gui_pid, gui_start,
+        preflight_ok=bool(preflight_ok),
+    )
 
 
 def main():
-    import json as _json
-
     parser = argparse.ArgumentParser(description="ATK-Logic pre-flight check")
     parser.add_argument("--output", "-o", help="Planned output .atkdl filename only (validates DATA_DIR)")
     parser.add_argument("--fix", action="store_true",
-                        help="Auto-start GUI and wait for TCP if not running")
+                        help="Auto-start GUI and wait for window if not running")
     parser.add_argument("--json", action="store_true",
-                        help="Output machine-parseable JSON instead of human-readable text")
-    parser.add_argument("--ch", help="Comma-separated channel IDs to enable (e.g. 0,1,2,3)")
+                        help="Output machine-parseable JSON instead of human text")
+    # Forwarded capture params (PUSHED to set.ini BEFORE start of GUI).
+    # Mirrors the original preflight contract: preflight was the place that
+    # synced params + saved backup + restarted GUI so the just-launched
+    # GUI came up with the user's exact request.
+    parser.add_argument("--ch", help="Comma-separated channel IDs (e.g. 0,1,2,3)")
     parser.add_argument("--sample-rate-hz", type=int, help="Sample rate in Hz")
-    parser.add_argument("--threshold", type=float, help="Threshold voltage")
+    parser.add_argument("--threshold", type=float, help="Logic threshold voltage")
     args = parser.parse_args()
 
-    gui_was_running = None  # only set by --fix mode
+    gui_was_running = None
+    sync_done = False
+    sync_changes = []
+
+    # ── Sync capture params to set.ini BEFORE launching the GUI (when --fix).
+    # Doing it here means the GUI comes up with the right config; cmd_capture
+    # doesn't need a second restart for the same params.
+    if args.fix and (args.ch is not None or args.sample_rate_hz is not None or args.threshold is not None):
+        ch_list = None
+        if args.ch is not None:
+            ch_list = [int(x.strip()) for x in args.ch.split(",") if x.strip()]
+        sr = sync_set_ini(channels=ch_list, set_hz=args.sample_rate_hz, threshold=args.threshold)
+        sync_changes = sr.get("changes", [])
+        sync_done = len(sync_changes) > 0
 
     if args.fix:
-        # ── Sync capture params to set.ini BEFORE starting GUI ──
-        # This way the GUI starts with the correct channels/rate/threshold,
-        # avoiding a second restart in cmd_capture.
-        ch_list = None
-        if args.ch:
-            ch_list = [int(x.strip()) for x in args.ch.split(",") if x.strip()]
-        sync_done = False
-        if ch_list is not None or args.sample_rate_hz is not None or args.threshold is not None:
-            sync_result = sync_set_ini(
-                channels=ch_list,
-                set_hz=args.sample_rate_hz,
-                threshold=args.threshold,
-            )
-            sync_done = len(sync_result["changes"]) > 0
+        # Make sure GUI is running before validating shortcuts (which only
+        # matter when a capture is about to happen against a live GUI).
+        # Restart if sync changed params — set.ini edits only take effect on launch.
+        if sync_done:
+            _restart_gui_for_sync()
+        ok, msg, gui_was_running = _start_gui_and_wait()
+        if not ok:
+            return _emit_result(False, [("GUI + window", False, msg)], gui_was_running,
+                                sync_done, args)
 
-        proxy_ok, proxy_msg = check_proxy_dll()
-        gui_ok, gui_msg, gui_was_running = fix_gui_and_tcp()
-        cli_ok, cli_msg = check_cli()
-        classify_ok, classify_msg = check_classify()
-        out_ok, out_msg = check_output(args.output)
+    checks = [
+        ("atk_bg.exe",           *_ensure_atk_bg()),
+        ("GUI window",           *_ensure_gui_window()),
+        ("set.ini shortcuts",    *_ensure_save_file_shortcut()),
+        ("CLI script",           *_check_cli()),
+        ("Signal classifier",    *_check_classify()),
+        ("Output path",          *_check_output(args.output)),
+    ]
 
-        checks = [
-            ("Proxy DLL",       proxy_ok, proxy_msg),
-            ("GUI + TCP",       gui_ok, gui_msg),
-            ("CLI script",      cli_ok, cli_msg),
-            ("Signal classifier", classify_ok, classify_msg),
-            ("Output path",     out_ok, out_msg),
-        ]
-    else:
-        gui_ok, gui_msg = check_gui_running()
-        gui_was_running = gui_ok  # if process check passes, GUI was already running
-
-        checks = [
-            ("Proxy DLL",       *check_proxy_dll()),
-            ("GUI process",     gui_ok, gui_msg),
-            ("TCP 9876",        *check_tcp()),
-            ("CLI script",      *check_cli()),
-            ("Signal classifier", *check_classify()),
-            ("Output path",     *check_output(args.output)),
-        ]
-
-    all_ok = True
     results = {}
-
-    if not args.json:
-        print("=== ATK-Logic Pre-flight ===\n")
-
-    for item in checks:
-        if len(item) == 3:
-            name, ok, msg = item
-        else:
-            name, ok, msg = item[0], item[1], item[2] if len(item) > 2 else ""
-
-        if not args.json:
-            status = _green("PASS") if ok else _red("FAIL")
-            print(f"  [{status}] {name}: {msg}")
-
+    all_ok = True
+    for name, ok, msg in checks:
         results[name] = {"status": "pass" if ok else "fail", "message": msg}
         if not ok:
             all_ok = False
 
+    # If everything passed AND GUI is running, persist preflight_ok in state.
+    if all_ok:
+        pid = session_state.gui_running()
+        if pid > 0:
+            start = session_state.gui_start_iso(pid)
+            _write_state_if_changed(gui_pid=pid, gui_start=start, preflight_ok=True)
+        else:
+            all_ok = False
+            results["__note__"] = {"status": "fail", "message": "GUI not running after checks"}
+
+    return _emit_result(all_ok, checks, gui_was_running, sync_done, args, results)
+
+
+def _restart_gui_for_sync():
+    """Quick restart so set.ini edits take effect (used after sync_set_ini)."""
+    try:
+        subprocess.run(["taskkill", "/im", "ATK-Logic.exe"],
+                       capture_output=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
+    _cleanup_unsaved_markers()
+    time.sleep(3)  # Let WM_CLOSE finish
+    gui_exe = get_gui_dir() / "ATK-Logic.exe"
+    try:
+        subprocess.Popen(
+            [str(gui_exe)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=subprocess.DETACHED_PROCESS if sys.platform == "win32" else 0,
+        )
+    except OSError:
+        pass
+
+
+def _emit_result(all_ok, checks, gui_was_running, sync_done, args, results=None):
     if args.json:
-        output = {"all_ok": all_ok, "checks": results}
+        out = {"all_ok": all_ok, "checks": results or {}}
         if gui_was_running is not None:
-            output["gui_was_running"] = gui_was_running
-            output["sync_done"] = sync_done
-        print(_json.dumps(output, ensure_ascii=False))
+            out["gui_was_running"] = gui_was_running
+            out["sync_done"] = sync_done
+        print(_json.dumps(out, ensure_ascii=False))
     else:
+        print("=== ATK-Logic Pre-flight ===\n")
+        for name, ok, msg in checks:
+            status = _green("PASS") if ok else _red("FAIL")
+            print(f"  [{status}] {name}: {msg}")
         print()
         if all_ok:
             print(_green("All checks passed — ready to capture."))
         else:
             print(_red("Some checks FAILED — fix issues above before capturing."))
-
-    # Persist preflight status in DLL so cmd_capture can skip re-running
-    if all_ok:
-        _set_preflight_status_tcp(True)
-
     sys.exit(0 if all_ok else 1)
 
 

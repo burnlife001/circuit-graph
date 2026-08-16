@@ -8,11 +8,11 @@ from pathlib import Path
 SCRIPTS_DIR = Path(__file__).resolve().parent   # .../skills/atk-logic-capture/scripts/
 SKILL_DIR = SCRIPTS_DIR.parent                   # .../skills/atk-logic-capture/
 
-# —— external binaries (immovable: closed-source GUI + DLL hijack requirement) ——
-# GUI_DIR is read from config.ini at runtime — see get_gui_dir() below.
-
-# —— capture data & logs ——
-# DATA_DIR is read from config.ini at runtime — see get_data_dir() below.
+# —— atk_bg.exe (background message helper) ——
+# Built from tools/atk_bg/atk_bg.cs. Single binary that drives the GUI via
+# PostMessage + SendMessage (no DLL injection). If you move atk_bg.exe,
+# update this path.
+ATK_BG_EXE = SKILL_DIR / "tools" / "atk_bg" / "atk_bg.exe"
 
 # —— ATK-Logic appdata ——
 APPDATA_ATK = Path("C:/Users/yg/AppData/Roaming/ALIENTEK/ATK-LogicView")
@@ -50,10 +50,3 @@ def get_gui_dir() -> Path:
                 return Path(val)
     # Fallback — should only trigger if config.ini is missing
     return Path("D:/Programs/ATK-Logic")
-
-# —— TCP ——
-TCP_HOST = "127.0.0.1"
-TCP_PORT = 9876
-
-# —— DLL size expectations (KB) ——
-PROXY_EXPECTED_KB = (250, 400)
