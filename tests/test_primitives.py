@@ -286,3 +286,34 @@ def test_template_signal_to_components_empty_for_unconnected_signal() -> None:
     template = _parse_primitive(raw)
     assert template._signal_to_components["unused"] == []
     assert template._signal_to_components["used"] == ["R1"]
+
+
+def test_primitive_index_is_up_to_date() -> None:
+    """CI guard: regenerate the index from JSON; the committed file must match.
+
+    Pre-commit hook regenerates it locally; this test catches the case where
+    the hook is missing or skipped. ``--check`` exits 1 on drift.
+    """
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "scripts/build_primitive_index.py", "--check"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        "primitives/index_primitives.md is out of date.\n"
+        f"stderr: {result.stderr}\n"
+        "Fix: uv run python scripts/build_primitive_index.py"
+    )
+
+
+def test_primitive_index_lists_all_primitives() -> None:
+    """The index file mentions every primitive that load_primitives() returns."""
+    from pathlib import Path
+
+    ids = {t.id for t in load_primitives()}
+    content = Path("primitives/index_primitives.md").read_text(encoding="utf-8")
+    missing = sorted(pid for pid in ids if f"`{pid}`" not in content)
+    assert not missing, f"index does not mention primitives: {missing}"

@@ -1,0 +1,15 @@
+# Pre-commit hooks for circuit-graph.
+# Enable locally with: uv run pre-commit install
+# (or `pipx install pre-commit && pre-commit install`)
+# CI coverage does not require this hook — see
+# tests/test_primitives.py::test_primitive_index_is_up_to_date.
+
+repos:
+  - repo: local
+    hooks:
+      - id: regenerate-primitive-index
+        name: Regenerate primitives/index_primitives.md
+        entry: uv run python scripts/build_primitive_index.py
+        language: system
+        pass_filenames: false
+        files: ^primitives/.*\.json$
