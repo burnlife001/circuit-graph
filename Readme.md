@@ -20,7 +20,15 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
 
   **严格模式**：声明了任一 `expected_*` 的基元，circuit 边必须存在 `edge_semantic` 且值匹配；否则该基元识别为零（不是报错，是无结果）。现有未声明的基元不受影响。
 
-  当前基元清单（21 个）：完整对照表（名称 / 用途 / 严格模式字段）见 [`primitives/index_primitives.md`](primitives/index_primitives.md)，按 ID 字典序排列。
+### Primitives & matching
+
+Templates in `primitives/*.json` declare signal `name_pattern` regexes. The
+matcher additionally consults a built-in **default fallback table** keyed by
+`signal.id`, so Protel/Altium auto-nets such as `NetR97_1`, `USB_5V`,
+`NetC82_1` match without editing any `.json`. User patterns stay first-class:
+when they hit, the fallback is bypassed.
+
+  当前基元清单（21 个）：完整对照表（名称 / 用途 / 严格模式字段）见 [`primitives/__index_primitives.md`](primitives/__index_primitives.md)，按 ID 字典序排列。
   - 既有 6 个：voltage-divider / non-inverting-amplifier / inverting-amplifier / differential-amplifier / parallel-termination / type-c-cc-pull-down
   - 组 1（4 个，纯结构）：rc-low-pass / rc-high-pass / crystal-with-load-caps / bridge-rectifier
   - 组 2（6 个，依赖 expected_role）：pull-up-resistor / pull-down-resistor / tvs-protection / npn-low-side-switch / nmos-low-side-switch / pmos-high-side-switch
