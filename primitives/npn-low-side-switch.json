@@ -1,0 +1,40 @@
+{
+  "$schema": "./schema.json",
+  "id": "npn-low-side-switch",
+  "name": "NPN 低边开关",
+  "description": "NPN 三极管集电极接负载，发射极接地，基极通过电阻接控制信号。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "load_net", "type": "net", "name_pattern": ".*", "required": true
+    },
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "expected_role": "gnd",
+      "required": true
+    },
+    {
+      "id": "ctrl", "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "digital",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "Q1", "type": "Unknown", "required": true,
+      "pins": [
+        {"number": "C", "net": "load_net"},
+        {"number": "E", "net": "gnd"},
+        {"number": "B", "net": "ctrl"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.30, "naming": 0.20, "parametric": 0.10, "type": 0.40},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

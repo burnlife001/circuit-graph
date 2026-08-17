@@ -341,3 +341,173 @@ def test_find_matches_bridge_rectifier():
     comp = result.matches[0].component_mapping
     # All four diodes must be in the mapping
     assert {comp["D1"], comp["D2"], comp["D3"], comp["D4"]} == {"D1", "D2", "D3", "D4"}
+
+
+# ---------------------------------------------------------------------------
+# Group 2 primitives: pull-up / pull-down / tvs / switches
+# All rely on strict-mode expected_role matching.
+# ---------------------------------------------------------------------------
+
+
+def _pull_up_ir_with_semantics():
+    r = make_component("R100", DeviceKind.RESISTOR, [("1", "VCC"), ("2", "GPIO1")], raw_value="10K")
+    vcc = make_net("N_VCC", "VCC", NetType.POWER)
+    sig = make_net("N_SIG", "GPIO1", NetType.SIGNAL)
+    return build_ir(
+        [r], [vcc, sig],
+        [("R100.1", "N_VCC"), ("R100.2", "N_SIG")],
+        edge_semantics={
+            ("R100.1", "N_VCC"): {"role": "power",    "direction": "bidirectional", "level": "5V"},
+            ("R100.2", "N_SIG"): {"role": "digital",  "direction": "bidirectional", "level": None},
+        },
+    )
+
+
+def test_find_matches_pull_up():
+    template = next(t for t in load_primitives() if t.id == "pull-up-resistor")
+    matcher = Vf2TopologyMatcher(_pull_up_ir_with_semantics())
+    result = matcher.find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) == 1
+    assert result.matches[0].component_mapping["R_pull"] == "R100"
+    assert result.matches[0].signal_mapping == {"vcc": "N_VCC", "signal": "N_SIG"}
+
+
+def test_find_matches_pull_up_rejected_when_vcc_mistagged_digital():
+    """Same topology, but VCC net is mis-tagged as digital → strict-mode rejects."""
+    r = make_component("R100", DeviceKind.RESISTOR, [("1", "VCC"), ("2", "GPIO1")], raw_value="10K")
+    vcc = make_net("N_VCC", "VCC", NetType.POWER)
+    sig = make_net("N_SIG", "GPIO1", NetType.SIGNAL)
+    ir = build_ir(
+        [r], [vcc, sig],
+        [("R100.1", "N_VCC"), ("R100.2", "N_SIG")],
+        edge_semantics={
+            ("R100.1", "N_VCC"): {"role": "digital", "direction": "bidirectional", "level": None},
+            ("R100.2", "N_SIG"): {"role": "digital", "direction": "bidirectional", "level": None},
+        },
+    )
+    template = next(t for t in load_primitives() if t.id == "pull-up-resistor")
+    result = Vf2TopologyMatcher(ir).find_matches(template, timeout_seconds=2.0)
+    assert result.matches == []
+
+
+def _pull_down_ir():
+    r = make_component("R101", DeviceKind.RESISTOR, [("1", "GPIO2"), ("2", "GND")], raw_value="4.7K")
+    sig = make_net("N_SIG", "GPIO2", NetType.SIGNAL)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    return build_ir(
+        [r], [sig, gnd],
+        [("R101.1", "N_SIG"), ("R101.2", "N_GND")],
+        edge_semantics={
+            ("R101.1", "N_SIG"): {"role": "digital", "direction": "bidirectional", "level": None},
+            ("R101.2", "N_GND"): {"role": "gnd",     "direction": "bidirectional", "level": None},
+        },
+    )
+
+
+def test_find_matches_pull_down():
+    template = next(t for t in load_primitives() if t.id == "pull-down-resistor")
+    result = Vf2TopologyMatcher(_pull_down_ir()).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) == 1
+    assert result.matches[0].component_mapping["R_pull"] == "R101"
+
+
+def _tvs_ir():
+    d = make_component("D10", DeviceKind.DIODE, [("A", "GND"), ("K", "VBUS")], raw_value="SMBJ5.0A")
+    vbus = make_net("N_VBUS", "VBUS", NetType.POWER)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    return build_ir(
+        [d], [vbus, gnd],
+        [("D10.A", "N_GND"), ("D10.K", "N_VBUS")],
+        edge_semantics={
+            ("D10.A", "N_GND"):  {"role": "gnd",   "direction": "bidirectional", "level": None},
+            ("D10.K", "N_VBUS"): {"role": "power", "direction": "bidirectional", "level": "5V"},
+        },
+    )
+
+
+def test_find_matches_tvs_protection():
+    template = next(t for t in load_primitives() if t.id == "tvs-protection")
+    result = Vf2TopologyMatcher(_tvs_ir()).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) == 1
+    assert result.matches[0].component_mapping["D_tvs"] == "D10"
+
+
+def _npn_low_side_ir():
+    q = make_component("Q1", DeviceKind.UNKNOWN, [("C", "MOTOR"), ("E", "GND"), ("B", "CTRL")],
+                       raw_value="2N2222", part_number="2N2222")
+    load = make_net("N_LOAD", "MOTOR", NetType.SIGNAL)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    ctrl = make_net("N_CTRL", "CTRL_PWM", NetType.SIGNAL)
+    return build_ir(
+        [q], [load, gnd, ctrl],
+        [("Q1.C", "N_LOAD"), ("Q1.E", "N_GND"), ("Q1.B", "N_CTRL")],
+        edge_semantics={
+            ("Q1.E", "N_GND"):  {"role": "gnd",     "direction": "bidirectional", "level": None},
+            ("Q1.B", "N_CTRL"): {"role": "digital", "direction": "load",          "level": None},
+        },
+    )
+
+
+def test_find_matches_npn_low_side():
+    template = next(t for t in load_primitives() if t.id == "npn-low-side-switch")
+    result = Vf2TopologyMatcher(_npn_low_side_ir()).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) == 1
+    assert result.matches[0].component_mapping["Q1"] == "Q1"
+
+
+def _nmos_low_side_ir():
+    q = make_component("Q2", DeviceKind.MOSFET, [("D", "LED"), ("S", "GND"), ("G", "PWM")],
+                       raw_value="2N7002", part_number="2N7002")
+    load = make_net("N_LOAD", "LED", NetType.SIGNAL)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    ctrl = make_net("N_CTRL", "PWM", NetType.SIGNAL)
+    return build_ir(
+        [q], [load, gnd, ctrl],
+        [("Q2.D", "N_LOAD"), ("Q2.S", "N_GND"), ("Q2.G", "N_CTRL")],
+        edge_semantics={
+            ("Q2.S", "N_GND"):  {"role": "gnd",     "direction": "bidirectional", "level": None},
+            ("Q2.G", "N_CTRL"): {"role": "digital", "direction": "load",          "level": None},
+        },
+    )
+
+
+def test_find_matches_nmos_low_side():
+    template = next(t for t in load_primitives() if t.id == "nmos-low-side-switch")
+    result = Vf2TopologyMatcher(_nmos_low_side_ir()).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) == 1
+    assert result.matches[0].component_mapping["Q1"] == "Q2"
+
+
+def _pmos_high_side_ir():
+    q = make_component("Q3", DeviceKind.MOSFET, [("S", "VCC"), ("D", "LOAD"), ("G", "EN")],
+                       raw_value="AO3401", part_number="AO3401")
+    vcc = make_net("N_VCC", "VCC", NetType.POWER)
+    load = make_net("N_LOAD", "LOAD", NetType.SIGNAL)
+    ctrl = make_net("N_CTRL", "EN", NetType.SIGNAL)
+    return build_ir(
+        [q], [vcc, load, ctrl],
+        [("Q3.S", "N_VCC"), ("Q3.D", "N_LOAD"), ("Q3.G", "N_CTRL")],
+        edge_semantics={
+            ("Q3.S", "N_VCC"):  {"role": "power",   "direction": "bidirectional", "level": "5V"},
+            ("Q3.G", "N_CTRL"): {"role": "digital", "direction": "load",          "level": None},
+        },
+    )
+
+
+def test_find_matches_pmos_high_side():
+    template = next(t for t in load_primitives() if t.id == "pmos-high-side-switch")
+    result = Vf2TopologyMatcher(_pmos_high_side_ir()).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) == 1
+    assert result.matches[0].component_mapping["Q1"] == "Q3"

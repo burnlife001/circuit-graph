@@ -1,0 +1,38 @@
+{
+  "$schema": "./schema.json",
+  "id": "nmos-low-side-switch",
+  "name": "NMOS 低边开关",
+  "description": "NMOS 漏极接负载，源极接地，栅极接控制信号。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {"id": "load_net", "type": "net", "name_pattern": ".*", "required": true},
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "expected_role": "gnd",
+      "required": true
+    },
+    {
+      "id": "ctrl", "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "digital",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "Q1", "type": "Mosfet", "required": true,
+      "pins": [
+        {"number": "D", "net": "load_net"},
+        {"number": "S", "net": "gnd"},
+        {"number": "G", "net": "ctrl"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.30, "naming": 0.20, "parametric": 0.10, "type": 0.40},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}
