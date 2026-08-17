@@ -11,15 +11,18 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+import networkx as nx
 from networkx.algorithms.isomorphism import GraphMatcher
 
-from circuit_graph.ir import CircuitIR, Component, Net
+from circuit_graph.ir import CircuitIR, Component, Net, parse_pin_id
 from circuit_graph.primitives import (
+    PrimitiveSignal,
     PrimitiveTemplate,
     circuit_to_bipartite_graph,
     component_type_matches,
     primitive_to_bipartite_graph,
     signal_name_matches,
+    signal_semantic_matches,
 )
 
 
@@ -73,6 +76,94 @@ def _node_match_circuit_to_primitive(
     return False
 
 
+def _match_signal_semantics(
+    template: PrimitiveTemplate,
+    prim_signal: PrimitiveSignal,
+    circ_net_id: str,
+    partial_mapping: dict[str, str],
+    edge_semantics: dict[tuple[str, str], dict[str, Any]],
+) -> bool:
+    """Verify the candidate circuit net satisfies the primitive signal's expected_*.
+
+    For each template-side component linked to ``prim_signal``, look up its
+    mapped circuit-side component in ``partial_mapping`` (which maps
+    ``"c:<template_comp_id>" -> "c:<circuit_comp_id>"``). Components not yet
+    mapped are skipped — VF2 will map them later, and feasibility will be
+    re-evaluated then.
+
+    For each mapped pair, look up ``(circuit_comp_id, circ_net_id)`` in
+    ``edge_semantics``; absence is a strict-mode rejection. Otherwise call
+    :func:`signal_semantic_matches` to compare fields.
+
+    Returns True iff every mapped pair passes.
+    """
+    linked_template_comp_ids = template._signal_to_components.get(prim_signal.id, [])
+    for template_comp_id in linked_template_comp_ids:
+        circuit_node_key = partial_mapping.get(f"c:{template_comp_id}")
+        if circuit_node_key is None:
+            continue  # not yet mapped — defer judgement
+        circuit_comp_id = circuit_node_key[2:] if circuit_node_key.startswith("c:") else circuit_node_key
+        sem = edge_semantics.get((circuit_comp_id, circ_net_id))
+        if sem is None:
+            return False  # strict mode: edge_semantic required
+        if not signal_semantic_matches(
+            prim_signal.expected_role,
+            prim_signal.expected_direction,
+            prim_signal.expected_level,
+            sem,
+        ):
+            return False
+    return True
+
+
+class _SemanticGraphMatcher(GraphMatcher):
+    """GraphMatcher that enforces primitive expected_* semantics during VF2.
+
+    NetworkX's ``node_match`` callback receives only the two node attribute
+    dicts and cannot see the current partial mapping. ``semantic_feasibility``
+    is the hook NetworkX calls every time it considers extending the mapping;
+    it has access to ``self.core_1`` / ``self.core_2`` (the partial mapping),
+    which lets us validate edge semantics at each step and prune early.
+    """
+
+    def __init__(
+        self,
+        circuit_graph: nx.Graph,
+        primitive_graph: nx.Graph,
+        *,
+        template: PrimitiveTemplate,
+        edge_semantics: dict[tuple[str, str], dict[str, Any]],
+        node_match: Callable[[dict[str, Any], dict[str, Any]], bool] | None = None,
+    ):
+        super().__init__(circuit_graph, primitive_graph, node_match=node_match)
+        self._template = template
+        self._edge_semantics = edge_semantics
+
+    def semantic_feasibility(self, G1_node: str, G2_node: str) -> bool:
+        if not super().semantic_feasibility(G1_node, G2_node):
+            return False
+        # G1 = circuit graph, G2 = primitive graph (NetworkX convention).
+        prim_attrs = self.G2.nodes[G2_node]
+        if prim_attrs.get("kind") != "net":
+            return True
+        prim_signal: PrimitiveSignal = prim_attrs["data"]
+        if (
+            prim_signal.expected_role is None
+            and prim_signal.expected_direction is None
+            and prim_signal.expected_level is None
+        ):
+            return True
+        circ_net_id = G1_node[2:] if G1_node.startswith("n:") else G1_node
+        # core_2 maps primitive-graph node -> circuit-graph node.
+        return _match_signal_semantics(
+            template=self._template,
+            prim_signal=prim_signal,
+            circ_net_id=circ_net_id,
+            partial_mapping=self.core_2,
+            edge_semantics=self._edge_semantics,
+        )
+
+
 class Vf2TopologyMatcher:
     """Match primitive templates against a CircuitIR using VF2."""
 
@@ -81,6 +172,16 @@ class Vf2TopologyMatcher:
         self.circuit_graph = circuit_to_bipartite_graph(ir)
         self.component_map: dict[str, Component] = {c.id: c for c in ir.components}
         self.net_map: dict[str, Net] = {n.id: n for n in ir.nets}
+        # Index edge_semantic metadata by (component_id, net_id) for strict-mode checks.
+        self._edge_semantics: dict[tuple[str, str], dict[str, Any]] = {}
+        for conn in ir.connections:
+            sem = (conn.metadata or {}).get("edge_semantic")
+            if sem is None:
+                continue
+            comp_id, _ = parse_pin_id(conn.pin_id)
+            if comp_id is None:
+                continue
+            self._edge_semantics[(comp_id, conn.net_id)] = sem
 
     def find_matches(
         self,
@@ -124,9 +225,11 @@ class Vf2TopologyMatcher:
                 circuit_node_attrs, primitive_node_attrs, template, self.ir
             )
 
-        gm = GraphMatcher(
+        gm = _SemanticGraphMatcher(
             self.circuit_graph,
             primitive_graph,
+            template=template,
+            edge_semantics=self._edge_semantics,
             node_match=node_match,
         )
 

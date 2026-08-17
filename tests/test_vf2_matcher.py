@@ -130,3 +130,99 @@ def test_find_matches_large_graph_within_default_timeout(cc_template) -> None:
     assert result.duration_seconds < 2.0
     # No false positives: the synthetic nets do not match CC/GND patterns.
     assert not result.matches
+
+
+# ---------------------------------------------------------------------------
+# Strict-mode tests (expected_role / edge_semantic)
+# ---------------------------------------------------------------------------
+
+
+def _make_pull_up_template():
+    """Inline primitive used to drive strict-mode tests (not a real library entry)."""
+    from circuit_graph.primitives import (
+        PrimitiveComponent,
+        PrimitiveConstraints,
+        PrimitivePin,
+        PrimitiveScoring,
+        PrimitiveSignal,
+        PrimitiveTemplate,
+    )
+
+    return PrimitiveTemplate(
+        id="test-pull-up",
+        name="Test Pull-Up",
+        description="",
+        role="unknown",
+        version="0.1.0",
+        signals=[
+            PrimitiveSignal(
+                id="vcc", type="net", name_pattern="^VCC$",
+                expected_role="power", expected_direction="bidirectional",
+            ),
+            PrimitiveSignal(
+                id="gpio", type="net", name_pattern="^GPIO",
+                expected_role="digital",
+            ),
+        ],
+        components=[
+            PrimitiveComponent(
+                id="R_pull", type="Resistor",
+                pins=[
+                    PrimitivePin(number="1", net="vcc"),
+                    PrimitivePin(number="2", net="gpio"),
+                ],
+            ),
+        ],
+        constraints=PrimitiveConstraints(),
+        scoring=PrimitiveScoring(),
+        raw={},
+    )
+
+
+def _pull_up_ir(*, with_semantics: bool = True, vcc_role: str = "power"):
+    """Build a 1-resistor IR; resistor between VCC and GPIO nets."""
+    r = make_component(
+        "R1", DeviceKind.RESISTOR,
+        [("1", "VCC"), ("2", "GPIO1")],
+        raw_value="10K",
+    )
+    vcc = make_net("N_VCC", "VCC", NetType.POWER)
+    gpio = make_net("N_GPIO", "GPIO1", NetType.SIGNAL)
+    edge_semantics = {}
+    if with_semantics:
+        edge_semantics = {
+            ("R1.1", "N_VCC"):  {"role": vcc_role, "direction": "bidirectional", "level": "5V"},
+            ("R1.2", "N_GPIO"): {"role": "digital", "direction": "bidirectional", "level": None},
+        }
+    return build_ir([r], [vcc, gpio],
+                    [("R1.1", "N_VCC"), ("R1.2", "N_GPIO")],
+                    edge_semantics=edge_semantics)
+
+
+def test_strict_mode_role_match_passes():
+    """When edge_semantic matches expected_role, the primitive matches."""
+    matcher = Vf2TopologyMatcher(_pull_up_ir(with_semantics=True, vcc_role="power"))
+    result = matcher.find_matches(_make_pull_up_template(), timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) == 1
+    assert result.matches[0].signal_mapping["vcc"] == "N_VCC"
+    assert result.matches[0].signal_mapping["gpio"] == "N_GPIO"
+
+
+def test_strict_mode_role_mismatch_rejected():
+    """When edge_semantic.role disagrees with expected_role, no match."""
+    matcher = Vf2TopologyMatcher(_pull_up_ir(with_semantics=True, vcc_role="digital"))
+    result = matcher.find_matches(_make_pull_up_template(), timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert result.matches == []
+
+
+def test_strict_mode_missing_edge_semantic_rejected():
+    """Strict mode: edges without edge_semantic metadata are rejected."""
+    matcher = Vf2TopologyMatcher(_pull_up_ir(with_semantics=False))
+    result = matcher.find_matches(_make_pull_up_template(), timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert result.matches == []

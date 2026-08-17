@@ -8,7 +8,7 @@ process just like a parsed netlist.
 
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Any, Iterable
 
 from circuit_graph.ir import (
     CircuitIR,
@@ -68,15 +68,23 @@ def build_ir(
     wiring: Iterable[tuple[str, str]],
     *,
     source: str = "synthetic-fixture",
+    edge_semantics: dict[tuple[str, str], dict[str, Any]] | None = None,
 ) -> CircuitIR:
     """Wire components to nets and return a CircuitIR.
 
     ``wiring`` is an iterable of ``(component_id.pin_number, net_id)``
     tuples — same shape the protel parser produces.
+
+    ``edge_semantics`` optionally maps ``(pin_id, net_id)`` to a dict that will
+    be stored as ``metadata["edge_semantic"]`` on the corresponding Connection,
+    emulating what EdgeSemanticEnricher produces.
     """
-    connections = [
-        Connection(pin_id=pin_ref, net_id=net_id, metadata={}) for pin_ref, net_id in wiring
-    ]
+    edge_semantics = edge_semantics or {}
+    connections = []
+    for pin_ref, net_id in wiring:
+        sem = edge_semantics.get((pin_ref, net_id))
+        metadata = {"edge_semantic": sem} if sem is not None else {}
+        connections.append(Connection(pin_id=pin_ref, net_id=net_id, metadata=metadata))
     return CircuitIR(
         meta=CircuitMeta(source=source, format="synthetic"),
         components=components,
