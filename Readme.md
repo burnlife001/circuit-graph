@@ -20,10 +20,10 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
 
   **严格模式**：声明了任一 `expected_*` 的基元，circuit 边必须存在 `edge_semantic` 且值匹配；否则该基元识别为零（不是报错，是无结果）。现有未声明的基元不受影响。
 
-  当前基元清单（21 个）：完整对照表（名称 / 用途 / 严格模式字段）见 [`primitives/__index_primitives.md`](primitives/__index_primitives.md)，按 ID 字典序排列。
+  当前基元清单（22 个）：完整对照表（名称 / 用途 / 严格模式字段）见 [`primitives/__index_primitives.md`](primitives/__index_primitives.md)，按 ID 字典序排列。
   - 基元网名匹配：模板 `name_pattern` 之外，matcher 还查一份按 `signal.id` 键控的默认 fallback 表，让 Protel/Altium 自动命名（如 `NetR97_1`、`USB_5V`、`NetC82_1`）无需改任何 `.json` 也能命中。用户 pattern 命中时旁路 fallback。
   - 既有 6 个：voltage-divider / non-inverting-amplifier / inverting-amplifier / differential-amplifier / parallel-termination / type-c-cc-pull-down
-  - 组 1（4 个，纯结构）：rc-low-pass / rc-high-pass / crystal-with-load-caps / bridge-rectifier
+  - 组 1（5 个，纯结构）：rc-low-pass / rc-high-pass / crystal-with-load-caps / bridge-rectifier / peak-envelope-detector
   - 组 2（6 个，依赖 expected_role）：pull-up-resistor / pull-down-resistor / tvs-protection / npn-low-side-switch / nmos-low-side-switch / pmos-high-side-switch
   - 组 3（5 个，依赖 expected_role + direction + level）：flyback-diode / current-shunt-monitor / fet-level-shifter / lc-pi-filter / sallen-key-low-pass
 - 元件型号知识库：**SQLite 数据库**（`circuit_graph/knowledge/circuit_graph.db`）维护 part-number → 类别 / 引脚定义 / 属性

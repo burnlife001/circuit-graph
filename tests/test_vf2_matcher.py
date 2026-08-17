@@ -724,3 +724,34 @@ def test_non_inverting_amplifier_matches_protel_auto_named_nets():
         f"Expected a non-inverting-amplifier-* block containing R97; got: "
         f"{[(b.id, b.component_ids) for b in blocks]}"
     )
+
+
+def test_peak_envelope_detector_matches_protel_netlist():
+    """End-to-end: FX-T268 has two symmetric peak-detector front-ends for the
+    SW5001 boost rails (VBAK_A via D2, VBAK_B via D3). Both should be
+    recognised as peak-envelope-detector blocks.
+    """
+    from pathlib import Path
+
+    from circuit_graph.enrichers import run_enrichers
+    from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
+    from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
+
+    netlist = (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "protel"
+        / "FX-T268-V6-10米-5065.NET"
+    )
+    ir = ProtelNetParser().parse(ParserInput(file_path=str(netlist)))
+    ir2 = run_enrichers(ir, [TopologyRecognizer()]).ir
+
+    blocks = [b for b in ir2.blocks if b.id.startswith("peak-envelope-detector-")]
+    assert any({"D2", "R54", "R49", "R58", "C56"} <= set(b.component_ids) for b in blocks), (
+        f"Expected a peak-envelope-detector block covering D2 branch; got: "
+        f"{[(b.id, b.component_ids) for b in blocks]}"
+    )
+    assert any({"D3", "R56", "R50", "R59", "C58"} <= set(b.component_ids) for b in blocks), (
+        f"Expected a peak-envelope-detector block covering D3 branch; got: "
+        f"{[(b.id, b.component_ids) for b in blocks]}"
+    )

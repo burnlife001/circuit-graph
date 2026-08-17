@@ -1,6 +1,6 @@
 # Primitives 索引
 
-> 由 [`scripts/build_primitive_index.py`](./scripts/build_primitive_index.py) 自动生成于 2026-08-17，共 21 个基元。请勿手改。
+> 由 [`scripts/build_primitive_index.py`](./scripts/build_primitive_index.py) 自动生成于 2026-08-18，共 22 个基元。请勿手改。
 
 | ID | 名称 | 用途 | 严格模式 | 文件 |
 |---|---|---|---|---|
@@ -16,6 +16,7 @@
 | `non-inverting-amplifier` | 同相放大器 | 运放同相放大：输入信号接同相端(+)，反馈电阻Rf跨接输出与反相端(-)，Rg连接反相端到地，增益=1+Rf/Rg。 | — | [non-inverting-amplifier.json](./non-inverting-amplifier.json) |
 | `npn-low-side-switch` | NPN 低边开关 | NPN 三极管集电极接负载，发射极接地，基极通过电阻接控制信号。 | role | [npn-low-side-switch.json](./npn-low-side-switch.json) |
 | `parallel-termination` | 并联终端 | 多个电阻并联于信号线与地之间，常见于终端匹配、下拉阵列或 ESD 保护。 | — | [parallel-termination.json](./parallel-termination.json) |
+| `peak-envelope-detector` | 峰值包络检波采样电路 | 开关二极管对开关节点/高频方波整流，经串联限流电阻对保持电容充电形成峰值包络；并由上拉/泄放电阻构成放电回路，输出送往… | — | [peak-envelope-detector.json](./peak-envelope-detector.json) |
 | `pmos-high-side-switch` | PMOS 高边开关 | PMOS 源极接电源，漏极接负载，栅极接控制信号（通常需拉低导通）。 | role | [pmos-high-side-switch.json](./pmos-high-side-switch.json) |
 | `pull-down-resistor` | 下拉电阻 | 电阻一端接地（role=gnd），另一端接数字信号（role=digital），将信号默认拉到低电平。 | role | [pull-down-resistor.json](./pull-down-resistor.json) |
 | `pull-up-resistor` | 上拉电阻 | 电阻一端接电源（role=power），另一端接数字信号（role=digital），将信号默认拉到高电平。 | role | [pull-up-resistor.json](./pull-up-resistor.json) |

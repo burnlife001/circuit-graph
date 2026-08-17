@@ -1,4 +1,4 @@
-"""Generate primitives/index_primitives.md from primitives/*.json.
+"""Generate primitives/__index_primitives.md from primitives/*.json.
 
 Manual run:
     uv run python scripts/build_primitive_index.py            # regenerate
@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PRIMITIVES_DIR = REPO_ROOT / "primitives"
-INDEX_PATH = PRIMITIVES_DIR / "index_primitives.md"
+INDEX_PATH = PRIMITIVES_DIR / "__index_primitives.md"
 SKIP_FILES = {"schema.json"}
 
 EXPECTED_KEYS_HUMAN = {
@@ -127,7 +127,7 @@ def main() -> int:
         actual = INDEX_PATH.read_text(encoding="utf-8") if INDEX_PATH.exists() else ""
         if actual != expected:
             sys.stderr.write(
-                "primitives/index_primitives.md is out of date.\n"
+                "primitives/__index_primitives.md is out of date.\n"
                 "Run: uv run python scripts/build_primitive_index.py\n"
             )
             return 1
