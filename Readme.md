@@ -395,80 +395,15 @@ cd output
 
 ## 全局 SKILL（供其它项目调用）
 
-本项目随附 **11 个 Claude Skill**，**随 Python 包一起分发**，全部位于
-`circuit_graph/skills/<name>/SKILL.md`（已通过 `pyproject.toml` 的 `force-include`
-打包进 wheel）。`skills/SKILL.md`（eetool 路由）保留在仓库根目录，仅供本仓库内部使用，不外发。
-
-| Skill | 用途 |
-|---|---|
-| `cg` | 电路分析路由器（cg view / export / erc / kb / sim） |
-| `atk-logic-capture` | ATK 逻辑分析仪波形捕获 + 协议解码 |
-| `hardware-diff-by-codes` | 两份固件判断是否同一 PCB |
-| `keil-batch-gen` | Keil 编译/烧录脚本生成 |
-| `keil-init` | Keil 项目初始化（CLAUDE.md + 禁区 + 钩子） |
-| `mm32-armgcc-build` | MM32 ARM GCC 编译脚本 |
-| `netlist-signalmap` | Protel/DXP 网表 → 引脚信号映射 |
-| `pdf-pin-extract` | 数据手册 PDF → 引脚 JSON |
-| `pin2json` | KiCad `.kicad_sym` / LCSC id → 引脚 JSON |
-| `schmd-from-netlist` | 网表 → 原理图信号映射 |
-| `serial-monitor` | pyserial CH340 串口监听 |
-
-供**其它项目**的 agent 在处理电路相关问题时自动发现并选用 `cg` 命令：
-
-- **触发词**：`R100 是什么` / `电路分析` / `netlist` / `.NET file` / `kicad_sch` / `ERC` / `稳压器链` / `I2C 总线` / `chip pinout` / `元件数据库` 等
-- **典型工作流**（"R100 是什么"）：
-  ```powershell
-  cg view R100 E:\__electric\__workspace\stacking\circuit-graph\fixtures\protel\FX-T268-V6-10米-5065.NET --pretty
-  ```
-  需要供电上下文加 `--with-power`，需要通信总线上下文加 `--with-comm`，同时需要两者加 `--with-all`。
-- **路由总览**（决策树 + 反模式 + 默认 fixture）见 `cg` skill 的 SKILL.md 自身。
-
-### 在其它项目中启用全部 Skill
-
-在目标项目目录里执行 `cg initskill`，把 **所有** skill 复制到 `<项目根>/.claude/skills/<name>/`：
-
-```powershell
-# 在目标项目目录运行
-cd <other-project>
-cg initskill                     # 默认装到当前目录的 .claude/skills/
-cg initskill <other-project>     # 或显式指定目标
-cg initskill <other-project> --force     # 已存在时强制覆盖（覆盖全部 skill）
-cg initskill <other-project> --dry-run   # 只预览每个 skill 的安装计划，不写盘
-```
-
-退出码：成功 `0`；至少一个 skill 复制失败时 `1`；源缺失时 `2`。
-
-输出是 JSON 数组，逐个 skill 报告 `installed` / `skipped` / `would_install` / `would_overwrite` / `failed` 状态 + 文件数。
-
-外部项目只需保证 `cg.exe` 在 PATH（`uv pip install -e .` 即可），
-agent 会自动按 SKILL 路由到正确子命令，无需手抄 README。
-
-### 项目引导 `cg init`（规划中）
-
-在新项目首次接入 circuit-graph 时，一键完成「写 `.cg.toml` + 初始化知识库 + 安装 bundled skills」三件事。
-当前 `cg init` 槽位由 `cg initskill` 让出（见 commit `59c86cd`），计划用作项目级引导编排器。
-
-设计要点（详见 [`docs/superpowers/specs/2026-08-09-cg-init-orchestrator-design.md`](docs/superpowers/specs/2026-08-09-cg-init-orchestrator-design.md)）：
-
-- **一站式编排**：默认依次跑 detect → 写 `.cg.toml` → 调 `cg kb init` → 调 `cg initskill`
-- **检测 + 提议**：扫描 cwd 里的 `.NET` / `.kicad_sch` / KiCad 项目文件，把探测到的路径提议到 `.cg.toml`，交互式确认（或 `-y` 跳过）
-- **默认全开**：`--skip-config` / `--skip-kb` / `--skip-skill` 反向跳过
-- **幂等重跑**：第二次跑只刷新检测、不重装 skills / KB；`--force` 强制覆盖
-- **跨函数返回 JSON 字符串**：方便 `print` 调试，与 `cg initskill` / `cg kb init` 的输出风格一致
-- **错误简洁**：每步 JSON 里 `error` 字段是一句话 + 建议动作，不堆结构
-
-> 该命令尚未实现 — 目前首次接入项目请按 `cg initskill` + `cg kb init` 手动跑。
+随包分发的 Skill 列表、触发词、跨项目安装方式详见 [`circuit_graph/skills/README.md`](circuit_graph/skills/README.md)。
 
 ## 测试
 
 ```bash
-pytest
-```
+# 一次性装齐运行 + 测试依赖（含 kicad-sch-api，可选依赖用于 layout 测试）
+uv sync --extra dev
 
-或显式使用虚拟环境：
-
-```powershell
-.venv\Scripts\python -m pytest
+uv run pytest -q
 ```
 
 ## 项目结构
@@ -507,19 +442,18 @@ circuit_graph/
 │   ├── chip_resolver.py         # chip_resolver 引脚解析引擎（JLCPCB + KiCad 符号）
 │   ├── pdf_pin_extract.py       # PDF 数据手册引脚提取（Camelot lattice）
 │   └── vendor_db.json          # 遗留 JSON，首次 `cg kb init` 时迁移入 SQLite
-└── models/power_tree.py        # 供电树数据模型
+├── models/power_tree.py        # 供电树数据模型
+└── skills/                      # 随包分发的 Claude Skill 集（详见 skills/README.md）
 
 primitives/                     # 拓扑基元模板 JSON（新增拓扑 = 追加 *.json）
 tests/                          # pytest 测试
-output/pretty.ps1               # JSON 美化菜单脚本
 ```
 
 CLI 命令速查：
 
 | 命令 | 说明 |
 |------|------|
-| `cg initskill [TARGET] [--force] [--dry-run]` | 把全部 11 个 bundled skill 复制到 `<TARGET>/.claude/skills/<name>/` |
-| `cg init [TARGET] [--skip-config\|--skip-kb\|--skip-skill] [-y] [--force] [--dry-run]` | **规划中**：项目级引导（写 `.cg.toml` + KB init + 装 skills） |
+| `cg initskill [TARGET] [--force] [--dry-run]` | 把全部 bundled skill 复制到 `<TARGET>/.claude/skills/<name>/` |
 | `cg export graph <file>` | 生成 cg-graph JSON（`output/circuit.graph.json`） |
 | `cg export graphml <file>` | 生成 yEd GraphML（`output/circuit.graphml`） |
 | `cg view <id> <file> [--hops N] [--pretty]` | 元件 ego-subgraph（默认 2 hops） |

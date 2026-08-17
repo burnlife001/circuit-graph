@@ -5,6 +5,11 @@ from pathlib import Path
 
 import pytest
 
+# convert_to_kicad.py (lm321_ccs/, gitignored) imports kicad_sch_api at module
+# level; skip the whole module when the optional dependency is absent instead
+# of failing at import time (same convention as test_lm321_ccs.py).
+pytest.importorskip("kicad_sch_api")
+
 
 def test_ir_from_spice_parses_ccs_netlist():
     """Verify the SPICE parser extracts components and nets correctly."""

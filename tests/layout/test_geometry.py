@@ -41,7 +41,7 @@ def test_compute_pin_positions_uses_symbol_cache():
     """When a symbol cache entry is provided, use the real pin tip position."""
     import os
 
-    import kicad_sch_api as ksa
+    ksa = pytest.importorskip("kicad_sch_api")
 
     from circuit_graph.ir import CircuitIR, CircuitMeta
 

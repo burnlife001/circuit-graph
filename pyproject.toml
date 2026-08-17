@@ -18,6 +18,10 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.5.0",
+    # layout 模块的可选运行时依赖；6 个 layout 测试需要它（3 个文件已用
+    # pytest.importorskip 优雅降级）。不声明它时 uv sync 会把它从 .venv 修剪掉，
+    # 导致无保护导入的测试直接失败（2026-08-17 实测）。
+    "kicad-sch-api>=0.2.0",
 ]
 
 [project.scripts]
