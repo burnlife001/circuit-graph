@@ -101,3 +101,155 @@ def test_load_primitives_missing_directory_raises() -> None:
 
     with pytest.raises(FileNotFoundError):
         load_primitives(Path("/nonexistent/primitives"))
+
+
+# ---------------------------------------------------------------------------
+# extract_volts
+# ---------------------------------------------------------------------------
+
+
+def test_extract_volts_parses_plain_voltage_labels() -> None:
+    """extract_volts handles '5V' / '3.3V' / '+5V' / '5' → Decimal."""
+    from decimal import Decimal
+    from circuit_graph.primitives import extract_volts
+
+    assert extract_volts("5V") == Decimal("5")
+    assert extract_volts("3.3V") == Decimal("3.3")
+    assert extract_volts("+5V") == Decimal("5")
+    assert extract_volts("5") == Decimal("5")
+    assert extract_volts("5.0V") == Decimal("5.0")
+
+
+def test_extract_volts_parses_digit_v_digit_shorthand() -> None:
+    """extract_volts handles edge_semantic's 'V-as-decimal-point' shorthand."""
+    from decimal import Decimal
+    from circuit_graph.primitives import extract_volts
+
+    # _extract_level in edge_semantic.py emits "3V3" for 3.3V, "1V8" for 1.8V, "1V25" for 1.25V
+    assert extract_volts("3V3") == Decimal("3.3")
+    assert extract_volts("1V8") == Decimal("1.8")
+    assert extract_volts("1V25") == Decimal("1.25")
+
+
+def test_extract_volts_rejects_garbage() -> None:
+    """extract_volts returns None for unparseable input."""
+    from circuit_graph.primitives import extract_volts
+
+    assert extract_volts(None) is None
+    assert extract_volts("") is None
+    assert extract_volts("VCC") is None
+    assert extract_volts("3.3.3V") is None
+
+
+# ---------------------------------------------------------------------------
+# signal_semantic_matches
+# ---------------------------------------------------------------------------
+
+
+def test_signal_semantic_matches_all_none_is_unconstrained() -> None:
+    """When all expected_* are None, any edge_semantic passes."""
+    from circuit_graph.primitives import signal_semantic_matches
+
+    assert signal_semantic_matches(None, None, None, {"role": "power", "direction": "source", "level": "5V"})
+    assert signal_semantic_matches(None, None, None, {"role": "digital", "direction": "load", "level": None})
+
+
+def test_signal_semantic_matches_role_only() -> None:
+    """expected_role alone matches against edge_semantic.role."""
+    from circuit_graph.primitives import signal_semantic_matches
+
+    assert signal_semantic_matches("power", None, None, {"role": "power", "direction": "source", "level": "5V"})
+    assert not signal_semantic_matches("power", None, None, {"role": "digital", "direction": "source", "level": "5V"})
+
+
+def test_signal_semantic_matches_direction_only() -> None:
+    """expected_direction alone matches against edge_semantic.direction."""
+    from circuit_graph.primitives import signal_semantic_matches
+
+    assert signal_semantic_matches(None, "source", None, {"role": "power", "direction": "source", "level": "5V"})
+    assert not signal_semantic_matches(None, "source", None, {"role": "power", "direction": "load", "level": "5V"})
+
+
+def test_signal_semantic_matches_level_compares_decimally() -> None:
+    """expected_level is compared as Decimal volts, not raw string."""
+    from circuit_graph.primitives import signal_semantic_matches
+
+    # "3.3V" in the primitive should match "3V3" from edge_semantic
+    assert signal_semantic_matches(None, None, "3.3V", {"role": "power", "direction": "source", "level": "3V3"})
+    assert signal_semantic_matches(None, None, "5V", {"role": "power", "direction": "source", "level": "5V"})
+    assert not signal_semantic_matches(None, None, "5V", {"role": "power", "direction": "source", "level": "3V3"})
+
+
+def test_signal_semantic_matches_none_field_skips_check() -> None:
+    """None expected_* fields are skipped, others still enforced."""
+    from circuit_graph.primitives import signal_semantic_matches
+
+    # role matches, direction is None (skip), level matches
+    assert signal_semantic_matches("power", None, "5V", {"role": "power", "direction": "load", "level": "5V"})
+    # role matches, direction is None (skip), level mismatches
+    assert not signal_semantic_matches("power", None, "5V", {"role": "power", "direction": "load", "level": "3V3"})
+
+
+def test_signal_semantic_matches_unparseable_level_is_mismatch() -> None:
+    """If either side's level fails to parse, treat as mismatch (strict)."""
+    from circuit_graph.primitives import signal_semantic_matches
+
+    # Primitive side unparseable → mismatch
+    assert not signal_semantic_matches(None, None, "garbage", {"role": "power", "direction": "source", "level": "5V"})
+    # Circuit side unparseable (None) → mismatch
+    assert not signal_semantic_matches(None, None, "5V", {"role": "power", "direction": "source", "level": None})
+
+
+# ---------------------------------------------------------------------------
+# PrimitiveSignal expected_* parsing
+# ---------------------------------------------------------------------------
+
+
+def test_parse_signal_reads_expected_fields() -> None:
+    """_parse_signal picks up expected_role/direction/level when present."""
+    from circuit_graph.primitives import _parse_signal
+
+    raw = {
+        "id": "vcc",
+        "type": "net",
+        "name_pattern": "^VCC",
+        "expected_role": "power",
+        "expected_direction": "source",
+        "expected_level": "5V",
+    }
+    sig = _parse_signal(raw)
+    assert sig.expected_role == "power"
+    assert sig.expected_direction == "source"
+    assert sig.expected_level == "5V"
+
+
+def test_parse_signal_defaults_expected_fields_to_none() -> None:
+    """Omitted expected_* fields default to None (backwards compatible)."""
+    from circuit_graph.primitives import _parse_signal
+
+    sig = _parse_signal({"id": "vcc", "type": "net", "name_pattern": "^VCC"})
+    assert sig.expected_role is None
+    assert sig.expected_direction is None
+    assert sig.expected_level is None
+
+
+def test_parse_signal_rejects_invalid_role() -> None:
+    """expected_role outside the canonical set is rejected."""
+    from circuit_graph.primitives import _parse_signal
+
+    with pytest.raises(PrimitiveValidationError):
+        _parse_signal({
+            "id": "vcc", "type": "net", "name_pattern": "^VCC",
+            "expected_role": "invalid_role",
+        })
+
+
+def test_parse_signal_rejects_invalid_direction() -> None:
+    """expected_direction outside the canonical set is rejected."""
+    from circuit_graph.primitives import _parse_signal
+
+    with pytest.raises(PrimitiveValidationError):
+        _parse_signal({
+            "id": "vcc", "type": "net", "name_pattern": "^VCC",
+            "expected_direction": "invalid_direction",
+        })

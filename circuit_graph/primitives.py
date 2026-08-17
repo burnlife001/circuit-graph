@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +26,61 @@ class _NodeKind:
     NET = "net"
 
 
+# Canonical edge_semantic enums (used by signal_semantic_matches / schema validation).
+_VALID_ROLES = frozenset({"power", "gnd", "analog", "digital", "clock"})
+_VALID_DIRECTIONS = frozenset({"source", "load", "bidirectional"})
+
+
+_LEVEL_FRAC_RE = re.compile(r"^\+?(\d+)[Vv](\d+)$")
+_LEVEL_PLAIN_RE = re.compile(r"^\+?(\d+(?:\.\d+)?)[Vv]?$")
+
+
+def extract_volts(s: str | None) -> Decimal | None:
+    """Parse a voltage label to a Decimal value in volts.
+
+    Rules (first match wins):
+      1. ``"<int>V<frac>"`` → ``int.frac``   (e.g. "3V3" → 3.3, "1V25" → 1.25)
+      2. ``"[+]<float>[V]"`` → ``float``     (e.g. "5V" → 5.0, "3.3V" → 3.3, "5" → 5.0)
+      3. otherwise → ``None``
+    """
+    if not s:
+        return None
+    s = s.strip()
+    m = _LEVEL_FRAC_RE.match(s)
+    if m:
+        return Decimal(f"{m.group(1)}.{m.group(2)}")
+    m = _LEVEL_PLAIN_RE.match(s)
+    if m:
+        return Decimal(m.group(1))
+    return None
+
+
+def signal_semantic_matches(
+    expected_role: str | None,
+    expected_direction: str | None,
+    expected_level: str | None,
+    edge_semantic: dict[str, Any],
+) -> bool:
+    """Check one edge_semantic dict against the primitive's expected_* constraints.
+
+    ``None`` expected fields are unconstrained and skipped. Level comparison is
+    decimal-based via :func:`extract_volts`; if either side fails to parse, the
+    pair is treated as a mismatch (strict mode).
+    """
+    if expected_role is not None and edge_semantic.get("role") != expected_role:
+        return False
+    if expected_direction is not None and edge_semantic.get("direction") != expected_direction:
+        return False
+    if expected_level is not None:
+        expected_v = extract_volts(expected_level)
+        actual_v = extract_volts(edge_semantic.get("level"))
+        if expected_v is None or actual_v is None:
+            return False
+        if expected_v != actual_v:
+            return False
+    return True
+
+
 @dataclass(frozen=True)
 class PrimitiveSignal:
     """A net that participates in the primitive boundary."""
@@ -32,6 +89,9 @@ class PrimitiveSignal:
     type: str
     name_pattern: str
     required: bool = True
+    expected_role: str | None = None
+    expected_direction: str | None = None
+    expected_level: str | None = None
 
 
 @dataclass(frozen=True)
@@ -136,11 +196,25 @@ def _parse_primitive(raw: dict[str, Any]) -> PrimitiveTemplate:
 
 def _parse_signal(raw: dict[str, Any]) -> PrimitiveSignal:
     _require_keys(raw, {"id", "type", "name_pattern"})
+    expected_role = raw.get("expected_role")
+    expected_direction = raw.get("expected_direction")
+    expected_level = raw.get("expected_level")
+    if expected_role is not None and expected_role not in _VALID_ROLES:
+        raise PrimitiveValidationError(
+            f"Invalid expected_role {expected_role!r}; must be one of {sorted(_VALID_ROLES)}"
+        )
+    if expected_direction is not None and expected_direction not in _VALID_DIRECTIONS:
+        raise PrimitiveValidationError(
+            f"Invalid expected_direction {expected_direction!r}; must be one of {sorted(_VALID_DIRECTIONS)}"
+        )
     return PrimitiveSignal(
         id=raw["id"],
         type=raw["type"],
         name_pattern=raw["name_pattern"],
         required=raw.get("required", True),
+        expected_role=expected_role,
+        expected_direction=expected_direction,
+        expected_level=expected_level,
     )
 
 
@@ -253,4 +327,6 @@ __all__ = [
     "signal_name_matches",
     "component_type_matches",
     "component_value_matches",
+    "extract_volts",
+    "signal_semantic_matches",
 ]
