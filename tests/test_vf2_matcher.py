@@ -699,7 +699,7 @@ def test_find_matches_sallen_key_low_pass():
     assert len(result.matches) >= 1
 
 
-def test_non_inverting_amplifier_matches_protel_auto_named_nets(tmp_path):
+def test_non_inverting_amplifier_matches_protel_auto_named_nets():
     """End-to-end: a Protel-exported netlist whose intermediate nets use
     the default 'Net<COMP>_<PIN>' naming should still produce a
     non-inverting-amplifier FunctionalBlock containing R97.
