@@ -143,6 +143,26 @@ class PrimitiveTemplate:
     constraints: PrimitiveConstraints
     scoring: PrimitiveScoring
     raw: dict[str, Any]
+    _signal_to_components: dict[str, list[str]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        """Populate ``_signal_to_components`` from components[*].pins[*].net.
+
+        The dataclass is frozen, so we use ``object.__setattr__`` to set the
+        derived index. The mapping is sorted to guarantee determinism across
+        parser runs.
+        """
+        edges_by_net: dict[str, set[str]] = defaultdict(set)
+        for comp in self.components:
+            for pin in comp.pins:
+                edges_by_net[pin.net].add(comp.id)
+        derived = {
+            sig.id: sorted(edges_by_net.get(sig.id, set()))
+            for sig in self.signals
+        }
+        object.__setattr__(self, "_signal_to_components", derived)
 
 
 class PrimitiveValidationError(Exception):

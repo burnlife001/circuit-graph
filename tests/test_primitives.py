@@ -253,3 +253,47 @@ def test_parse_signal_rejects_invalid_direction() -> None:
             "id": "vcc", "type": "net", "name_pattern": "^VCC",
             "expected_direction": "invalid_direction",
         })
+
+
+# ---------------------------------------------------------------------------
+# PrimitiveTemplate._signal_to_components derived index
+# ---------------------------------------------------------------------------
+
+
+def test_template_signal_to_components_derived() -> None:
+    """PrimitiveTemplate derives signal_id → [component_id, ...] from pins."""
+    template = next(t for t in load_primitives() if t.id == "voltage-divider")
+    # voltage-divider 中：vin 连到 R_top, vout 连到 R_top+R_bottom, gnd 连到 R_bottom
+    assert template._signal_to_components["vin"] == ["R_top"]
+    assert template._signal_to_components["vout"] == ["R_bottom", "R_top"]
+    assert template._signal_to_components["gnd"] == ["R_bottom"]
+
+
+def test_template_signal_to_components_deterministic() -> None:
+    """Derived index is sorted so repeated loads give identical lists."""
+    t1 = next(t for t in load_primitives() if t.id == "non-inverting-amplifier")
+    t2 = next(t for t in load_primitives() if t.id == "non-inverting-amplifier")
+    assert t1._signal_to_components == t2._signal_to_components
+
+
+def test_template_signal_to_components_empty_for_unconnected_signal() -> None:
+    """A signal no component pin references gets an empty list."""
+    from circuit_graph.primitives import _parse_primitive
+
+    raw = {
+        "id": "orphan-signal",
+        "name": "Orphan",
+        "signals": [
+            {"id": "unused", "type": "net", "name_pattern": "^UNUSED$"},
+            {"id": "used", "type": "net", "name_pattern": "^USED$"},
+        ],
+        "components": [
+            {
+                "id": "R1", "type": "Resistor",
+                "pins": [{"number": "1", "net": "used"}, {"number": "2", "net": "used"}],
+            }
+        ],
+    }
+    template = _parse_primitive(raw)
+    assert template._signal_to_components["unused"] == []
+    assert template._signal_to_components["used"] == ["R1"]
