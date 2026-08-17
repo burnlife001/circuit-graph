@@ -303,7 +303,7 @@ def test_primitive_index_is_up_to_date() -> None:
         text=True,
     )
     assert result.returncode == 0, (
-        "primitives/index_primitives.md is out of date.\n"
+        "primitives/__index_primitives.md is out of date.\n"
         f"stderr: {result.stderr}\n"
         "Fix: uv run python scripts/build_primitive_index.py"
     )
@@ -314,6 +314,31 @@ def test_primitive_index_lists_all_primitives() -> None:
     from pathlib import Path
 
     ids = {t.id for t in load_primitives()}
-    content = Path("primitives/index_primitives.md").read_text(encoding="utf-8")
+    content = Path("primitives/__index_primitives.md").read_text(encoding="utf-8")
     missing = sorted(pid for pid in ids if f"`{pid}`" not in content)
     assert not missing, f"index does not mention primitives: {missing}"
+
+
+def test_signal_name_matches_falls_back_to_default_for_protel_nets():
+    """signal_name_matches must OR in _DEFAULT_SIGNAL_PATTERNS[sigid]
+    when the user pattern misses, so all 21 templates match Protel nets.
+    """
+    from circuit_graph.primitives import signal_name_matches
+
+    # User pattern miss + id-keyed default hit ⇒ True
+    assert signal_name_matches(r"^OUT$", "NetR100_1", signal_id="out") is True
+    assert signal_name_matches(r"^VIN\+$", "NetC82_1", signal_id="in_p") is True
+    assert signal_name_matches(r"^VIN\-$", "NetR97_1", signal_id="in_n") is True
+    # Protel-style power rail
+    assert signal_name_matches(r"^VCC$", "USB_5V", signal_id="vcc") is True
+
+    # Two-arg form MUST remain strict (no fallback)
+    assert signal_name_matches(r"^OUT$", "NetR100_1") is False
+    assert signal_name_matches(r"^VIN\-$", "NetR97_1") is False
+
+    # User hit short-circuits before fallback
+    assert signal_name_matches(r"^GND$", "GND") is True
+    assert signal_name_matches(r"^GND$", "GND", signal_id="gnd") is True
+
+    # Unknown signal_id with no defaults ⇒ False
+    assert signal_name_matches(r"^X$", "anything", signal_id="__no_such_id__") is False

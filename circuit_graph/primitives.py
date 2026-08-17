@@ -317,9 +317,83 @@ def primitive_to_bipartite_graph(template: PrimitiveTemplate) -> nx.Graph:
     return g
 
 
-def signal_name_matches(pattern: str, name: str) -> bool:
-    """Check whether ``name`` matches ``pattern`` (case-insensitive regex)."""
-    return bool(re.search(pattern, name, re.IGNORECASE))
+_DEFAULT_SIGNAL_PATTERNS: dict[str, tuple[str, ...]] = {
+    # ----- Power rails -----
+    "vcc": (
+        r".*VDD.*", r".*VCC.*", r"^V[+A-Z0-9]+$", r".*V$",
+        r"^[+]?\d+(\.\d+)?V(_.*)?$", r"^USB_5V$",
+        r"^PVCC$", r"^AVCC$", r"^AVDD$",
+    ),
+    "gnd": (
+        r"^GND\d*$", r".*GND$", r"^PGND$", r"^AGND$", r"^DGND$",
+        r"^CGND$", r".*VSS$", r".*VEE$", r".*_GND$", r"^GND_[A-Z0-9]+$",
+    ),
+    "vcc_low":  (r"^Net.*$", r".*VDD.*LOW.*", r".*_LOW$"),
+    "vcc_high": (r"^Net.*$", r".*VDD.*HIGH.*", r".*_HIGH$"),
+
+    # ----- Inputs (semantic + Protel auto-named) -----
+    "in_p":      (r"^Net.*_1$", r"^AINP.*$", r"^INP.*$", r"^V\+IN.*$", r"^VIP$", r"^POS$"),
+    "in_n":      (r"^Net.*_1$", r"^AINN.*$", r"^INN.*$", r"^V\-IN.*$", r"^VIN$", r"^NEG$"),
+    "vin":       (r"^Net.*_1$", r"^VIN.*$", r"^V[Ii]n.*$", r"^V[_]?[Ii]n.*$"),
+
+    # ----- Outputs -----
+    "out":       (r"^Net.*_1$", r"^V?OUT.*$", r"^VO$", r"^AMP_OUT.*$",
+                  r"^OA_OUT.*$", r"^OP_OUT.*$", r"^VOUT.*$", r"^AOUT.*$"),
+    "vout":      (r"^Net.*_1$", r"^V?OUT.*$", r"^VOUT.*$", r"^AOUT.*$"),
+
+    # ----- Generic signals -----
+    "signal":    (r"^Net.*$", r"^[A-Z]+_\d+V$", r"^SIG.*$", r"^A(IO|IN|OUT)\d+$"),
+    "sig_in":    (r"^Net.*$", r"^SIG.*$", r"^VIN.*$", r"^AIN.*$"),
+    "sig_p":     (r"^Net.*$", r"^SIG.*P$", r"^.+_P$"),
+    "sig_n":     (r"^Net.*$", r"^SIG.*N$", r"^.+_N$"),
+    "sig_low":   (r"^Net.*$", r".*_LOW$"),
+    "sig_high":  (r"^Net.*$", r".*_HIGH$"),
+    "load_net":  (r"^Net.*$", r"^LOAD.*$", r"^.+_LOAD$"),
+
+    # ----- Differential / specific -----
+    "ac1":       (r"^Net.*_1$", r"^AC\d?$", r"^A$"),
+    "ac2":       (r"^Net.*_2$", r"^AC\d?$", r"^B$"),
+    "dc_plus":   (r"^Net.*$", r"^D\+$", r"^DC\+$", r"^V\+IN$"),
+    "dc_minus":  (r"^Net.*$", r"^D\-$", r"^DC\-$", r"^V\-IN$"),
+    "xtal_p":    (r"^Net.*$", r"^XT.*P$", r"^XI$", r"^XIN$"),
+    "xtal_n":    (r"^Net.*$", r"^XT.*N$", r"^XO$", r"^XOUT$"),
+
+    # ----- Switches / drivers -----
+    "ctrl":      (r"^Net.*$", r"^CTRL.*$", r".*_CTRL$", r"^GATE\d?$"),
+    "high_side": (r"^Net.*$", r".*HS$", r".*_HIGH$"),
+    "low_side":  (r"^Net.*$", r".*LS$", r".*_LOW$"),
+    "pwr_in":    (r"^Net.*$", r"^PWR.*IN.*$", r".+_IN$"),
+    "pwr_out":   (r"^Net.*$", r"^PWR.*OUT.*$", r".+_OUT$"),
+
+    # ----- Pull-ups / CC / protection -----
+    "pull_up":   (r"^Net.*$", r".*PULLUP.*", r".*PU$"),
+    "cc":        (r"^CC[12]?$", r".*CC\d?$"),
+    "protected": (r"^Net.*$", r"^PROT.*$"),
+}
+
+
+def signal_name_matches(
+    pattern: str,
+    name: str,
+    *,
+    signal_id: str | None = None,
+) -> bool:
+    """Check whether ``name`` matches ``pattern`` (case-insensitive regex).
+
+    With the keyword-only ``signal_id``, a built-in default fallback table
+    is consulted *after* the user pattern misses — this lets the matcher
+    match Protel auto-named nets (``NetR97_1``, ``USB_5V`` ...) without
+    editing any primitive template. The two-arg form is unchanged and
+    triggers no fallback, so all pre-existing tests stay green.
+    """
+    if re.search(pattern, name, re.IGNORECASE):
+        return True
+    if signal_id is None:
+        return False
+    for fallback in _DEFAULT_SIGNAL_PATTERNS.get(signal_id, ()):
+        if re.search(fallback, name, re.IGNORECASE):
+            return True
+    return False
 
 
 def component_type_matches(expected: str, comp: Component) -> bool:
