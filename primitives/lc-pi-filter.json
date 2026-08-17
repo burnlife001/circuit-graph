@@ -1,0 +1,56 @@
+{
+  "$schema": "./schema.json",
+  "id": "lc-pi-filter",
+  "name": "π 型 LC 滤波器",
+  "description": "C-L-C π 型滤波：输入电容 + 串联电感 + 输出电容，用于电源纹波抑制。",
+  "role": "power",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "pwr_in", "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "power",
+      "required": true
+    },
+    {
+      "id": "pwr_out", "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "power",
+      "required": true
+    },
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "expected_role": "gnd",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "C_in", "type": "Capacitor", "required": true,
+      "pins": [
+        {"number": "1", "net": "pwr_in"},
+        {"number": "2", "net": "gnd"}
+      ]
+    },
+    {
+      "id": "L1", "type": "Inductor", "required": true,
+      "pins": [
+        {"number": "1", "net": "pwr_in"},
+        {"number": "2", "net": "pwr_out"}
+      ]
+    },
+    {
+      "id": "C_out", "type": "Capacitor", "required": true,
+      "pins": [
+        {"number": "1", "net": "pwr_out"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 3, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.40, "naming": 0.20, "parametric": 0.15, "type": 0.25},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "./schema.json",
+  "id": "flyback-diode",
+  "name": "续流二极管",
+  "description": "二极管反向并联在电感/继电器线圈两端，关断时为感应电流提供续流路径。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "high_side", "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "power",
+      "required": true
+    },
+    {
+      "id": "low_side", "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "L1", "type": "Inductor", "required": true,
+      "pins": [
+        {"number": "1", "net": "high_side"},
+        {"number": "2", "net": "low_side"}
+      ]
+    },
+    {
+      "id": "D_fly", "type": "Diode", "required": true,
+      "pins": [
+        {"number": "A", "net": "low_side"},
+        {"number": "K", "net": "high_side"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 2, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.40, "naming": 0.20, "parametric": 0.15, "type": 0.25},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

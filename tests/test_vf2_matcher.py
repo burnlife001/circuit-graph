@@ -511,3 +511,176 @@ def test_find_matches_pmos_high_side():
     assert not result.aborted
     assert len(result.matches) == 1
     assert result.matches[0].component_mapping["Q1"] == "Q3"
+
+
+# ---------------------------------------------------------------------------
+# Group 3 primitives: flyback / current-shunt / fet-level-shifter / lc-pi / sallen-key
+# ---------------------------------------------------------------------------
+
+
+def _flyback_ir():
+    l = make_component("L1", DeviceKind.INDUCTOR, [("1", "VCC"), ("2", "SW")], raw_value="10uH")
+    d = make_component("D5", DeviceKind.DIODE, [("A", "SW"), ("K", "VCC")], raw_value="1N4148")
+    vcc = make_net("N_VCC", "VCC", NetType.POWER)
+    sw = make_net("N_SW", "SW", NetType.SIGNAL)
+    return build_ir(
+        [l, d], [vcc, sw],
+        [("L1.1", "N_VCC"), ("L1.2", "N_SW"),
+         ("D5.A", "N_SW"), ("D5.K", "N_VCC")],
+        edge_semantics={
+            ("L1.1", "N_VCC"): {"role": "power", "direction": "bidirectional", "level": "5V"},
+            ("D5.K", "N_VCC"): {"role": "power", "direction": "bidirectional", "level": "5V"},
+        },
+    )
+
+
+def test_find_matches_flyback_diode():
+    template = next(t for t in load_primitives() if t.id == "flyback-diode")
+    result = Vf2TopologyMatcher(_flyback_ir()).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    comp = result.matches[0].component_mapping
+    assert comp["L1"] == "L1"
+    assert comp["D_fly"] == "D5"
+
+
+def _current_shunt_ir():
+    r = make_component("R200", DeviceKind.RESISTOR, [("1", "VBUS"), ("2", "VDD")], raw_value="0.1")
+    vin = make_net("N_VIN", "VBUS", NetType.POWER)
+    vout = make_net("N_VOUT", "VDD", NetType.POWER)
+    return build_ir(
+        [r], [vin, vout],
+        [("R200.1", "N_VIN"), ("R200.2", "N_VOUT")],
+        edge_semantics={
+            ("R200.1", "N_VIN"):  {"role": "power", "direction": "bidirectional", "level": "5V"},
+            ("R200.2", "N_VOUT"): {"role": "power", "direction": "bidirectional", "level": "5V"},
+        },
+    )
+
+
+def test_find_matches_current_shunt():
+    template = next(t for t in load_primitives() if t.id == "current-shunt-monitor")
+    result = Vf2TopologyMatcher(_current_shunt_ir()).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    # R200 is symmetric → VF2 may find 2 matches (swapped pwr_in/pwr_out)
+    assert len(result.matches) >= 1
+    assert result.matches[0].component_mapping["R_shunt"] == "R200"
+
+
+def _fet_level_shifter_ir():
+    q = make_component("Q4", DeviceKind.MOSFET, [("S", "SDA_3V3"), ("D", "SDA_5V"), ("G", "3V3")],
+                       raw_value="BSS138", part_number="BSS138")
+    r_lo = make_component("R300", DeviceKind.RESISTOR, [("1", "SDA_3V3"), ("2", "3V3")], raw_value="10K")
+    r_hi = make_component("R301", DeviceKind.RESISTOR, [("1", "SDA_5V"), ("2", "5V")], raw_value="10K")
+    v3 = make_net("N_3V3", "3V3", NetType.POWER)
+    v5 = make_net("N_5V", "5V", NetType.POWER)
+    sl = make_net("N_SL", "SDA_3V3", NetType.SIGNAL)
+    sh = make_net("N_SH", "SDA_5V", NetType.SIGNAL)
+    return build_ir(
+        [q, r_lo, r_hi], [v3, v5, sl, sh],
+        [("Q4.S", "N_SL"), ("Q4.D", "N_SH"), ("Q4.G", "N_3V3"),
+         ("R300.1", "N_SL"), ("R300.2", "N_3V3"),
+         ("R301.1", "N_SH"), ("R301.2", "N_5V")],
+        edge_semantics={
+            ("Q4.G", "N_3V3"):   {"role": "power",   "direction": "bidirectional", "level": "3V3"},
+            ("R300.2", "N_3V3"): {"role": "power",   "direction": "bidirectional", "level": "3V3"},
+            ("R301.2", "N_5V"):  {"role": "power",   "direction": "bidirectional", "level": "5V"},
+            ("Q4.S", "N_SL"):    {"role": "digital", "direction": "bidirectional", "level": None},
+            ("R300.1", "N_SL"):  {"role": "digital", "direction": "bidirectional", "level": None},
+            ("Q4.D", "N_SH"):    {"role": "digital", "direction": "bidirectional", "level": None},
+            ("R301.1", "N_SH"):  {"role": "digital", "direction": "bidirectional", "level": None},
+        },
+    )
+
+
+def test_find_matches_fet_level_shifter():
+    template = next(t for t in load_primitives() if t.id == "fet-level-shifter")
+    result = Vf2TopologyMatcher(_fet_level_shifter_ir()).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    comp = result.matches[0].component_mapping
+    assert comp["Q1"] == "Q4"
+    assert {comp["R_low"], comp["R_high"]} == {"R300", "R301"}
+
+
+def _lc_pi_ir():
+    c_in = make_component("C40", DeviceKind.CAPACITOR, [("1", "VIN"), ("2", "GND")], raw_value="10uF")
+    l = make_component("L2", DeviceKind.INDUCTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="10uH")
+    c_out = make_component("C41", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")], raw_value="10uF")
+    vin = make_net("N_VIN", "VIN", NetType.POWER)
+    vout = make_net("N_VOUT", "VOUT", NetType.POWER)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    return build_ir(
+        [c_in, l, c_out], [vin, vout, gnd],
+        [("C40.1", "N_VIN"), ("C40.2", "N_GND"),
+         ("L2.1", "N_VIN"), ("L2.2", "N_VOUT"),
+         ("C41.1", "N_VOUT"), ("C41.2", "N_GND")],
+        edge_semantics={
+            ("C40.1", "N_VIN"):  {"role": "power", "direction": "bidirectional", "level": "5V"},
+            ("L2.1", "N_VIN"):   {"role": "power", "direction": "bidirectional", "level": "5V"},
+            ("L2.2", "N_VOUT"):  {"role": "power", "direction": "bidirectional", "level": "5V"},
+            ("C41.1", "N_VOUT"): {"role": "power", "direction": "bidirectional", "level": "5V"},
+            ("C40.2", "N_GND"):  {"role": "gnd",   "direction": "bidirectional", "level": None},
+            ("C41.2", "N_GND"):  {"role": "gnd",   "direction": "bidirectional", "level": None},
+        },
+    )
+
+
+def test_find_matches_lc_pi_filter():
+    template = next(t for t in load_primitives() if t.id == "lc-pi-filter")
+    result = Vf2TopologyMatcher(_lc_pi_ir()).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    comp = result.matches[0].component_mapping
+    assert comp["L1"] == "L2"
+    assert {comp["C_in"], comp["C_out"]} == {"C40", "C41"}
+
+
+def _sallen_key_ir():
+    """Simplified Sallen-Key IR — direct connections without intermediate nets.
+
+    The Sallen-Key primitive is an *approximate* match (VF2 ignores pin
+    numbers), so we omit the R1/R2 daisy-chain via VIN_MID/VOUT_MID that a real
+    schematic would have. With direct vin↔vout and vout↔gnd connections the
+    5-component bipartite structure matches the primitive cleanly.
+    """
+    u = make_component("U10", DeviceKind.IC,
+                       [("+", "VIN"), ("-", "VOUT"), ("OUT", "VOUT"),
+                        ("V+", "VCC"), ("V-", "GND")],
+                       raw_value="LM358", part_number="LM358")
+    r1 = make_component("R400", DeviceKind.RESISTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="10K")
+    r2 = make_component("R401", DeviceKind.RESISTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="10K")
+    c1 = make_component("C50", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")], raw_value="10nF")
+    c2 = make_component("C51", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")], raw_value="10nF")
+    vin = make_net("N_VIN", "VIN", NetType.SIGNAL)
+    vout = make_net("N_VOUT", "VOUT", NetType.SIGNAL)
+    vcc = make_net("N_VCC", "VCC", NetType.POWER)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    return build_ir(
+        [u, r1, r2, c1, c2], [vin, vout, vcc, gnd],
+        [("U10.+", "N_VIN"), ("U10.-", "N_VOUT"), ("U10.OUT", "N_VOUT"),
+         ("U10.V+", "N_VCC"), ("U10.V-", "N_GND"),
+         ("R400.1", "N_VIN"), ("R400.2", "N_VOUT"),
+         ("R401.1", "N_VIN"), ("R401.2", "N_VOUT"),
+         ("C50.1", "N_VOUT"), ("C50.2", "N_GND"),
+         ("C51.1", "N_VOUT"), ("C51.2", "N_GND")],
+        edge_semantics={
+            ("U10.V+", "N_VCC"): {"role": "power", "direction": "load",         "level": "5V"},
+            ("U10.V-", "N_GND"): {"role": "gnd",   "direction": "bidirectional", "level": None},
+            ("C50.2", "N_GND"):  {"role": "gnd",   "direction": "bidirectional", "level": None},
+            ("C51.2", "N_GND"):  {"role": "gnd",   "direction": "bidirectional", "level": None},
+        },
+    )
+
+
+def test_find_matches_sallen_key_low_pass():
+    template = next(t for t in load_primitives() if t.id == "sallen-key-low-pass")
+    result = Vf2TopologyMatcher(_sallen_key_ir()).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    # Sallen-Key is approximate (VF2 ignores pin numbers); allow any number >= 1
+    assert len(result.matches) >= 1

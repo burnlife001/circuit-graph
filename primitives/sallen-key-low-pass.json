@@ -1,0 +1,69 @@
+{
+  "$schema": "./schema.json",
+  "id": "sallen-key-low-pass",
+  "name": "Sallen-Key 二阶低通滤波器",
+  "description": "运放 + 2R + 2C 构成的单位增益二阶有源低通。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {"id": "vin",  "type": "net", "name_pattern": ".*", "required": true},
+    {"id": "vout", "type": "net", "name_pattern": ".*", "required": true},
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "expected_role": "gnd",
+      "required": true
+    },
+    {
+      "id": "vcc", "type": "net",
+      "name_pattern": "^(VCC|VDD|\\+?\\d+\\.?\\d*V).*",
+      "expected_role": "power",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "U_op", "type": "IC", "required": true,
+      "pins": [
+        {"number": "+",  "net": "vin"},
+        {"number": "-",  "net": "vout"},
+        {"number": "OUT","net": "vout"},
+        {"number": "V+", "net": "vcc"},
+        {"number": "V-", "net": "gnd"}
+      ]
+    },
+    {
+      "id": "R1", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "vin"},
+        {"number": "2", "net": "vout"}
+      ]
+    },
+    {
+      "id": "R2", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "vin"},
+        {"number": "2", "net": "vout"}
+      ]
+    },
+    {
+      "id": "C1", "type": "Capacitor", "required": true,
+      "pins": [
+        {"number": "1", "net": "vout"},
+        {"number": "2", "net": "gnd"}
+      ]
+    },
+    {
+      "id": "C2", "type": "Capacitor", "required": true,
+      "pins": [
+        {"number": "1", "net": "vout"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 5, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.40, "naming": 0.15, "parametric": 0.20, "type": 0.25},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

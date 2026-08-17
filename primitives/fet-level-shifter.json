@@ -1,0 +1,63 @@
+{
+  "$schema": "./schema.json",
+  "id": "fet-level-shifter",
+  "name": "FET 双向电平转换",
+  "description": "NMOS + 两个上拉电阻实现双向电平转换（常见于 I2C 5V↔3V3）。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "vcc_low", "type": "net",
+      "name_pattern": "^(3V3|\\+?3\\.3V).*",
+      "expected_role": "power", "expected_level": "3V3",
+      "required": true
+    },
+    {
+      "id": "vcc_high", "type": "net",
+      "name_pattern": "^(5V|\\+?5V|VCC|VDD).*",
+      "expected_role": "power", "expected_level": "5V",
+      "required": true
+    },
+    {
+      "id": "sig_low", "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "digital",
+      "required": true
+    },
+    {
+      "id": "sig_high", "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "digital",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "Q1", "type": "Mosfet", "required": true,
+      "pins": [
+        {"number": "S", "net": "sig_low"},
+        {"number": "D", "net": "sig_high"},
+        {"number": "G", "net": "vcc_low"}
+      ]
+    },
+    {
+      "id": "R_low", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "sig_low"},
+        {"number": "2", "net": "vcc_low"}
+      ]
+    },
+    {
+      "id": "R_high", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "sig_high"},
+        {"number": "2", "net": "vcc_high"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 3, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.35, "naming": 0.20, "parametric": 0.15, "type": 0.30},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}
