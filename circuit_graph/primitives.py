@@ -325,8 +325,18 @@ _DEFAULT_SIGNAL_PATTERNS: dict[str, tuple[str, ...]] = {
         r"^PVCC$", r"^AVCC$", r"^AVDD$",
     ),
     "gnd": (
-        r"^GND\d*$", r".*GND$", r"^PGND$", r"^AGND$", r"^DGND$",
-        r"^CGND$", r".*VSS$", r".*VEE$", r".*_GND$", r"^GND_[A-Z0-9]+$",
+        r"^GND\d*$", r"^PGND$", r"^AGND$", r"^DGND$",
+        # NOTE: CGND is intentionally NOT in the 'gnd' fallback.
+        # CGND is a signal/chassis ground, structurally distinct from
+        # the circuit-reference ground. Letting CGND match 'gnd' caused
+        # R96 (GND<->CGND bridge) to be falsely identified as the shunt
+        # resistor of rc-high-pass.json. A primitive that genuinely needs
+        # CGND-as-ground should declare a dedicated signal id (e.g. `cgnd`).
+        # The broader `.*GND$` fallback was removed because it still
+        # matched `CGND` (and any other name ending in 'GND'), re-introducing
+        # the same false positive. If a future schematic uses a name like
+        # `MYGND` that we need to recognise, add it explicitly here.
+        r".*VSS$", r".*VEE$", r".*_GND$", r"^GND_[A-Z0-9]+$",
     ),
     "vcc_low":  (r"^Net.*$", r".*VDD.*LOW.*", r".*_LOW$"),
     "vcc_high": (r"^Net.*$", r".*VDD.*HIGH.*", r".*_HIGH$"),

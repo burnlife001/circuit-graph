@@ -342,3 +342,27 @@ def test_signal_name_matches_falls_back_to_default_for_protel_nets():
 
     # Unknown signal_id with no defaults ⇒ False
     assert signal_name_matches(r"^X$", "anything", signal_id="__no_such_id__") is False
+
+
+def test_signal_name_matches_does_not_treat_cgnd_as_gnd_fallback():
+    """CGND (chassis / signal ground) must NOT match signal_id='gnd'.
+
+    Regression for the false positive where R96 — a GND↔CGND bridge
+    resistor on the T268 board — was matched as the R_shunt of
+    rc-high-pass.json, generating a spurious `rc-high-pass-c82`
+    FunctionalBlock with [C82, R96]. The CGND end of R96 is *not* the
+    circuit-reference ground; allowing CGND as a 'gnd' fallback gave
+    the high-pass pattern a structural leg to stand on.
+
+    After the fix, only true GND/PGND/AGND/DGND/VSS/VEE/... names match
+    the 'gnd' signal. A primitive that genuinely needs CGND-as-ground
+    should declare it under a dedicated signal id (e.g. `cgnd`).
+    """
+    from circuit_graph.primitives import signal_name_matches
+
+    # CGND must NOT match signal_id='gnd' fallback
+    assert signal_name_matches(r"^X$", "CGND", signal_id="gnd") is False
+    # But an explicit CGND user pattern still works (caller's choice)
+    assert signal_name_matches(r"^CGND$", "CGND", signal_id="gnd") is True
+    # Sanity: GND itself still matches the fallback
+    assert signal_name_matches(r"^X$", "GND", signal_id="gnd") is True

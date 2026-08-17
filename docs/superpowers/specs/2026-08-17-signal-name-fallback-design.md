@@ -1,7 +1,7 @@
 # Spec — Signal-name fallback for primitive templates
 
 **Date:** 2026-08-17
-**Status:** Draft (pending user review)
+**Status:** v1.1 — v1 CGND exclusion tuning merged
 
 ## 1. Problem
 
@@ -71,8 +71,16 @@ _DEFAULT_SIGNAL_PATTERNS: dict[str, list[str]] = {
     "vcc":       [r".*VDD.*", r".*VCC.*", r"^V[+A-Z0-9]+$",
                   r".*V$", r"^[+]?\d+(\.\d+)?V(_.*)?$", r"^USB_5V$",
                   r"^PVCC$", r"^AVCC$", r"^AVDD$"],
-    "gnd":       [r"^GND\d*$", r"^.*GND$", r"^PGND$", r"^AGND$", r"^DGND$",
-                  r"^CGND$", r"^.*VSS$", r"^.*VEE$", r"^.*_GND$",
+    "gnd":       [r"^GND\d*$", r"^PGND$", r"^AGND$", r"^DGND$",
+                  # NOTE (v1.1): CGND and `.*GND$` are intentionally removed.
+                  # CGND is a signal/chassis ground, structurally distinct
+                  # from the circuit-reference ground; letting CGND match
+                  # 'gnd' caused R96 (GND<->CGND bridge) to be falsely
+                  # identified as the shunt resistor of rc-high-pass.json,
+                  # producing a spurious `rc-high-pass-c82` block. A
+                  # primitive that genuinely needs CGND-as-ground should
+                  # declare a dedicated signal id (e.g. `cgnd`).
+                  r"^.*VSS$", r"^.*VEE$", r"^.*_GND$",
                   r"^GND_[A-Z0-9]+$"],
 
     # Inputs / outputs (semantic + Protel auto-named)
@@ -134,7 +142,31 @@ like `NetR97_1` now becomes a candidate for any of `in_p` / `in_n` / `out` /
 `signal` — VF2 still picks the role-assignment that satisfies the structural
 constraints.
 
-### 3.3 Tuning / scoring
+### 3.3 v1.1 tuning (post-merge, 2026-08-17)
+
+After the first merge the fallback gnd tuple accepted `r"^CGND$"`. That
+made the matcher treat chassis / signal-ground nets (CGND) as
+circuit-reference ground, with two visible consequences on the
+`FX-T268-V6-10米-5065.NET` board:
+
+1. **`rc-high-pass-c82` was emitted with `[C82, R96]`** — R96 is in fact
+   a bridge resistor between `GND` and `CGND` (one net on each side).
+   The high-pass template matched because CGND was accepted as gnd,
+   letting `(C_series.vout, R_shunt.gnd) = (NetC82_1, CGND)` slip
+   through, even though R96 is not really on the signal path.
+2. **`rc-low-pass-c82` was unaffected** because its gnd end is *true*
+   `GND` (C82 pins to GND, not CGND) — only the GND side of the filter
+   matters semantically.
+
+Both `r"^CGND$"` and the broader `r".*GND$"` (which silently covered
+CGND a second time) are removed from the v1.1 gnd fallback. Add an
+explicit pattern if you genuinely need to accept a non-standard ground
+name like `MYGND`. Add a dedicated signal id (e.g. `cgnd`) for any new
+primitive that *does* want to operate on CGND-as-ground — keeping the
+gnd fallback maximally strict means future callers can opt in
+explicitly.
+
+### 3.4 Tuning / scoring
 
 We intentionally **do not** change scoring weights or thresholds in this
 spec. Keeping it match-or-no-match prevents accidental score-regressions.
@@ -144,7 +176,7 @@ is a follow-up spec (e.g. add an `naming` evidence item in
 `TopologyScorer._naming_score` recording whether the match came from the user
 pattern or the fallback).
 
-### 3.4 API surface
+### 3.5 API surface
 
 ```python
 # Existing — unchanged behavior, no signal_id → no fallback.
