@@ -697,3 +697,30 @@ def test_find_matches_sallen_key_low_pass():
     assert not result.aborted
     # Sallen-Key is approximate (VF2 ignores pin numbers); allow any number >= 1
     assert len(result.matches) >= 1
+
+
+def test_non_inverting_amplifier_matches_protel_auto_named_nets(tmp_path):
+    """End-to-end: a Protel-exported netlist whose intermediate nets use
+    the default 'Net<COMP>_<PIN>' naming should still produce a
+    non-inverting-amplifier FunctionalBlock containing R97.
+    """
+    from pathlib import Path
+
+    from circuit_graph.enrichers import run_enrichers
+    from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
+    from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
+
+    netlist = (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "protel"
+        / "FX-T268-V6-10米-5065.NET"
+    )
+    ir = ProtelNetParser().parse(ParserInput(file_path=str(netlist)))
+    ir2 = run_enrichers(ir, [TopologyRecognizer()]).ir
+
+    blocks = [b for b in ir2.blocks if b.id.startswith("non-inverting-amplifier-")]
+    assert any("R97" in b.component_ids for b in blocks), (
+        f"Expected a non-inverting-amplifier-* block containing R97; got: "
+        f"{[(b.id, b.component_ids) for b in blocks]}"
+    )

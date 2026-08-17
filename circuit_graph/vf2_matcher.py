@@ -71,7 +71,9 @@ def _node_match_circuit_to_primitive(
     if circ_kind == "net":
         if not isinstance(circ_data, Net):
             return False
-        return signal_name_matches(prim_data.name_pattern, circ_data.name)
+        return signal_name_matches(
+            prim_data.name_pattern, circ_data.name, signal_id=prim_data.id
+        )
 
     return False
 
