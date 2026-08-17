@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "circuit-graph topology primitive",
+  "type": "object",
+  "required": ["id", "name", "signals", "components"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "role": {"type": "string"},
+    "version": {"type": "string"},
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "name_pattern"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"type": "string", "enum": ["net"]},
+          "name_pattern": {"type": "string"},
+          "required": {"type": "boolean", "default": true},
+          "expected_role": {
+            "type": ["string", "null"],
+            "enum": ["power", "gnd", "analog", "digital", "clock", null]
+          },
+          "expected_direction": {
+            "type": ["string", "null"],
+            "enum": ["source", "load", "bidirectional", null]
+          },
+          "expected_level": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "pins"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"type": "string"},
+          "required": {"type": "boolean", "default": true},
+          "value_pattern": {"type": ["string", "null"]},
+          "pins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["number", "net"],
+              "properties": {
+                "number": {"type": ["string", "integer"]},
+                "net": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "properties": {
+        "min_components": {"type": "integer", "minimum": 1},
+        "exact_component_count": {"type": "boolean"}
+      }
+    },
+    "scoring": {
+      "type": "object",
+      "properties": {
+        "weights": {"type": "object"},
+        "thresholds": {"type": "object"}
+      }
+    }
+  }
+}
