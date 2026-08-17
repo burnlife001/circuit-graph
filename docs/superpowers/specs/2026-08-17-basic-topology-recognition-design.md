@@ -82,6 +82,25 @@ ProtelNetParser.parse
 - 这样 `"5V"`、`"5.0V"`、`"+5V"`、`"5"` 都视为同一电平
 - 若用户希望区分电源域（如"主 5V" vs "副 5V"），应改用 `expected_role` 或加 `name_pattern`，不要靠 `expected_level` 区分
 
+**`extract_volts` 解析规则**（与 `edge_semantic._extract_level` 的输出格式对齐）：
+
+```python
+# primitives.py 顶层
+_LEVEL_FRAC_RE = re.compile(r"^\+?(\d+)[Vv](\d+)$")        # "3V3" / "1V8" / "1V25"
+_LEVEL_PLAIN_RE = re.compile(r"^\+?(\d+(?:\.\d+)?)[Vv]?$") # "5V" / "3.3V" / "5" / "+5"
+
+def extract_volts(s: str | None) -> Decimal | None:
+    """Parse a voltage label to a Decimal value in volts.
+
+    Rules (first match wins):
+      1. ``"<int>V<frac>"`` → ``int.frac``     (e.g. "3V3" → 3.3, "1V25" → 1.25)
+      2. ``"[+]<float>[V]"`` → ``float``       (e.g. "5V" → 5.0, "3.3V" → 3.3, "5" → 5.0)
+      3. otherwise → ``None``
+    """
+```
+
+规则 1 优先是因为 `edge_semantic._extract_level` 输出的 `"3V3"` / `"1V8"` 是**数字化习惯记法**（`V` 作小数点），若按规则 2 解析会得到 `3.0`，与 `"3V0"` 混淆。
+
 #### 3.2.2 严格模式（用户已确认）
 
 **规则**：当基元的某个 signal 声明了任一 `expected_*` 字段时，VF2 在将该 signal 映射到 candidate circuit net 时，必须满足：
@@ -89,7 +108,7 @@ ProtelNetParser.parse
 1. 基元中至少存在一个 component `C` 通过 pin 连接到该 signal；
 2. 对所有这样的 `C`，其映射到 circuit 中的 component `C'` 与 candidate net 之间的 `(C', net)` 边在 `ir.connections` 中**存在**，且 `metadata["edge_semantic"]` 中对应字段**等于** `expected_*` 值。
 
-任一不满足 → `node_match` 返回 `False`，VF2 剪枝。
+任一不满足 → `semantic_feasibility` 钩子返回 `False`，VF2 剪枝（机制详见 §3.2.4）。
 
 **含义**：
 - 现有 6 个基元（未声明 `expected_*`）**完全不受影响**，继续按原有逻辑匹配。
@@ -108,96 +127,118 @@ ProtelNetParser.parse
 
 | 文件 | 改动 |
 |---|---|
-| `circuit_graph/primitives.py` | `PrimitiveSignal` 增加 3 字段；`_parse_signal` 解析；新增 `extract_volts(s) -> Decimal \| None`；新增派生属性 `_linked_component_ids: list[str]`（primitive 内部"该 signal 节点直接连接的 component 节点 id 列表"），在 `PrimitiveTemplate` 构造后由 `_compute_linked_components()` 一次性填好；新增模块级纯函数 `signal_semantic_matches(expected_role, expected_direction, expected_level, edge_semantic_dict) -> bool`（逐字段布尔比对，`None` 字段跳过） |
-| `circuit_graph/vf2_matcher.py` | `Vf2TopologyMatcher.__init__` 构建 `(component_id, net_id) → EdgeSemantic` 索引 `self._edge_semantics`；新增实例方法 `_match_signal_semantics(prim_data, circ_data) -> bool`，遍历 `prim_data._linked_component_ids` 中的每个 template-side component id，对每个 component 在 VF2 当前 partial mapping 中查已映射的 circuit-side component_id，再用 `(circuit_comp_id, circ_net_id)` 查 `self._edge_semantics` 得到 edge_semantic，调纯函数 `signal_semantic_matches` 比对；`_node_match_circuit_to_primitive` 在 net 分支调用 `_match_signal_semantics` |
+| `circuit_graph/primitives.py` | `PrimitiveSignal` 增加 3 个可选字段（`expected_role` / `expected_direction` / `expected_level`，均默认 `None`）；`_parse_signal` 解析；新增模块级 `extract_volts(s) -> Decimal \| None`（规则见 §3.2.1）；`PrimitiveTemplate` 新增**私有派生字段** `_signal_to_components: dict[str, list[str]]`（key 为 signal id，value 为通过 pin 连到该 signal 的 component id 列表，排序去重），由 `__post_init__` 一次性填好；新增模块级纯函数 `signal_semantic_matches(expected_role, expected_direction, expected_level, edge_semantic_dict) -> bool` |
+| `circuit_graph/vf2_matcher.py` | `Vf2TopologyMatcher.__init__` 构建 `(component_id, net_id) → EdgeSemantic` 索引 `self._edge_semantics`；新增内部类 `_SemanticGraphMatcher(GraphMatcher)`，重写 `semantic_feasibility(G1_node, G2_node)` 钩子：先 `super().semantic_feasibility(...)`，再做 `edge_semantic` 检查（通过 `self.core_1` / `self.core_2` 访问 partial mapping）；`find_matches` 中将 `GraphMatcher(...)` 替换为 `_SemanticGraphMatcher(...)`；新增模块级函数 `_match_signal_semantics(template, prim_signal, circ_net_id, partial_mapping, edge_semantics) -> bool`，遍历 `template._signal_to_components[prim_signal.id]` 中的每个 template-side component id，对每个 component 在 `partial_mapping` 中查已映射的 circuit-side component_id，再用 `(circuit_comp_id, circ_net_id)` 查 `edge_semantics` 索引，调纯函数 `signal_semantic_matches` 比对 |
 | `primitives/schema.json` | 新增 3 个可选字段定义 |
 | `tests/test_vf2_matcher.py` | 新增 3 个测试：role 匹配通过、role 不匹配拒绝、缺 edge_semantic 拒绝（严格模式） |
-| `tests/test_primitives.py` | 新增 schema 解析测试：3 字段读取、缺字段默认 `null`、`_linked_component_ids` 派生正确、`extract_volts` 数值比较 |
+| `tests/test_primitives.py` | 新增 schema 解析测试：3 字段读取、缺字段默认 `null`、`PrimitiveTemplate._signal_to_components` 派生正确、`extract_volts` 数值比较（含 `"3V3"` / `"1V25"` 习惯记法） |
 | `primitives/*.json`（现有 6 个） | **不动** |
 
 **两个函数的角色划分**：
 - `signal_semantic_matches(...)`（模块级**纯函数**）：输入 `expected_role/expected_direction/expected_level` 三个值 + 一条 `edge_semantic` 字典，返回是否匹配。**`None` 字段视为"不约束"，跳过比对**。可单测。
-- `_match_signal_semantics(prim_data, circ_data)`（matcher **实例方法**）：依赖 `self._edge_semantics` 索引 + VF2 当前 partial mapping，遍历 primitive signal 在 primitive 内部连到的所有 component，把每对 `(component_template_id, net_circuit_id)` 翻译成 `(component_circuit_id, net_circuit_id)` 再查索引，**任一对不通过则返回 `False`**。
+- `_match_signal_semantics(template, prim_signal, circ_net_id, partial_mapping, edge_semantics)`（模块级函数）：依赖调用方传入的 `edge_semantics` 索引（由 `_SemanticGraphMatcher` 传入 `self._edge_semantics`）+ partial mapping（`self.core_2`），遍历 `template._signal_to_components[prim_signal.id]`，把每对 `(template_comp_id, circ_net_id)` 翻译成 `(circuit_comp_id, circ_net_id)` 再查索引，**任一对不通过则返回 `False`**。
 
-#### 3.2.4 严格模式语义检查的数据流（方案 b：剪枝于 net 节点）
+#### 3.2.4 严格模式语义检查的数据流（方案 b：剪枝于 `semantic_feasibility` 钩子）
 
-**为什么不选方案 a（延迟到 mapping 完成后）**：VF2 候选基数在大图上可达数千，若延迟检查会产生大量"映射完成才发现缺 semantic"的浪费匹配。net 节点剪枝是单步 O(deg×3) 操作，能尽早剪掉不可能的 candidate。
+**为什么不选方案 a（延迟到 mapping 完成后 post-filter）**：VF2 候选基数在大图上可达数千，若延迟检查会产生大量"映射完成才发现缺 semantic"的浪费匹配。尽早剪枝能显著降低搜索空间。
 
-**PrimitiveSignal 派生表**（`primitives.py` 内）：
+**为什么不在 `node_match` 内做语义检查**：NetworkX `GraphMatcher` 的 `node_match` 回调签名是 `node_match(G1_attrs, G2_attrs) -> bool` —— 它只接收两个节点的 attrs，**不暴露当前 partial mapping**。严格模式需要"在 net 节点匹配时查询 primitive 内已映射 component 的 circuit 对应物"，这在 `node_match` 里物理上做不到。
+
+**正确路径**：NetworkX `GraphMatcher` 提供 `semantic_feasibility(G1_node, G2_node)` 钩子，在每次尝试扩展 mapping 时被调用，且能通过 `self.core_1` / `self.core_2` 访问当前 partial mapping。子类化 `GraphMatcher` 重写此钩子即可实现"在 net 节点匹配时做语义检查"。
+
+**`PrimitiveTemplate` 派生表**（`primitives.py` 内）：
 
 ```python
-@dataclass
-class PrimitiveSignal:
+@dataclass(frozen=True)
+class PrimitiveTemplate:
     # ... 既有字段 ...
-    expected_role: str | None = None
-    expected_direction: str | None = None
-    expected_level: str | None = None
-    _linked_component_ids: list[str] = field(default_factory=list, repr=False)
+    _signal_to_components: dict[str, list[str]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
-def _compute_linked_components(template: PrimitiveTemplate) -> None:
-    """在模板解析后一次性填好每个 signal 的 _linked_component_ids。"""
-    edges_by_net: dict[str, list[str]] = defaultdict(list)
-    for conn in template.connections:
-        edges_by_net[conn.net_id].append(conn.component_id)
-    for sig in template.signals:
-        if sig.type == "net":
-            sig._linked_component_ids = sorted(edges_by_net.get(sig.id, []))
+    def __post_init__(self) -> None:
+        """Derive signal_id → [component_id, ...] from components[*].pins[*].net.
+
+        Frozen dataclass: use object.__setattr__ to populate the derived index.
+        """
+        edges_by_net: dict[str, set[str]] = defaultdict(set)
+        for comp in self.components:
+            for pin in comp.pins:
+                edges_by_net[pin.net].add(comp.id)
+        derived = {
+            sig.id: sorted(edges_by_net.get(sig.id, set()))
+            for sig in self.signals
+        }
+        object.__setattr__(self, "_signal_to_components", derived)
 ```
 
-**Matcher 初始化时构建语义索引**（在 `__init__` 中直接赋值，不抽单独方法）：
+**说明**：
+- 派生数据放在 `PrimitiveTemplate`（而非 `PrimitiveSignal`），保持 `PrimitiveSignal` 的 frozen 语义不变
+- 派生逻辑遍历 `components[*].pins[*].net`（**不是 `template.connections`**——`PrimitiveTemplate` 没有该字段）
+- 用 `set` 中间结构去重，最终 `sorted` 保证确定性
+
+**`_SemanticGraphMatcher` 子类**（`vf2_matcher.py` 内）：
 
 ```python
-# Vf2TopologyMatcher.__init__ 新增代码
-self._edge_semantics: dict[tuple[str, str], dict[str, Any]] = {}
-for conn in ir.connections:
-    sem = (conn.metadata or {}).get("edge_semantic")
-    if sem is None:
-        continue
-    comp_id, _ = parse_pin_id(conn.pin_id)
-    if comp_id is None:
-        continue
-    self._edge_semantics[(comp_id, conn.net_id)] = sem
+class _SemanticGraphMatcher(GraphMatcher):
+    """GraphMatcher subclass that honours primitive expected_* semantics."""
+
+    def __init__(self, circuit_graph, primitive_graph, *, template, edge_semantics):
+        super().__init__(circuit_graph, primitive_graph)
+        self._template = template
+        self._edge_semantics = edge_semantics  # (circuit_comp_id, circuit_net_id) -> dict
+
+    def semantic_feasibility(self, G1_node, G2_node) -> bool:
+        if not super().semantic_feasibility(G1_node, G2_node):
+            return False
+        # G1 = circuit graph, G2 = primitive graph (NetworkX convention)
+        # Only intercept when the candidate G2 node is a net with expected_* declared
+        prim_attrs = self.G2.nodes[G2_node]
+        if prim_attrs.get("kind") != "net":
+            return True
+        prim_signal = prim_attrs["data"]
+        if (
+            prim_signal.expected_role is None
+            and prim_signal.expected_direction is None
+            and prim_signal.expected_level is None
+        ):
+            return True
+        circ_net_id = G1_node[2:] if G1_node.startswith("n:") else G1_node
+        # core_2: primitive_node -> circuit_node (current partial mapping)
+        return _match_signal_semantics(
+            template=self._template,
+            prim_signal=prim_signal,
+            circ_net_id=circ_net_id,
+            partial_mapping=self.core_2,
+            edge_semantics=self._edge_semantics,
+        )
 ```
 
-**`_node_match_circuit_to_primitive` 在 net 分支**：
+**`_match_signal_semantics` 实现要点**（模块级函数）：
 
 ```python
-if circ_kind == "net":
-    if not isinstance(circ_data, Net):
-        return False
-    if not signal_name_matches(prim_data.name_pattern, circ_data.name):
-        return False
-    # 严格模式：声明了 expected_* 就必须找到匹配的 edge_semantic
-    if (
-        prim_data.expected_role is not None
-        or prim_data.expected_direction is not None
-        or prim_data.expected_level is not None
-    ):
-        return self._match_signal_semantics(prim_data, circ_data)
-    return True
-```
-
-**`_match_signal_semantics` 实现要点**：
-
-```python
-def _match_signal_semantics(self, prim_data, circ_data) -> bool:
-    """对 primitive 内连接到 prim_data 的每个 component：
-    - 在 VF2 当前 partial mapping 中查 template_comp_id → circuit_comp_id
-    - 若该 component 尚未被映射（partial mapping 中查不到），视为 partial 通过
+def _match_signal_semantics(template, prim_signal, circ_net_id, partial_mapping, edge_semantics) -> bool:
+    """对 primitive 内连接到 prim_signal 的每个 component：
+    - 在 partial_mapping 中查 template_comp_id → circuit_comp_id
+      （注意 prefix 约定：partial_mapping 的 key 是带前缀的 "c:<comp_id>"，
+       而 template._signal_to_components[sig.id] 是不带前缀的 comp.id；
+       查询时需加 "c:" 前缀，取回 circuit-side 节点后需去 "c:" 前缀）
+    - 若该 component 尚未被映射（partial_mapping 中查不到），跳过该对的检查
       （因为 VF2 后续会把它映射到某个 candidate；这里只验证已映射部分）
-    - 若已映射，组装 (circuit_comp_id, circ_net_id) 查 self._edge_semantics
-    - 若索引里没有该 component 的 edge_semantic：拒绝（严格模式要求存在）
+    - 若已映射，组装 (circuit_comp_id, circ_net_id) 查 edge_semantics
+    - 若索引里没有该 (comp, net) 的 edge_semantic：拒绝（严格模式要求存在）
     - 查到了则调 signal_semantic_matches(...) 比对
+    - 所有已映射对都通过 → True；任一不通过 → False
     """
     ...
 ```
 
-**Partial mapping 时序说明**：VF2 在递归过程中对 primitive 节点按一定策略（如 BFS）逐个尝试映射。当尝试映射一个 signal 节点时，可能：
-- 情况 A：primitive 内所有连接到此 signal 的 component 节点都尚未映射 → `_match_signal_semantics` 直接返回 `True`，让 VF2 继续推进
-- 情况 B：部分已映射 → 仅验证已映射部分，未映射的留待后续
+**Partial mapping 时序说明**：`semantic_feasibility` 在 VF2 递归扩展时被调用，每次只验证**当前新增的一对映射**与已确立的 mapping 的一致性。当尝试把一个 circuit net 节点映射到 primitive signal 节点时：
+- 情况 A：primitive 内所有连接到此 signal 的 component 节点都尚未映射 → 直接返回 `True`（无可验证对），让 VF2 继续推进
+- 情况 B：部分已映射 → 仅验证已映射部分，未映射的留待后续 feasibility 调用
 - 情况 C：全部已映射 → 严格验证每对
 
-这避免了"在 net 节点匹配时强制所有 component 必须已映射"的不自然约束。
+这避免了"在 net 节点匹配时强制所有 component 必须已映射"的不自然约束，也让 VF2 能在搜索早期就剪掉语义不一致的分支。
 
 #### 3.2.5 `_candidate_components` 与严格模式的交互（性能优化）
 
@@ -205,11 +246,11 @@ def _match_signal_semantics(self, prim_data, circ_data) -> bool:
 
 ```python
 def _candidate_components(self, template):
-    base = <既有按 type 预筛的逻辑>
+    base: set[str] = <既有按 type 预筛的逻辑>
     # 严格模式附加：如果某 primitive 的 root component 通过 net 连到 role=power/gnd 的信号，
     # 则只保留其 (component, power_net) 边真实存在 edge_semantic.role 的 candidate
     if any(s.expected_role in ("power", "gnd") for s in template.signals):
-        return [c for c in base if self._has_role_edge(c.id, template)]
+        return {c for c in base if self._has_role_edge(c, template)}
     return base
 ```
 

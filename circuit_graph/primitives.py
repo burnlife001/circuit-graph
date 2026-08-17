@@ -225,7 +225,8 @@ def _parse_signal(raw: dict[str, Any]) -> PrimitiveSignal:
         )
     if expected_direction is not None and expected_direction not in _VALID_DIRECTIONS:
         raise PrimitiveValidationError(
-            f"Invalid expected_direction {expected_direction!r}; must be one of {sorted(_VALID_DIRECTIONS)}"
+            f"Invalid expected_direction {expected_direction!r}; "
+            f"must be one of {sorted(_VALID_DIRECTIONS)}"
         )
     return PrimitiveSignal(
         id=raw["id"],

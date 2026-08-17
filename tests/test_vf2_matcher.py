@@ -235,7 +235,8 @@ def test_strict_mode_missing_edge_semantic_rejected():
 
 def _rc_low_pass_ir():
     r = make_component("R10", DeviceKind.RESISTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="1K")
-    c = make_component("C10", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")], raw_value="100nF")
+    c = make_component("C10", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")],
+                       raw_value="100nF")
     vin = make_net("N_VIN", "VIN", NetType.SIGNAL)
     vout = make_net("N_VOUT", "VOUT", NetType.SIGNAL)
     gnd = make_net("N_GND", "GND", NetType.GND)
@@ -262,7 +263,8 @@ def test_find_matches_rc_low_pass():
 
 
 def _rc_high_pass_ir():
-    c = make_component("C20", DeviceKind.CAPACITOR, [("1", "VIN"), ("2", "VOUT")], raw_value="100nF")
+    c = make_component("C20", DeviceKind.CAPACITOR, [("1", "VIN"), ("2", "VOUT")],
+                       raw_value="100nF")
     r = make_component("R20", DeviceKind.RESISTOR, [("1", "VOUT"), ("2", "GND")], raw_value="10K")
     vin = make_net("N_VIN", "VIN", NetType.SIGNAL)
     vout = make_net("N_VOUT", "VOUT", NetType.SIGNAL)
@@ -288,8 +290,10 @@ def test_find_matches_rc_high_pass():
 
 def _crystal_ir():
     x = make_component("X1", DeviceKind.UNKNOWN, [("1", "XTAL1"), ("2", "XTAL2")], raw_value="8MHz")
-    cp = make_component("C30", DeviceKind.CAPACITOR, [("1", "XTAL1"), ("2", "GND")], raw_value="22pF")
-    cn = make_component("C31", DeviceKind.CAPACITOR, [("1", "XTAL2"), ("2", "GND")], raw_value="22pF")
+    cp = make_component("C30", DeviceKind.CAPACITOR, [("1", "XTAL1"), ("2", "GND")],
+                        raw_value="22pF")
+    cn = make_component("C31", DeviceKind.CAPACITOR, [("1", "XTAL2"), ("2", "GND")],
+                        raw_value="22pF")
     xp = make_net("N_XP", "XTAL1", NetType.SIGNAL)
     xn = make_net("N_XN", "XTAL2", NetType.SIGNAL)
     gnd = make_net("N_GND", "GND", NetType.GND)
@@ -393,7 +397,8 @@ def test_find_matches_pull_up_rejected_when_vcc_mistagged_digital():
 
 
 def _pull_down_ir():
-    r = make_component("R101", DeviceKind.RESISTOR, [("1", "GPIO2"), ("2", "GND")], raw_value="4.7K")
+    r = make_component("R101", DeviceKind.RESISTOR, [("1", "GPIO2"), ("2", "GND")],
+                       raw_value="4.7K")
     sig = make_net("N_SIG", "GPIO2", NetType.SIGNAL)
     gnd = make_net("N_GND", "GND", NetType.GND)
     return build_ir(
@@ -519,12 +524,13 @@ def test_find_matches_pmos_high_side():
 
 
 def _flyback_ir():
-    l = make_component("L1", DeviceKind.INDUCTOR, [("1", "VCC"), ("2", "SW")], raw_value="10uH")
-    d = make_component("D5", DeviceKind.DIODE, [("A", "SW"), ("K", "VCC")], raw_value="1N4148")
+    ind = make_component("L1", DeviceKind.INDUCTOR, [("1", "VCC"), ("2", "SW")],
+                         raw_value="10uH")
+    dio = make_component("D5", DeviceKind.DIODE, [("A", "SW"), ("K", "VCC")], raw_value="1N4148")
     vcc = make_net("N_VCC", "VCC", NetType.POWER)
     sw = make_net("N_SW", "SW", NetType.SIGNAL)
     return build_ir(
-        [l, d], [vcc, sw],
+        [ind, dio], [vcc, sw],
         [("L1.1", "N_VCC"), ("L1.2", "N_SW"),
          ("D5.A", "N_SW"), ("D5.K", "N_VCC")],
         edge_semantics={
@@ -572,8 +578,10 @@ def test_find_matches_current_shunt():
 def _fet_level_shifter_ir():
     q = make_component("Q4", DeviceKind.MOSFET, [("S", "SDA_3V3"), ("D", "SDA_5V"), ("G", "3V3")],
                        raw_value="BSS138", part_number="BSS138")
-    r_lo = make_component("R300", DeviceKind.RESISTOR, [("1", "SDA_3V3"), ("2", "3V3")], raw_value="10K")
-    r_hi = make_component("R301", DeviceKind.RESISTOR, [("1", "SDA_5V"), ("2", "5V")], raw_value="10K")
+    r_lo = make_component("R300", DeviceKind.RESISTOR, [("1", "SDA_3V3"), ("2", "3V3")],
+                          raw_value="10K")
+    r_hi = make_component("R301", DeviceKind.RESISTOR, [("1", "SDA_5V"), ("2", "5V")],
+                          raw_value="10K")
     v3 = make_net("N_3V3", "3V3", NetType.POWER)
     v5 = make_net("N_5V", "5V", NetType.POWER)
     sl = make_net("N_SL", "SDA_3V3", NetType.SIGNAL)
@@ -607,14 +615,17 @@ def test_find_matches_fet_level_shifter():
 
 
 def _lc_pi_ir():
-    c_in = make_component("C40", DeviceKind.CAPACITOR, [("1", "VIN"), ("2", "GND")], raw_value="10uF")
-    l = make_component("L2", DeviceKind.INDUCTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="10uH")
-    c_out = make_component("C41", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")], raw_value="10uF")
+    c_in = make_component("C40", DeviceKind.CAPACITOR, [("1", "VIN"), ("2", "GND")],
+                          raw_value="10uF")
+    ind = make_component("L2", DeviceKind.INDUCTOR, [("1", "VIN"), ("2", "VOUT")],
+                         raw_value="10uH")
+    c_out = make_component("C41", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")],
+                           raw_value="10uF")
     vin = make_net("N_VIN", "VIN", NetType.POWER)
     vout = make_net("N_VOUT", "VOUT", NetType.POWER)
     gnd = make_net("N_GND", "GND", NetType.GND)
     return build_ir(
-        [c_in, l, c_out], [vin, vout, gnd],
+        [c_in, ind, c_out], [vin, vout, gnd],
         [("C40.1", "N_VIN"), ("C40.2", "N_GND"),
          ("L2.1", "N_VIN"), ("L2.2", "N_VOUT"),
          ("C41.1", "N_VOUT"), ("C41.2", "N_GND")],
@@ -654,8 +665,10 @@ def _sallen_key_ir():
                        raw_value="LM358", part_number="LM358")
     r1 = make_component("R400", DeviceKind.RESISTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="10K")
     r2 = make_component("R401", DeviceKind.RESISTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="10K")
-    c1 = make_component("C50", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")], raw_value="10nF")
-    c2 = make_component("C51", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")], raw_value="10nF")
+    c1 = make_component("C50", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")],
+                       raw_value="10nF")
+    c2 = make_component("C51", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")],
+                       raw_value="10nF")
     vin = make_net("N_VIN", "VIN", NetType.SIGNAL)
     vout = make_net("N_VOUT", "VOUT", NetType.SIGNAL)
     vcc = make_net("N_VCC", "VCC", NetType.POWER)

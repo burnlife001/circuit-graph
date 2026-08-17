@@ -9,6 +9,22 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
 - 数值标准化、网络分类、引脚名补全、边语义标注（`direction` / `role` / `level`）、拓扑识别增强器（按 priority 串行 + `requires` 依赖）
 - 元件追踪、网络追踪、邻居查询、BFS/DFS 遍历（支持 `net_types` / `device_kinds` 过滤）、引脚间最短路径
 - 拓扑识别：**基元库 + VF2 子图匹配 + 四源融合评分**（structural / naming / parametric / type）；新增拓扑 = 追加 `primitives/*.json`
+
+  **基元 JSON 支持的新字段**（自 2026-08-17 起）：
+
+  | 字段 | 取值 | 作用 |
+  |---|---|---|
+  | `expected_role` | `"power"` / `"gnd"` / `"analog"` / `"digital"` / `"clock"` | 严格匹配 `edge_semantic.role` |
+  | `expected_direction` | `"source"` / `"load"` / `"bidirectional"` | 严格匹配 `edge_semantic.direction` |
+  | `expected_level` | 任意电压字符串（`"5V"` / `"3V3"` / `"1V25"`） | 数值化比对（`"3.3V"` ≡ `"3V3"`） |
+
+  **严格模式**：声明了任一 `expected_*` 的基元，circuit 边必须存在 `edge_semantic` 且值匹配；否则该基元识别为零（不是报错，是无结果）。现有未声明的基元不受影响。
+
+  当前基元清单（21 个）：
+  - 既有 6 个：voltage-divider / non-inverting-amplifier / inverting-amplifier / differential-amplifier / parallel-termination / type-c-cc-pull-down
+  - 组 1（4 个，纯结构）：rc-low-pass / rc-high-pass / crystal-with-load-caps / bridge-rectifier
+  - 组 2（6 个，依赖 expected_role）：pull-up-resistor / pull-down-resistor / tvs-protection / npn-low-side-switch / nmos-low-side-switch / pmos-high-side-switch
+  - 组 3（5 个，依赖 expected_role + direction + level）：flyback-diode / current-shunt-monitor / fet-level-shifter / lc-pi-filter / sallen-key-low-pass
 - 元件型号知识库：**SQLite 数据库**（`circuit_graph/knowledge/circuit_graph.db`）维护 part-number → 类别 / 引脚定义 / 属性
 - PDF 数据手册引脚提取：Camelot lattice 模式自动搜索引脚表页面，提取 `{引脚号: 引脚名}` 映射
 - 供电上下文（`cg view --with-power`）：从 USB / 电池 / 排针 → 稳压器 → 负载

@@ -102,7 +102,10 @@ def _match_signal_semantics(
         circuit_node_key = partial_mapping.get(f"c:{template_comp_id}")
         if circuit_node_key is None:
             continue  # not yet mapped — defer judgement
-        circuit_comp_id = circuit_node_key[2:] if circuit_node_key.startswith("c:") else circuit_node_key
+        if circuit_node_key.startswith("c:"):
+            circuit_comp_id = circuit_node_key[2:]
+        else:
+            circuit_comp_id = circuit_node_key
         sem = edge_semantics.get((circuit_comp_id, circ_net_id))
         if sem is None:
             return False  # strict mode: edge_semantic required
@@ -139,7 +142,7 @@ class _SemanticGraphMatcher(GraphMatcher):
         self._template = template
         self._edge_semantics = edge_semantics
 
-    def semantic_feasibility(self, G1_node: str, G2_node: str) -> bool:
+    def semantic_feasibility(self, G1_node: str, G2_node: str) -> bool:  # noqa: N803
         if not super().semantic_feasibility(G1_node, G2_node):
             return False
         # G1 = circuit graph, G2 = primitive graph (NetworkX convention).
