@@ -226,3 +226,118 @@ def test_strict_mode_missing_edge_semantic_rejected():
 
     assert not result.aborted
     assert result.matches == []
+
+
+# ---------------------------------------------------------------------------
+# Group 1 primitives: rc-low-pass / rc-high-pass / crystal / bridge-rectifier
+# ---------------------------------------------------------------------------
+
+
+def _rc_low_pass_ir():
+    r = make_component("R10", DeviceKind.RESISTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="1K")
+    c = make_component("C10", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")], raw_value="100nF")
+    vin = make_net("N_VIN", "VIN", NetType.SIGNAL)
+    vout = make_net("N_VOUT", "VOUT", NetType.SIGNAL)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    return build_ir(
+        [r, c], [vin, vout, gnd],
+        [("R10.1", "N_VIN"), ("R10.2", "N_VOUT"),
+         ("C10.1", "N_VOUT"), ("C10.2", "N_GND")],
+    )
+
+
+def test_find_matches_rc_low_pass():
+    template = next(t for t in load_primitives() if t.id == "rc-low-pass")
+    matcher = Vf2TopologyMatcher(_rc_low_pass_ir())
+    result = matcher.find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    sig = result.matches[0].signal_mapping
+    comp = result.matches[0].component_mapping
+    assert comp["R_series"] == "R10"
+    assert comp["C_shunt"] == "C10"
+    assert sig["vout"] == "N_VOUT"
+    assert sig["gnd"] == "N_GND"
+
+
+def _rc_high_pass_ir():
+    c = make_component("C20", DeviceKind.CAPACITOR, [("1", "VIN"), ("2", "VOUT")], raw_value="100nF")
+    r = make_component("R20", DeviceKind.RESISTOR, [("1", "VOUT"), ("2", "GND")], raw_value="10K")
+    vin = make_net("N_VIN", "VIN", NetType.SIGNAL)
+    vout = make_net("N_VOUT", "VOUT", NetType.SIGNAL)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    return build_ir(
+        [c, r], [vin, vout, gnd],
+        [("C20.1", "N_VIN"), ("C20.2", "N_VOUT"),
+         ("R20.1", "N_VOUT"), ("R20.2", "N_GND")],
+    )
+
+
+def test_find_matches_rc_high_pass():
+    template = next(t for t in load_primitives() if t.id == "rc-high-pass")
+    matcher = Vf2TopologyMatcher(_rc_high_pass_ir())
+    result = matcher.find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    comp = result.matches[0].component_mapping
+    assert comp["C_series"] == "C20"
+    assert comp["R_shunt"] == "R20"
+
+
+def _crystal_ir():
+    x = make_component("X1", DeviceKind.UNKNOWN, [("1", "XTAL1"), ("2", "XTAL2")], raw_value="8MHz")
+    cp = make_component("C30", DeviceKind.CAPACITOR, [("1", "XTAL1"), ("2", "GND")], raw_value="22pF")
+    cn = make_component("C31", DeviceKind.CAPACITOR, [("1", "XTAL2"), ("2", "GND")], raw_value="22pF")
+    xp = make_net("N_XP", "XTAL1", NetType.SIGNAL)
+    xn = make_net("N_XN", "XTAL2", NetType.SIGNAL)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    return build_ir(
+        [x, cp, cn], [xp, xn, gnd],
+        [("X1.1", "N_XP"), ("X1.2", "N_XN"),
+         ("C30.1", "N_XP"), ("C30.2", "N_GND"),
+         ("C31.1", "N_XN"), ("C31.2", "N_GND")],
+    )
+
+
+def test_find_matches_crystal_with_load_caps():
+    template = next(t for t in load_primitives() if t.id == "crystal-with-load-caps")
+    matcher = Vf2TopologyMatcher(_crystal_ir())
+    result = matcher.find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    comp = result.matches[0].component_mapping
+    assert comp["X1"] == "X1"
+    assert {comp["C_p"], comp["C_n"]} == {"C30", "C31"}
+
+
+def _bridge_rectifier_ir():
+    d1 = make_component("D1", DeviceKind.DIODE, [("A", "AC1"), ("K", "VDC")], raw_value="1N4007")
+    d2 = make_component("D2", DeviceKind.DIODE, [("A", "AC2"), ("K", "VDC")], raw_value="1N4007")
+    d3 = make_component("D3", DeviceKind.DIODE, [("A", "GND"), ("K", "AC1")], raw_value="1N4007")
+    d4 = make_component("D4", DeviceKind.DIODE, [("A", "GND"), ("K", "AC2")], raw_value="1N4007")
+    ac1 = make_net("N_AC1", "AC1", NetType.SIGNAL)
+    ac2 = make_net("N_AC2", "AC2", NetType.SIGNAL)
+    vdc = make_net("N_VDC", "VDC_OUT", NetType.POWER)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    return build_ir(
+        [d1, d2, d3, d4], [ac1, ac2, vdc, gnd],
+        [("D1.A", "N_AC1"), ("D1.K", "N_VDC"),
+         ("D2.A", "N_AC2"), ("D2.K", "N_VDC"),
+         ("D3.A", "N_GND"), ("D3.K", "N_AC1"),
+         ("D4.A", "N_GND"), ("D4.K", "N_AC2")],
+    )
+
+
+def test_find_matches_bridge_rectifier():
+    template = next(t for t in load_primitives() if t.id == "bridge-rectifier")
+    matcher = Vf2TopologyMatcher(_bridge_rectifier_ir())
+    result = matcher.find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    comp = result.matches[0].component_mapping
+    # All four diodes must be in the mapping
+    assert {comp["D1"], comp["D2"], comp["D3"], comp["D4"]} == {"D1", "D2", "D3", "D4"}
