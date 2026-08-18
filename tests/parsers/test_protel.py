@@ -133,6 +133,49 @@ def test_parse_t268_fixture():
         assert pin_num in {p.number for p in comp.pins}
 
 
+def test_parse_gbk_fixture():
+    """Protel exports from Chinese-localised Altium use GBK, not UTF-8.
+
+    The parser must transparently fall back so ``cg view`` works on these
+    files without an explicit encoding flag.
+    """
+    fixture = FIXTURE_DIR / "M4-V8.03.NET"
+    if not fixture.exists():
+        pytest.skip(f"Fixture not found: {fixture}")
+
+    raw = fixture.read_bytes()
+    with pytest.raises(UnicodeDecodeError):
+        raw.decode("utf-8")
+    raw.decode("gbk")  # sanity: fixture really is GBK
+
+    ir = ProtelNetParser().parse(ParserInput(source_id=str(fixture), file_path=str(fixture)))
+
+    assert len(ir.components) > 0
+    assert len(ir.nets) > 0
+    assert len(ir.connections) > 0
+
+    # U5 (LM358) is the focal IC of the file; pins 1..8 must all resolve.
+    u5 = next((c for c in ir.components if c.id == "U5"), None)
+    assert u5 is not None
+    assert [p.number for p in u5.pins] == ["1", "2", "3", "4", "5", "6", "7", "8"]
+
+
+def test_read_text_with_fallback_prefers_utf8_then_gbk():
+    """Unit test for the encoding fallback helper itself."""
+    from circuit_graph.parsers.protel import _read_text_with_fallback
+
+    tmp = FIXTURE_DIR / "_tmp_encoding_probe.txt"
+    try:
+        tmp.write_bytes("ascii-only\n".encode("ascii"))
+        assert _read_text_with_fallback(tmp).endswith("ascii-only\n")
+
+        tmp.write_bytes("中文线路\n".encode("gbk"))
+        assert _read_text_with_fallback(tmp).endswith("中文线路\n")
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
 def test_parse_skips_malformed_blocks():
     content = """[
 ]

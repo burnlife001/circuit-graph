@@ -73,6 +73,8 @@ cg view U2 fixtures/protel/FX-T268-V6-10米-5065.NET --with-comm
 cg view U2 fixtures/protel/FX-T268-V6-10米-5065.NET --with-all
 ```
 
+> **Protel .NET 编码自动识别**：解析器按 `UTF-8 → GBK → Latin-1` 顺序回退，无需 `--encoding` 参数。中文本地化 Altium Designer 导出的 GBK 网表（如 `fixtures/protel/M4-V8.03.NET`）也能直接 `cg view` 解析。
+
 > **`--with-power` fallback 行为**：当 focal 元件所在 rail 不是 `power_tree_recognizer` 已登记的输入源（USB / BAT / VIN / 排针等）或下游稳压器时，`power_context` 给出明确 fallback：
 > ```json
 > {

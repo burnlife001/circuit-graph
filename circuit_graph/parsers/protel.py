@@ -30,6 +30,27 @@ from circuit_graph.ir import (
     make_pin_id,
 )
 
+# Encoding candidates tried in order.  UTF-8 first covers modern exports
+# (including BOM); GBK covers Protel exports from Chinese-localised Altium
+# Designer; Latin-1 is a final safety net that always succeeds.
+_NETLIST_ENCODINGS: tuple[str, ...] = ("utf-8", "gbk", "latin-1")
+
+
+def _read_text_with_fallback(path: Path) -> str:
+    """Read ``path`` as text, trying each candidate encoding in order.
+
+    Mirrors the behaviour of ``circuit_graph.knowledge.db._read_text_with_fallback``
+    so KB-import and parser paths agree on what "the file's text" means.
+    """
+    raw = path.read_bytes()
+    for encoding in _NETLIST_ENCODINGS:
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    # Unreachable in practice (latin-1 always succeeds), kept for type checkers.
+    return raw.decode("utf-8", errors="replace")
+
 
 @dataclass
 class ParserInput:
@@ -63,7 +84,7 @@ class ProtelNetParser:
         if content is None:
             if input_.file_path is None:
                 raise ValueError("ParserInput must provide content or file_path")
-            content = Path(input_.file_path).read_text(encoding="utf-8")
+            content = _read_text_with_fallback(Path(input_.file_path))
         lines = content.splitlines()
 
         # First pass: collect component metadata and pin numbers from net blocks.
