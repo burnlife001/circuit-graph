@@ -317,6 +317,43 @@ def test_find_matches_crystal_with_load_caps():
     assert {comp["C_p"], comp["C_n"]} == {"C30", "C31"}
 
 
+def _crystal_with_shield_ir():
+    """4-pin crystal whose shield pin (4) is tied to GND — the common SAW /
+    canned-crystal form factor, which the template's optional gnd pin covers."""
+    x = make_component(
+        "X1", DeviceKind.UNKNOWN,
+        [("1", "XTAL1"), ("2", "XTAL2"), ("4", "GND")],
+        raw_value="12MHz",
+    )
+    cp = make_component("C2", DeviceKind.CAPACITOR, [("1", "XTAL1"), ("2", "GND")],
+                        raw_value="20pF")
+    cn = make_component("C3", DeviceKind.CAPACITOR, [("1", "XTAL2"), ("2", "GND")],
+                        raw_value="20pF")
+    xp = make_net("N_XP", "XTAL1", NetType.SIGNAL)
+    xn = make_net("N_XN", "XTAL2", NetType.SIGNAL)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    return build_ir(
+        [x, cp, cn], [xp, xn, gnd],
+        [("X1.1", "N_XP"), ("X1.2", "N_XN"), ("X1.4", "N_GND"),
+         ("C2.1", "N_XP"), ("C2.2", "N_GND"),
+         ("C3.1", "N_XN"), ("C3.2", "N_GND")],
+    )
+
+
+def test_find_matches_crystal_with_load_caps_optional_shield_pin():
+    """The optional ground pin lets a 4-pin grounded crystal match while the
+    plain 2-pin crystal (test above) still matches via the pin-less variant."""
+    template = next(t for t in load_primitives() if t.id == "crystal-with-load-caps")
+    matcher = Vf2TopologyMatcher(_crystal_with_shield_ir())
+    result = matcher.find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    comp = result.matches[0].component_mapping
+    assert comp["X1"] == "X1"
+    assert {comp["C_p"], comp["C_n"]} == {"C2", "C3"}
+
+
 def _bridge_rectifier_ir():
     d1 = make_component("D1", DeviceKind.DIODE, [("A", "AC1"), ("K", "VDC")], raw_value="1N4007")
     d2 = make_component("D2", DeviceKind.DIODE, [("A", "AC2"), ("K", "VDC")], raw_value="1N4007")

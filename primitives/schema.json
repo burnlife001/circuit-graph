@@ -56,7 +56,8 @@
               "required": ["number", "net"],
               "properties": {
                 "number": {"type": ["string", "integer"]},
-                "net": {"type": "string"}
+                "net": {"type": "string"},
+                "optional": {"type": "boolean", "default": false}
               }
             }
           }

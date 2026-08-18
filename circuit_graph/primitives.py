@@ -100,10 +100,16 @@ class PrimitiveSignal:
 
 @dataclass(frozen=True)
 class PrimitivePin:
-    """A pin on a primitive component and the signal/net it must connect to."""
+    """A pin on a primitive component and the signal/net it must connect to.
+
+    ``optional`` pins are not strictly required: the matcher tries the
+    template both with and without them (e.g. a 4-pin crystal whose shield
+    pin may or may not be tied to ground).
+    """
 
     number: str
     net: str
+    optional: bool = False
 
 
 @dataclass(frozen=True)
@@ -298,7 +304,13 @@ def _parse_component(raw: dict[str, Any], signals: list[PrimitiveSignal]) -> Pri
             raise PrimitiveValidationError(f"Invalid pin definition: {p!r}")
         if p["net"] not in valid_signals:
             raise PrimitiveValidationError(f"Pin references undefined signal '{p['net']}'")
-        pins.append(PrimitivePin(number=str(p["number"]), net=p["net"]))
+        pins.append(
+            PrimitivePin(
+                number=str(p["number"]),
+                net=p["net"],
+                optional=p.get("optional", False),
+            )
+        )
     return PrimitiveComponent(
         id=raw["id"],
         type=_parse_component_type(raw["type"]),

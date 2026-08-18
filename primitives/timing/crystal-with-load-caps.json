@@ -6,8 +6,8 @@
   "role": "unknown",
   "version": "0.1.0",
   "signals": [
-    {"id": "xtal_p", "type": "net", "name_pattern": "(XTAL|OSC|XIN|XI|CLK_IN|XT1).*", "required": true},
-    {"id": "xtal_n", "type": "net", "name_pattern": "(XTAL|OSC|XOUT|XO|CLK_OUT|XT2).*", "required": true},
+    {"id": "xtal_p", "type": "net", "name_pattern": "(XTAL|OSC|OSCI|XIN|XI|CLK_IN|XT1).*", "required": true},
+    {"id": "xtal_n", "type": "net", "name_pattern": "(XTAL|OSC|OSCO|XOUT|XO|CLK_OUT|XT2).*", "required": true},
     {"id": "gnd",    "type": "net", "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$", "required": true}
   ],
   "components": [
@@ -15,7 +15,8 @@
       "id": "X1", "type": "Unknown", "required": true,
       "pins": [
         {"number": "1", "net": "xtal_p"},
-        {"number": "2", "net": "xtal_n"}
+        {"number": "2", "net": "xtal_n"},
+        {"number": "4", "net": "gnd", "optional": true}
       ]
     },
     {
