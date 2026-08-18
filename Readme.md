@@ -471,6 +471,22 @@ rules = load_rules(Path("fixtures/rules/default.schlayout"))
 # 返回 list[RuleSpec];失败抛 LayoutCheckError(kind=..., message=...)
 ```
 
+## 设计输出（design output）
+
+`primitives/` 拓扑模板除识别外，还可用作**参数化设计宏**：给定规格，实例化出具体电路并反向写出 Protel .NET 网表。
+
+```bash
+# 1. 写规格文件 spec.json
+#    {"inputs": {"vin": 12, "vout": 5}}   # 其余可选：nets / designators / start_index
+# 2. 实例化
+cg design voltage-divider --spec spec.json -o divider.NET
+# 3. 输出 IR JSON（调试用）
+cg design voltage-divider --spec spec.json --json -o divider.json
+```
+
+- 支持的设计字段（向后兼容，不影响识别）：`design_inputs`（必填规格项，可带默认值）、`parameters`（`"<组件>.value"` → 四则表达式，可引用设计输入或其他参数）、`recommended_parts`（选型建议：型号 + footprint）。
+- 目前仅 `voltage-divider` 落地 design 字段；其余模板可照 `primitives/power/voltage-divider.json` 补写。
+
 ## 人性化观察
 
 `output/pretty.ps1` 提供菜单，把 `output/` 里的 `.json` 转成带缩进的 `<filename>_human.json`，方便直接阅读。
