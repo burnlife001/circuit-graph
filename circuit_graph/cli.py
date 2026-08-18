@@ -17,6 +17,7 @@ from pathlib import Path
 
 import click
 
+from circuit_graph.design import DesignError, DesignSpec, instantiate, parse_number
 from circuit_graph.enrichers import run_enrichers
 from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
 from circuit_graph.enrichers.net_classifier import NetClassifier
@@ -24,11 +25,14 @@ from circuit_graph.enrichers.pin_resolver import PinNameResolver
 from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
 from circuit_graph.enrichers.value_normalizer import ValueNormalizer
 from circuit_graph.exporters.graphml import write_graphml
+from circuit_graph.exporters.protel_netlist import write_protel_netlist
 from circuit_graph.generators.cg_graph import view_component, write_cg_graph
 from circuit_graph.graph import create_graph
 from circuit_graph.ir import CircuitIR
+from circuit_graph.ir import ir_to_json
 from circuit_graph.knowledge import ComponentDatabase
 from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
+from circuit_graph.primitives import load_primitives
 from circuit_graph.sim.deck_builder import DeckBuilder
 from circuit_graph.sim.spice_deck import SimulationDeck
 from circuit_graph.sim.spice_runner import SpiceRunner, SpiceRunnerConfig
@@ -39,6 +43,8 @@ DEFAULT_GRAPH_FILE = _PROJECT_ROOT / "output" / "circuit.graph.json"
 DEFAULT_GRAPHML_FILE = _PROJECT_ROOT / "output" / "circuit.graphml"
 DEFAULT_KB_PATH = _PROJECT_ROOT / "circuit_graph" / "knowledge" / "circuit_graph.db"
 DEFAULT_LAYOUT_RULES_FILE = _PROJECT_ROOT / "fixtures" / "rules" / "default.schlayout"
+DEFAULT_DESIGN_OUTPUT = _PROJECT_ROOT / "output" / "design.NET"
+DEFAULT_DESIGN_JSON = _PROJECT_ROOT / "output" / "design.json"
 
 
 @click.group()
@@ -307,6 +313,59 @@ def layout_check(
     )
     sys.stdout.buffer.write(b"\n")
     sys.exit(final_exit)
+
+
+@main.command(name="design")
+@click.argument("primitive_id")
+@click.option(
+    "--spec",
+    "spec_path",
+    type=click.Path(exists=True, path_type=Path),
+    required=True,
+    help="JSON design spec: {inputs, nets, designators, start_index}.",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(path_type=Path),
+    help="Output .NET netlist (default: <repo>/output/design.NET).",
+)
+@click.option(
+    "--json",
+    "as_json",
+    is_flag=True,
+    help="Emit CircuitIR JSON instead of a .NET netlist.",
+)
+def design(primitive_id: str, spec_path: Path, output: Path | None, as_json: bool) -> None:
+    """Instantiate a primitive template into a concrete netlist."""
+    templates = load_primitives()
+    template = next((t for t in templates if t.id == primitive_id), None)
+    if template is None:
+        click.echo(f"Unknown primitive: {primitive_id}", err=True)
+        sys.exit(1)
+
+    raw = json.loads(spec_path.read_text(encoding="utf-8"))
+    spec = DesignSpec(
+        inputs={k: parse_number(v) for k, v in raw.get("inputs", {}).items()},
+        nets=raw.get("nets", {}),
+        designators=raw.get("designators", {}),
+        start_index=int(raw.get("start_index", 1)),
+    )
+    try:
+        result = instantiate(template, spec)
+    except DesignError as exc:
+        click.echo(f"Design error: {exc}", err=True)
+        sys.exit(1)
+    for warning in result.warnings:
+        click.echo(f"warning: {warning}", err=True)
+
+    out = output or (DEFAULT_DESIGN_JSON if as_json else DEFAULT_DESIGN_OUTPUT)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if as_json:
+        out.write_text(ir_to_json(result.ir), encoding="utf-8")
+    else:
+        write_protel_netlist(result.ir, out)
+    click.echo(f"Wrote {len(result.ir.components)} components to {out}")
 
 
 @main.command()
