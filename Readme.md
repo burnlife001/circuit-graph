@@ -385,6 +385,54 @@ circuit_graph/layout/
     └── lm321_ccs.json    # LM321 CCS per-unit 覆盖
 ```
 
+## 布局规则校验 (cg layout-check) — 进行中
+
+`circuit_graph.layout` 把 IR *变成* 布局；`circuit_graph.layout_check` 把布局 *拿来校验*。两者并列、互不依赖——后者是 Layout 完成后由 `cg layout-check <schematic> --rules rules.schlayout` 跑的二阶段检查器。
+
+设计参考：`docs/superpowers/specs/2026-08-18-cg-layout-check-rule-engine-design.md`
+
+### 目标
+
+把 `lm321_ccs/布局.md` 的 8 节准则变成**严格执行的规则引擎**：
+
+- **规则载体** — `.schlayout` YAML 文件（schema_version: 1）
+- **二元判定** — 全部 severity=error,任意违规 exit 1
+- **机器友好** — stdout JSON,violations 都有 location (x_mm, y_mm) + context
+- **可裁剪** — 单条规则 `enabled: false` 即可跳过,不影响其它
+- **格式矩阵** — `.kicad_sch` 走全 12 条;`.NET` 仅走 §6 三条标注检查（无几何信息）
+
+### 12 个内置断言
+
+| 区域 | 规则 |
+|---|---|
+| §1 信号流 | `signal-flow-axis` |
+| §3 电源 / 地 | `power-at-top`、`gnd-at-bottom`、`power-layer-hierarchy`、`single-star-point` |
+| §5 元件对齐 | `same-orientation`、`grid-alignment`、`decoup-near-ic-power-pin` |
+| §6 标注 | `designator-present`、`value-present`、`signal-name-on-net` |
+| §4 走线 | `no-trace-through-component`(best-effort,KiCad-only) |
+
+判定边界统一为 `distance ≤ tolerance` pass、`>` fail,基类 `Assertion` 的 docstring 已固化。
+
+### 当前进度（feat/cg-layout-check 分支）
+
+| 阶段 | 状态 | 落地物 |
+|---|---|---|
+| Scaffold (`__init__.py`、`model.py`、`assertions/base.py`) | ✅ Batch 1 | 9 个 dataclass + 12 内置断言 kind 常量 + `refdes_prefix` / `match_glob` / `passes_or_violates` helper |
+| `.schlayout` 加载器 (`loader.py`) | ✅ Batch 1 | 6 种 `LayoutCheckError`(rules_file_not_found、yaml_parse_error、schema_version_mismatch、unknown_assert_kind、duplicate_rule_id、schematic_parse_error),9 个 pytest 全绿 |
+| KiCad / Protel parser | ⏳ Batch 2 | |
+| 12 条断言实现 | ⏳ Batch 3-5 | |
+| `cg layout-check` CLI + 默认规则 | ⏳ Batch 6 | |
+
+直接调用 loader：
+
+```python
+from pathlib import Path
+from circuit_graph.layout_check.loader import load_rules
+
+rules = load_rules(Path("fixtures/rules/default.schlayout"))
+# 返回 list[RuleSpec];失败抛 LayoutCheckError(kind=..., message=...)
+```
+
 ## 人性化观察
 
 `output/pretty.ps1` 提供菜单，把 `output/` 里的 `.json` 转成带缩进的 `<filename>_human.json`，方便直接阅读。
