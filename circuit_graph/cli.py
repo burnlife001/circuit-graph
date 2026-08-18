@@ -38,6 +38,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_GRAPH_FILE = _PROJECT_ROOT / "output" / "circuit.graph.json"
 DEFAULT_GRAPHML_FILE = _PROJECT_ROOT / "output" / "circuit.graphml"
 DEFAULT_KB_PATH = _PROJECT_ROOT / "circuit_graph" / "knowledge" / "circuit_graph.db"
+DEFAULT_LAYOUT_RULES_FILE = _PROJECT_ROOT / "fixtures" / "rules" / "default.schlayout"
 
 
 @click.group()
@@ -129,6 +130,183 @@ def view(
     output = json.dumps(result, indent=2 if pretty else None, ensure_ascii=False)
     sys.stdout.buffer.write(output.encode("utf-8"))
     sys.stdout.buffer.write(b"\n")
+
+
+@main.command(name="layout-check")
+@click.argument(
+    "schematics",
+    nargs=-1,
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+)
+@click.option(
+    "--rules",
+    "rules_path",
+    type=click.Path(path_type=Path),
+    default=DEFAULT_LAYOUT_RULES_FILE,
+    show_default=True,
+    help="Path to .schlayout rules file (default: <repo>/fixtures/rules/default.schlayout)",
+)
+@click.option(
+    "--compact",
+    is_flag=True,
+    help="Emit JSON on a single line (default: pretty multi-line).",
+)
+@click.option(
+    "--baseline",
+    type=click.Path(path_type=Path),
+    help="Write the violation baseline snapshot to PATH.",
+)
+@click.option(
+    "--diff-baseline",
+    type=click.Path(exists=True, path_type=Path),
+    help="Fail only on violations NOT present in the baseline at PATH.",
+)
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    help="Print per-rule PASS/SKIP summary to stderr.",
+)
+def layout_check(
+    schematics: tuple[Path, ...],
+    rules_path: Path,
+    compact: bool,
+    baseline: Path | None,
+    diff_baseline: Path | None,
+    verbose: bool,
+) -> None:
+    """Run declarative layout rules against one or more schematic files.
+
+    SCHEMATICS may be ``.NET`` (Protel logical netlist) or ``.kicad_sch``
+    (KiCad geometry). Each input format supports a different rule subset;
+    spatial rules (alignment, decoupling, power/ground placement, flow,
+    routing) auto-skip on ``.NET`` and are counted in
+    ``summary.rules_skipped_unsupported_input``.
+
+    Exit codes:
+        0  all rules passed (or only baselined violations remained)
+        1  ≥1 violation remains
+        2  configuration / parse error
+
+    stdout: JSON report; stderr: human progress (only with ``-v``).
+    """
+    # Imported lazily so the cli module stays importable even before the
+    # layout_check package is fully wired (e.g. on a fresh checkout mid-batch).
+    from circuit_graph.layout_check.checker import LayoutChecker
+    from circuit_graph.layout_check.loader import LayoutCheckError
+
+    # Pre-flight: rules file existence is checked explicitly so the
+    # error code is 2 (not 1) and reports `rules_file_not_found`.
+    if not rules_path.exists():
+        sys.stdout.buffer.write(
+            json.dumps(
+                {
+                    "$schema": "cg-layout-check-v1",
+                    "tool": {"name": "cg-layout-check", "version": "0.1.0"},
+                    "error": {
+                        "kind": "rules_file_not_found",
+                        "message": f"rules file not found: {rules_path}",
+                        "location": str(rules_path),
+                        "cause_path": "$",
+                    },
+                },
+                indent=None if compact else 2,
+                ensure_ascii=False,
+            ).encode("utf-8")
+        )
+        sys.stdout.buffer.write(b"\n")
+        sys.exit(2)
+
+    results: list[dict] = []
+    final_exit = 0
+
+    for sch in schematics:
+        if verbose:
+            click.echo(f"checking: {sch}", file=sys.stderr)
+
+        checker = LayoutChecker(rules_path=rules_path, schematic_path=sch)
+        try:
+            checker.load_rules()
+            checker.parse_schematic()
+        except LayoutCheckError as e:
+            results.append(
+                {
+                    "$schema": "cg-layout-check-v1",
+                    "tool": {"name": "cg-layout-check", "version": "0.1.0"},
+                    "input": {"schematic": str(sch), "rules_file": str(rules_path)},
+                    "error": {
+                        "kind": e.kind,
+                        "message": e.message,
+                        "location": e.location,
+                        "cause_path": e.cause_path,
+                    },
+                }
+            )
+            final_exit = max(final_exit, 2)
+            continue
+
+        if verbose:
+            n_rules = len(checker.rules or [])
+            cn = len(checker.schematic.components)
+            nn = len(checker.schematic.nets)
+            wn = len(checker.schematic.wires)
+            click.echo(
+                f"  loaded {n_rules} rule(s); "
+                f"schematic has {cn} components / {nn} nets / {wn} wires",
+                file=sys.stderr,
+            )
+
+        violations = checker.evaluate()
+
+        if verbose:
+            s = checker.summary
+            click.echo(
+                f"  evaluated: {s.get('rules_evaluated', 0)}/{s.get('rules_total', 0)} rules, "
+                f"{s.get('violations', 0)} violation(s); "
+                f"skipped (disabled={s.get('rules_skipped_disabled', 0)}, "
+                f"unsupported-input={s.get('rules_skipped_unsupported_input', 0)})",
+                file=sys.stderr,
+            )
+
+        # Optional: write baseline snapshot of current violation sigs.
+        if baseline:
+            checker.write_baseline(baseline)
+            if verbose:
+                click.echo(f"  wrote baseline to {baseline}", file=sys.stderr)
+
+        report = checker.report()
+
+        # Optional: filter to violations NOT in baseline.
+        if diff_baseline:
+            filtered = checker.diff_against_baseline(diff_baseline)
+            from dataclasses import asdict  # local import keeps top-level clean
+            report["violations"] = [asdict(v) for v in filtered]
+            report["summary"]["violations"] = len(filtered)
+            report["summary"]["baselined_violations"] = (
+                len(checker._violations) - len(filtered)  # noqa: SLF001 (orchestrator-private)
+            )
+
+        results.append(report)
+
+        if report.get("violations"):
+            final_exit = max(final_exit, 1)
+
+    output_doc = {
+        "$schema": "cg-layout-check-v1",
+        "tool": {"name": "cg-layout-check", "version": "0.1.0"},
+        "results": results,
+        "summary": {"schematics": len(results)},
+    }
+    sys.stdout.buffer.write(
+        json.dumps(
+            output_doc,
+            indent=None if compact else 2,
+            ensure_ascii=False,
+        ).encode("utf-8")
+    )
+    sys.stdout.buffer.write(b"\n")
+    sys.exit(final_exit)
 
 
 @main.command()

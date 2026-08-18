@@ -428,7 +428,34 @@ circuit_graph/layout/
 | §1 信号流(`flow.py`) | ✅ Batch 5 | `SignalFlowAxis`:input vs output 中位数,`axis` 默认 `x`,`delta < 0` 触发(distance-pass ≤ tolerance),使用 `statistics.median`;8 个 pytest 全绿 |
 | §4 走线断言(`routing.py`) | ✅ Batch 5 | `NoTraceThroughComponent`:wire 段到 comp 点距离用 `_point_to_segment_distance`;**反向** boundary(`d ≥ tolerance → PASS`),tolerance 是 component 周围 buffer,`<= tolerance` 也算越界;7 个 pytest 全绿 |
 | LayoutChecker orchestrator(`checker.py`) | ✅ Batch 5 | 注册 12 个内置断言为单例,加载 `.schlayout` → 派 dispatcher → 跑断言 → JSON report;`summary` 含 `rules_total`/`rules_evaluated`/`rules_skipped_disabled`/`rules_skipped_unsupported_input`/`violations`/`checked_components`/`checked_nets`/`duration_ms`;`baseline_signature` round coord 到 1µm;baseline / diff-baseline 支持;14 个 pytest 全绿 |
-| `cg layout-check` CLI + 默认规则 | ⏳ Batch 6 | |
+| `cg layout-check` CLI + 默认规则 | ✅ Batch 6 | 新增 `cg layout-check <schematics...>` 子命令,exit code 严格 0/1/2(全 pass / 违规 / 配置错);stdout 仅 JSON,stderr 可选 verbose 进度;`--rules` 默认 `fixtures/rules/default.schlayout`,`--baseline` / `--diff-baseline` round-trip 锁定 1µm noise;`fixtures/rules/default.schlayout` 含 12 条规则(2 关闭:`same-orientation` 因 kicad-sch-api 不暴露 rotation,`signal-flow-axis` 因 input/output prefix 视设计而定);`test_cli.py` 11 个 + `test_integration.py` 3 个 + `test_integration.snapshot.json` 锁 `lm321_ccs/1A_CCS_LM321_BJT.kicad_sch` 上违规数 = 15 |
+
+直接调用 loader：
+
+```python
+from pathlib import Path
+from circuit_graph.layout_check.loader import load_rules
+
+rules = load_rules(Path("fixtures/rules/default.schlayout"))
+# 返回 list[RuleSpec];失败抛 LayoutCheckError(kind=..., message=...)
+```
+
+CLI 范例：
+
+```powershell
+# 全套默认规则跑一遍真 schematic
+uv run cg layout-check lm321_ccs/1A_CCS_LM321_BJT.kicad_sch
+# exit 1,有 15 violations(stdout 是 JSON,详细 location+context)
+
+# 把当前违规存为基线
+uv run cg layout-check lm321_ccs/1A_CCS_LM321_BJT.kicad_sch --baseline output/baseline.json
+
+# 后续只对新违规报错
+uv run cg layout-check lm321_ccs/1A_CCS_LM321_BJT.kicad_sch --diff-baseline output/baseline.json
+
+# 一次性跑多个文件(NDJSON 风格,exit code 是所有 sub-result 的 max)
+uv run cg layout-check lm321_ccs/*.kicad_sch
+```
 
 直接调用 loader：
 
