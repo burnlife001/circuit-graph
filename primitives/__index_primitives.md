@@ -1,15 +1,17 @@
 # Primitives 索引
 
-> 由 [`scripts/build_primitive_index.py`](./scripts/build_primitive_index.py) 自动生成于 2026-08-18，共 22 个基元。请勿手改。
+> 由 [`scripts/build_primitive_index.py`](./scripts/build_primitive_index.py) 自动生成于 2026-08-18，共 24 个基元。请勿手改。
 
 | ID | 名称 | 用途 | 严格模式 | 文件 |
 |---|---|---|---|---|
 | `bridge-rectifier` | 桥式整流器 | 4 个二极管组成全波整流桥：2 个 AC 输入，1 个 DC+ 输出，1 个 DC- 输出（通常接地）。 | — | [power/bridge-rectifier.json](./power/bridge-rectifier.json) |
+| `bridge-rectifier-package` | 桥堆整流器（封装确认） | 封装已确认的集成桥堆（footprint 含 BRIDGE，如 GBJ1510/MB10S）：4 引脚器件跨接 2 路… | — | [power/bridge-rectifier-package.json](./power/bridge-rectifier-package.json) |
 | `crystal-with-load-caps` | 晶振 + 负载电容 | 晶体 / 陶瓷谐振器两端各接一个负载电容到地（Pierce 振荡器拓扑）。 | — | [timing/crystal-with-load-caps.json](./timing/crystal-with-load-caps.json) |
 | `current-shunt-monitor` | 电流采样电阻 | 小阻值精密电阻串联在电源路径中，两端压降反映电流；常配合电流检测放大器使用。 | role | [power/current-shunt-monitor.json](./power/current-shunt-monitor.json) |
 | `differential-amplifier` | 差分放大器 | 运放差分放大：R1/Rin1将VIN1接入反相端，R2/Rin2将VIN2接入同相端，Rf跨接输出与反相端，Rg连接同… | — | [amplifier/differential-amplifier.json](./amplifier/differential-amplifier.json) |
 | `fet-level-shifter` | FET 双向电平转换 | NMOS + 两个上拉电阻实现双向电平转换（常见于 I2C 5V↔3V3）。 | level, role | [interface/fet-level-shifter.json](./interface/fet-level-shifter.json) |
 | `flyback-diode` | 续流二极管 | 二极管反向并联在电感/继电器线圈两端，关断时为感应电流提供续流路径。 | role | [protection/flyback-diode.json](./protection/flyback-diode.json) |
+| `integrated-bridge-rectifier` | 集成桥堆整流器 | 单颗集成桥堆实现全波整流：一个 4 引脚器件同时跨接 2 路交流输入（L/N/AC*）与正负直流母线。不依赖位号命名（… | — | [power/integrated-bridge-rectifier.json](./power/integrated-bridge-rectifier.json) |
 | `inverting-amplifier` | 反向比例放大器 | 运放反向比例放大：输入信号经Rin接入反相端(-)，反馈电阻Rf跨接输出与反相端，同相端(+)接地，增益=-Rf/Ri… | — | [amplifier/inverting-amplifier.json](./amplifier/inverting-amplifier.json) |
 | `lc-pi-filter` | π 型 LC 滤波器 | C-L-C π 型滤波：输入电容 + 串联电感 + 输出电容，用于电源纹波抑制。 | role | [filter/lc-pi-filter.json](./filter/lc-pi-filter.json) |
 | `nmos-low-side-switch` | NMOS 低边开关 | NMOS 漏极接负载，源极接地，栅极接控制信号。 | role | [switch/nmos-low-side-switch.json](./switch/nmos-low-side-switch.json) |

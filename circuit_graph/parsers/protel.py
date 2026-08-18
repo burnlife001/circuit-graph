@@ -200,6 +200,11 @@ class ProtelNetParser:
         if rv == "coil":
             return DeviceKind.INDUCTOR
 
+        # Integrated bridge rectifier: footprint evidence (e.g. "Bridge",
+        # "BRIDGE-4PIN") is reliable regardless of reference designator.
+        if "BRIDGE" in fp:
+            return DeviceKind.BRIDGE_RECTIFIER
+
         # Connector signature (e.g. USB-C with a U-prefixed designator) takes
         # precedence over the designator-prefix heuristic below: the footprint
         # or value is stronger evidence than the reference letter.

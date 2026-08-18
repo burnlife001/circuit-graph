@@ -111,7 +111,7 @@ class PrimitiveComponent:
     """A component signature inside a primitive template."""
 
     id: str
-    type: str
+    type: str | tuple[str, ...]
     required: bool = True
     value_pattern: str | None = None
     pins: list[PrimitivePin] = field(default_factory=list)
@@ -271,6 +271,24 @@ def _parse_role(value: Any) -> str | tuple[str, ...] | None:
     )
 
 
+def _parse_component_type(value: Any) -> str | tuple[str, ...]:
+    """Normalize component ``type``: str -> str, non-empty list -> tuple."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        if not value:
+            raise PrimitiveValidationError("component type list must not be empty")
+        for item in value:
+            if not isinstance(item, str):
+                raise PrimitiveValidationError(
+                    f"component type entries must be strings, got {type(item).__name__}"
+                )
+        return tuple(value)
+    raise PrimitiveValidationError(
+        f"component type must be a string or list of strings, got {type(value).__name__}"
+    )
+
+
 def _parse_component(raw: dict[str, Any], signals: list[PrimitiveSignal]) -> PrimitiveComponent:
     _require_keys(raw, {"id", "type", "pins"})
     valid_signals = {s.id for s in signals}
@@ -283,7 +301,7 @@ def _parse_component(raw: dict[str, Any], signals: list[PrimitiveSignal]) -> Pri
         pins.append(PrimitivePin(number=str(p["number"]), net=p["net"]))
     return PrimitiveComponent(
         id=raw["id"],
-        type=raw["type"],
+        type=_parse_component_type(raw["type"]),
         required=raw.get("required", True),
         value_pattern=raw.get("value_pattern"),
         pins=pins,
@@ -396,7 +414,7 @@ _DEFAULT_SIGNAL_PATTERNS: dict[str, tuple[str, ...]] = {
     "ac1":       (r"^Net.*_1$", r"^AC\d?$", r"^A$"),
     "ac2":       (r"^Net.*_2$", r"^AC\d?$", r"^B$"),
     "dc_plus":   (r"^Net.*$", r"^D\+$", r"^DC\+$", r"^V\+IN$"),
-    "dc_minus":  (r"^Net.*$", r"^D\-$", r"^DC\-$", r"^V\-IN$"),
+    "dc_minus":  (r"^Net.*$", r"^D\-$", r"^DC\-$", r"^V\-IN$", r".+\-$"),
     "xtal_p":    (r"^Net.*$", r"^XT.*P$", r"^XI$", r"^XIN$"),
     "xtal_n":    (r"^Net.*$", r"^XT.*N$", r"^XO$", r"^XOUT$"),
 
@@ -438,9 +456,16 @@ def signal_name_matches(
     return False
 
 
-def component_type_matches(expected: str, comp: Component) -> bool:
-    """Check whether ``comp``'s device kind matches ``expected``."""
-    return comp.device_kind.value.lower() == expected.lower()
+def component_type_matches(expected: str | tuple[str, ...], comp: Component) -> bool:
+    """Check whether ``comp``'s device kind matches ``expected``.
+
+    ``expected`` may be a single type string or a tuple of accepted types;
+    the component matches when its kind equals any accepted type
+    (case-insensitive).
+    """
+    accepted = (expected,) if isinstance(expected, str) else expected
+    kind = comp.device_kind.value.lower()
+    return any(kind == t.lower() for t in accepted)
 
 
 def component_value_matches(pattern: str | None, comp: Component) -> bool:

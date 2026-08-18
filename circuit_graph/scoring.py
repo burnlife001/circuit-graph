@@ -164,9 +164,16 @@ class TopologyScorer:
             circ_comp = self.component_map.get(circ_id)
             if circ_comp is None:
                 continue
-            if circ_comp.device_kind.value.lower() == comp.type.lower():
+            if circ_comp.device_kind.value.lower() in _accepted_types(comp.type):
                 hits += 1
         return hits / len(required_components)
+
+
+def _accepted_types(type_spec: str | tuple[str, ...]) -> set[str]:
+    """Normalize a primitive component type spec to a lowercase set."""
+    if isinstance(type_spec, str):
+        return {type_spec.lower()}
+    return {t.lower() for t in type_spec}
 
 
 def _to_confidence(score: float, thresholds: dict[str, float]) -> str:

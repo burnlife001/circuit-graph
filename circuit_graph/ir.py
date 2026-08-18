@@ -64,6 +64,7 @@ class DeviceKind(StrEnum):
     IC = "IC"
     MOSFET = "Mosfet"
     DIODE = "Diode"
+    BRIDGE_RECTIFIER = "BridgeRectifier"
     CONNECTOR = "Connector"
     UNKNOWN = "Unknown"
 

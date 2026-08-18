@@ -278,7 +278,12 @@ class Vf2TopologyMatcher:
         A candidate must share at least one device-kind label with a required
         primitive component.
         """
-        required_types = {comp.type.lower() for comp in template.components if comp.required}
+        required_types: set[str] = set()
+        for comp in template.components:
+            if not comp.required:
+                continue
+            accepted = (comp.type,) if isinstance(comp.type, str) else comp.type
+            required_types.update(t.lower() for t in accepted)
         return {
             comp.id
             for comp in self.component_map.values()

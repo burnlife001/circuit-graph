@@ -403,3 +403,63 @@ def test_signal_name_matches_does_not_treat_cgnd_as_gnd_fallback():
     assert signal_name_matches(r"^CGND$", "CGND", signal_id="gnd") is True
     # Sanity: GND itself still matches the fallback
     assert signal_name_matches(r"^X$", "GND", signal_id="gnd") is True
+
+
+# ---------------------------------------------------------------------------
+# Component type as a list (multi-type acceptance)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_component_accepts_type_list() -> None:
+    """Component ``type`` may be a list; normalised to a tuple."""
+    from circuit_graph.primitives import _parse_component, _parse_signal
+
+    sig = _parse_signal({"id": "s", "type": "net", "name_pattern": ".*"})
+    comp = _parse_component(
+        {
+            "id": "BD",
+            "type": ["Diode", "BridgeRectifier"],
+            "pins": [{"number": "1", "net": "s"}],
+        },
+        [sig],
+    )
+    assert comp.type == ("Diode", "BridgeRectifier")
+
+
+def test_parse_component_rejects_empty_type_list() -> None:
+    from circuit_graph.primitives import _parse_component, _parse_signal
+
+    sig = _parse_signal({"id": "s", "type": "net", "name_pattern": ".*"})
+    with pytest.raises(PrimitiveValidationError):
+        _parse_component(
+            {"id": "BD", "type": [], "pins": [{"number": "1", "net": "s"}]},
+            [sig],
+        )
+
+
+def test_component_type_matches_tuple() -> None:
+    """component_type_matches accepts any member of a type tuple."""
+    from circuit_graph.primitives import component_type_matches
+
+    diode = make_component("D1", DeviceKind.DIODE, [], raw_value="US1M")
+    bridge = make_component("BD1", DeviceKind.BRIDGE_RECTIFIER, [], raw_value="10A")
+    ic = make_component("U1", DeviceKind.IC, [], raw_value="LM358")
+
+    accepted = ("Diode", "BridgeRectifier")
+    assert component_type_matches(accepted, diode)
+    assert component_type_matches(accepted, bridge)
+    assert not component_type_matches(accepted, ic)
+    # Single-string form still works
+    assert component_type_matches("Diode", diode)
+    assert not component_type_matches("Diode", ic)
+
+
+def test_protel_parser_classifies_bridge_footprint() -> None:
+    """footprint containing 'BRIDGE' yields BRIDGE_RECTIFIER regardless of ref."""
+    from circuit_graph.parsers.protel import ProtelNetParser
+
+    kind = ProtelNetParser._infer_device_kind("BD1", "Bridge", "10A/1000V")
+    assert kind is DeviceKind.BRIDGE_RECTIFIER
+    # Prefix heuristics unaffected
+    assert ProtelNetParser._infer_device_kind("D1", "SMA", "US1M") is DeviceKind.DIODE
+    assert ProtelNetParser._infer_device_kind("B1", "SIP-4", None) is DeviceKind.UNKNOWN
