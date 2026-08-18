@@ -8,7 +8,7 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
 - 构建组件 / 引脚 / 网络 / 功能块 异构图（NetworkX）
 - 数值标准化、网络分类、引脚名补全、边语义标注（`direction` / `role` / `level`）、拓扑识别增强器（按 priority 串行 + `requires` 依赖）
 - 元件追踪、网络追踪、邻居查询、BFS/DFS 遍历（支持 `net_types` / `device_kinds` 过滤）、引脚间最短路径
-- 拓扑识别：**基元库 + VF2 子图匹配 + 四源融合评分**（structural / naming / parametric / type）；新增拓扑 = 追加 `primitives/*.json`
+- 拓扑识别：**基元库 + VF2 子图匹配 + 四源融合评分**（structural / naming / parametric / type）；新增拓扑 = 追加 `primitives/<category>/*.json`（`<category>` ∈ amplifier / filter / power / switch / protection / termination / interface / timing）
 
   **基元 JSON 支持的新字段**（自 2026-08-17 起）：
 
@@ -446,7 +446,18 @@ circuit_graph/
 ├── models/power_tree.py        # 供电树数据模型
 └── skills/                      # 随包分发的 Claude Skill 集（详见 skills/README.md）
 
-primitives/                     # 拓扑基元模板 JSON（新增拓扑 = 追加 *.json）
+primitives/                     # 拓扑基元模板 JSON（新增拓扑 = 追加 <category>/*.json）
+├── amplifier/                 # 运放 / 有源滤波（differential / inverting / non-inverting / sallen-key）
+├── filter/                    # 无源滤波（rc-low-pass / rc-high-pass / lc-pi）
+├── power/                     # 电源 / 整流 / 采样 / 峰值检波（voltage-divider / bridge / shunt / peak-envelope）
+├── switch/                    # 开关管拓扑（nmos / pmos / npn）
+├── protection/                # 保护（tvs / flyback）
+├── termination/               # 端接 / 上下拉 / CC（pull-up / pull-down / parallel / type-c-cc）
+├── interface/                 # 接口 / 电平转换（fet-level-shifter）
+├── timing/                    # 时钟（crystal-with-load-caps）
+├── schema.json                # 基元 JSON Schema
+├── __index_primitives.md      # 自动生成的索引（scripts/build_primitive_index.py）
+└── ext_primitives_list.md     # 待补基元清单
 tests/                          # pytest 测试
 ```
 

@@ -1,4 +1,4 @@
-"""Generate primitives/__index_primitives.md from primitives/*.json.
+"""Generate primitives/__index_primitives.md from primitives/**/*.json.
 
 Manual run:
     uv run python scripts/build_primitive_index.py            # regenerate
@@ -6,6 +6,11 @@ Manual run:
 
 Used by .pre-commit-config.yaml hook; also covered by a pytest test so CI
 still catches drift if the hook is missing locally.
+
+Sub-directories under ``primitives/`` are organisational categories
+(amplifier / filter / power / switch / protection / termination / interface /
+timing). The script walks them via ``rglob`` and renders each file's path
+relative to ``primitives/`` so markdown links keep working.
 """
 
 from __future__ import annotations
@@ -52,16 +57,17 @@ def _truncate(s: str, n: int) -> str:
 def collect_primitives(primitives_dir: Path) -> list[dict]:
     rows: list[dict] = []
     errors: list[str] = []
-    for path in sorted(primitives_dir.glob("*.json")):
+    for path in sorted(primitives_dir.rglob("*.json")):
         if path.name in SKIP_FILES:
             continue
+        rel = path.relative_to(primitives_dir).as_posix()
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            errors.append(f"{path.name}: invalid JSON ({exc.msg} at line {exc.lineno})")
+            errors.append(f"{rel}: invalid JSON ({exc.msg} at line {exc.lineno})")
             continue
         if "id" not in raw:
-            errors.append(f"{path.name}: missing required field 'id'")
+            errors.append(f"{rel}: missing required field 'id'")
             continue
         rows.append(
             {
@@ -69,7 +75,7 @@ def collect_primitives(primitives_dir: Path) -> list[dict]:
                 "name": raw.get("name", raw["id"]),
                 "description": _truncate(raw.get("description", ""), 60),
                 "modes": _strict_modes(_collect_signals(raw)),
-                "file": path.name,
+                "file": rel,
             }
         )
     if errors:
@@ -104,7 +110,8 @@ def render_markdown(rows: list[dict]) -> str:
         "",
         "## 新增基元",
         "",
-        "在 `primitives/` 目录新增一个 `<id>.json`，pre-commit hook 会自动重生成此文件。",
+        "在 `primitives/` 下选择合适的分类子目录（amplifier / filter / power / switch / protection / "
+        "termination / interface / timing）新增 `<id>.json`，pre-commit hook 会自动重生成此文件。",
         "若未安装 hook，可手动跑 `uv run python scripts/build_primitive_index.py`。",
         "",
     ]

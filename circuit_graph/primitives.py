@@ -173,17 +173,20 @@ DEFAULT_PRIMITIVES_DIR = Path(__file__).resolve().parent.parent / "primitives"
 
 
 def load_primitives(path: Path | str | None = None) -> list[PrimitiveTemplate]:
-    """Load all ``*.json`` primitive templates from ``path``.
+    """Load all ``*.json`` primitive templates from ``path`` (recursive).
 
     The default path is ``primitives/`` next to the project root.  Templates
     are validated syntactically but not semantically against a real circuit.
+    Sub-directories under ``primitives/`` are treated as organisational
+    categories (amplifier / filter / power / ...); the loader walks them via
+    ``rglob`` so new categories need no code change.
     """
     base = Path(path) if path else DEFAULT_PRIMITIVES_DIR
     if not base.exists():
         raise FileNotFoundError(f"Primitive library directory not found: {base}")
 
     templates: list[PrimitiveTemplate] = []
-    for file_path in sorted(base.glob("*.json")):
+    for file_path in sorted(base.rglob("*.json")):
         if file_path.name == "schema.json":
             continue
         raw = json.loads(file_path.read_text(encoding="utf-8"))
