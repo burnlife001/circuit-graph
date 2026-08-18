@@ -132,3 +132,14 @@ def test_instantiate_circular_dependency_raises(tmp_path) -> None:
     template = load_primitives(tmp_path)[0]
     with pytest.raises(DesignError, match="[Cc]ircular"):
         instantiate(template, DesignSpec())
+
+
+def test_real_voltage_divider_primitive_is_instantiable() -> None:
+    """Integration: the shipped primitives/power/voltage-divider.json must instantiate."""
+    template = next(t for t in load_primitives() if t.id == "voltage-divider")
+    result = instantiate(template, DesignSpec(inputs={"vin": 12, "vout": 5}))
+    by_id = {c.id: c for c in result.ir.components}
+    assert isinstance(by_id["R1"].value, ResistanceValue)
+    assert by_id["R1"].value.magnitude == 14000.0
+    assert by_id["R2"].value.magnitude == 10000.0
+    assert template.recommended_parts  # 选型建议已落地

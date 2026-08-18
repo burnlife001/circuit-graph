@@ -61,5 +61,24 @@
       "medium": 0.50,
       "low": 0.0
     }
+  },
+  "design_inputs": [
+    {"id": "vin", "label": "输入电压", "unit": "V"},
+    {"id": "vout", "label": "输出电压", "unit": "V"},
+    {"id": "r_bottom", "label": "下电阻阻值", "unit": "Ω", "default": 10000}
+  ],
+  "parameters": {
+    "R_top.value": "(vin - vout) * r_bottom / vout",
+    "R_bottom.value": "r_bottom"
+  },
+  "recommended_parts": {
+    "R_top": [
+      {"pn": "RC0603FR-07 系列 1%", "footprint": "0603"},
+      {"pn": "RC0805FR-07 系列 1%", "footprint": "0805"}
+    ],
+    "R_bottom": [
+      {"pn": "RC0603FR-07 系列 1%", "footprint": "0603"},
+      {"pn": "RC0805FR-07 系列 1%", "footprint": "0805"}
+    ]
   }
 }
