@@ -56,19 +56,23 @@ def extract_volts(s: str | None) -> Decimal | None:
 
 
 def signal_semantic_matches(
-    expected_role: str | None,
+    expected_role: str | tuple[str, ...] | None,
     expected_direction: str | None,
     expected_level: str | None,
     edge_semantic: dict[str, Any],
 ) -> bool:
     """Check one edge_semantic dict against the primitive's expected_* constraints.
 
-    ``None`` expected fields are unconstrained and skipped. Level comparison is
-    decimal-based via :func:`extract_volts`; if either side fails to parse, the
-    pair is treated as a mismatch (strict mode).
+    ``None`` expected fields are unconstrained and skipped. ``expected_role`` may
+    be a single role string or a tuple of accepted roles; the circuit edge matches
+    when its role is a member of the set (or equals the single string). Level
+    comparison is decimal-based via :func:`extract_volts`; if either side fails
+    to parse, the pair is treated as a mismatch (strict mode).
     """
-    if expected_role is not None and edge_semantic.get("role") != expected_role:
-        return False
+    if expected_role is not None:
+        accepted = (expected_role,) if isinstance(expected_role, str) else expected_role
+        if edge_semantic.get("role") not in accepted:
+            return False
     if expected_direction is not None and edge_semantic.get("direction") != expected_direction:
         return False
     if expected_level is not None:
@@ -89,7 +93,7 @@ class PrimitiveSignal:
     type: str
     name_pattern: str
     required: bool = True
-    expected_role: str | None = None
+    expected_role: str | tuple[str, ...] | None = None
     expected_direction: str | None = None
     expected_level: str | None = None
 
@@ -219,13 +223,9 @@ def _parse_primitive(raw: dict[str, Any]) -> PrimitiveTemplate:
 
 def _parse_signal(raw: dict[str, Any]) -> PrimitiveSignal:
     _require_keys(raw, {"id", "type", "name_pattern"})
-    expected_role = raw.get("expected_role")
+    expected_role = _parse_role(raw.get("expected_role"))
     expected_direction = raw.get("expected_direction")
     expected_level = raw.get("expected_level")
-    if expected_role is not None and expected_role not in _VALID_ROLES:
-        raise PrimitiveValidationError(
-            f"Invalid expected_role {expected_role!r}; must be one of {sorted(_VALID_ROLES)}"
-        )
     if expected_direction is not None and expected_direction not in _VALID_DIRECTIONS:
         raise PrimitiveValidationError(
             f"Invalid expected_direction {expected_direction!r}; "
@@ -239,6 +239,35 @@ def _parse_signal(raw: dict[str, Any]) -> PrimitiveSignal:
         expected_role=expected_role,
         expected_direction=expected_direction,
         expected_level=expected_level,
+    )
+
+
+def _parse_role(value: Any) -> str | tuple[str, ...] | None:
+    """Normalize ``expected_role`` from JSON: str -> str, list -> tuple."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        if value not in _VALID_ROLES:
+            raise PrimitiveValidationError(
+                f"Invalid expected_role {value!r}; must be one of {sorted(_VALID_ROLES)}"
+            )
+        return value
+    if isinstance(value, list):
+        if not value:
+            raise PrimitiveValidationError(
+                "expected_role list must contain at least one role"
+            )
+        normalized: list[str] = []
+        for item in value:
+            if not isinstance(item, str) or item not in _VALID_ROLES:
+                raise PrimitiveValidationError(
+                    f"Invalid expected_role entry {item!r}; "
+                    f"must be one of {sorted(_VALID_ROLES)}"
+                )
+            normalized.append(item)
+        return tuple(normalized)
+    raise PrimitiveValidationError(
+        f"expected_role must be a string or list of strings, got {type(value).__name__}"
     )
 
 

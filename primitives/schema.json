@@ -21,8 +21,10 @@
           "name_pattern": {"type": "string"},
           "required": {"type": "boolean", "default": true},
           "expected_role": {
-            "type": ["string", "null"],
-            "enum": ["power", "gnd", "analog", "digital", "clock", null]
+            "oneOf": [
+              {"type": ["string", "null"], "enum": ["power", "gnd", "analog", "digital", "clock", null]},
+              {"type": "array", "items": {"type": "string", "enum": ["power", "gnd", "analog", "digital", "clock"]}, "minItems": 1}
+            ]
           },
           "expected_direction": {
             "type": ["string", "null"],

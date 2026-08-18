@@ -51,7 +51,7 @@ class NetClassifier:
 def _classify_net(name: str) -> NetType:
     upper = name.upper()
 
-    if re.match(r"^(GND|PGND|AGND|DGND|SGND)", upper):
+    if re.match(r"^(C?GND|PGND|AGND|DGND|SGND)", upper):
         return NetType.GND
     if re.search(r"\d+\.?\d*V", upper) or re.search(r"VBUS|VCC|VDD|VEE|VBAT|VIN", upper):
         return NetType.POWER

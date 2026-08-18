@@ -9,20 +9,20 @@
     {
       "id": "pwr_in", "type": "net",
       "name_pattern": ".*",
-      "expected_role": "power",
+      "expected_role": ["power", "gnd"],
       "required": true
     },
     {
       "id": "pwr_out", "type": "net",
       "name_pattern": ".*",
-      "expected_role": "power",
+      "expected_role": ["power", "gnd"],
       "required": true
     }
   ],
   "components": [
     {
       "id": "R_shunt", "type": "Resistor", "required": true,
-      "value_pattern": "^(0\\.|R0|mΩ|mR|\\d+mR|\\d+\\s*mΩ)",
+      "value_pattern": "^(0\\.|R0|mΩ|mR|\\d+mR|\\d+\\s*mΩ|<=1R)",
       "pins": [
         {"number": "1", "net": "pwr_in"},
         {"number": "2", "net": "pwr_out"}

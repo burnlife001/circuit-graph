@@ -148,6 +148,22 @@ def test_net_classifier():
     assert types["Mystery"] == NetType.UNKNOWN
 
 
+def test_net_classifier_treats_cgnd_as_gnd():
+    """CGND (chassis / common ground) is a ground net, not digital/unknown.
+
+    Without this, R96 (GND<->CGND bridge) on the T268 fixture never reaches
+    primitives that accept gnd-role nets (e.g. current-shunt-monitor).
+    """
+    ir = CircuitIR(
+        meta={"source": "test", "format": "manual"},
+        components=[],
+        nets=[Net(id="N1", name="CGND")],
+        connections=[],
+    )
+    result = run_enrichers(ir, [NetClassifier()])
+    assert result.ir.nets[0].type == NetType.GND
+
+
 def test_topology_recognizer_cc_pull_down():
     ir = _sample_ir()
     result = run_enrichers(ir, [NetClassifier(), TopologyRecognizer()])

@@ -244,6 +244,43 @@ def test_parse_signal_rejects_invalid_direction() -> None:
         })
 
 
+def test_parse_signal_accepts_role_list() -> None:
+    """expected_role may be a list of roles; normalised to a tuple."""
+    sig = _parse_signal({
+        "id": "pwr", "type": "net", "name_pattern": ".*",
+        "expected_role": ["power", "gnd"],
+    })
+    assert sig.expected_role == ("power", "gnd")
+
+
+def test_parse_signal_rejects_invalid_role_in_list() -> None:
+    """A list containing an unknown role is rejected."""
+    with pytest.raises(PrimitiveValidationError):
+        _parse_signal({
+            "id": "pwr", "type": "net", "name_pattern": ".*",
+            "expected_role": ["power", "bogus"],
+        })
+
+
+def test_parse_signal_rejects_empty_role_list() -> None:
+    """An empty role list is rejected."""
+    with pytest.raises(PrimitiveValidationError):
+        _parse_signal({
+            "id": "pwr", "type": "net", "name_pattern": ".*",
+            "expected_role": [],
+        })
+
+
+def test_signal_semantic_matches_role_set() -> None:
+    """Tuple role matches when actual role is a member of the set."""
+    sem_gnd = {"role": "gnd", "direction": "bidirectional", "level": None}
+    sem_power = {"role": "power", "direction": "source", "level": "5V"}
+    sem_digital = {"role": "digital", "direction": "load", "level": None}
+    assert signal_semantic_matches(("power", "gnd"), None, None, sem_gnd)
+    assert signal_semantic_matches(("power", "gnd"), None, None, sem_power)
+    assert not signal_semantic_matches(("power", "gnd"), None, None, sem_digital)
+
+
 # ---------------------------------------------------------------------------
 # PrimitiveTemplate._signal_to_components derived index
 # ---------------------------------------------------------------------------
