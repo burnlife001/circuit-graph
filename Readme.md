@@ -422,7 +422,9 @@ circuit_graph/layout/
 | KiCad / Protel parser | ✅ Batch 2 | `circuit_graph/parsers/kicad_sch.py` 对真 lm321 fixture 抽 14 components / 29 wires / 5 nets;`layout_check/protel_adapter.py` 对真 FX-T268 抽 207 components / 118 nets / 0 wires;`layout_check/parsers.py` dispatch 按扩展名分派,大小写不敏感 |
 | §6 标注断言(`annotation.py`) | ✅ Batch 3 | `DesignatorPresent` / `ValuePresent` / `SignalNameOnNet` 三条;12 个 pytest 全绿 |
 | §5 对齐断言(`alignment.py`) | ✅ Batch 3 | `SameOrientation`(rot 跨度 ≤ tolerance_deg pass)/ `GridAlignment`(用 `pos − round(pos/grid)×grid` 处理负坐标,1µm 容差);10 个 pytest 全绿;`SameOrientation` 在 lm321 fixture 上因 kicad-sch-api 不暴露 rotation_deg 而 vacuous-pass,前向兼容 |
-| §5 去耦、§3 电源/地 | ⏳ Batch 4 | |
+| §5 去耦断言(`decoupling.py`) | ✅ Batch 4 | `DecoupNearIcPowerPin` 用 `100nF` 默认阈值挑选 cap,取最近 IC power pin 距离 ≤ `max_distance_mm`;13 个 pytest 全绿;cap value parser 加 IEEE-754 noise fix(round to 12 dp)防 100nF 在阈值边界被误拒 |
+| §3 电源断言(`power.py`) | ✅ Batch 4 | `PowerAtTop`(默认 page_height=210mm,Y-up 大 y 算顶部)/ `PowerLayerHierarchy`(解析 `5V`/`3V3`/`5V0`/`+12V` 电压后缀,y-带重叠 ≤ tolerance pass);11 个 pytest 全绿 |
+| §3 地线断言(`ground.py`) | ✅ Batch 4 | `GndAtBottom` 与 `PowerAtTop` 镜像(y ≤ tolerance 算底部)/ `SingleStarPoint`(AGND/DGND 收敛到一点,median 收 max_merge_distance);10 个 pytest 全绿 |
 | §1 信号流、§4 走线 + orchestrator | ⏳ Batch 5 | |
 | `cg layout-check` CLI + 默认规则 | ⏳ Batch 6 | |
 
