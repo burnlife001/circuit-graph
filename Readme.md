@@ -419,7 +419,7 @@ circuit_graph/layout/
 |---|---|---|
 | Scaffold (`__init__.py`、`model.py`、`assertions/base.py`) | ✅ Batch 1 | 9 个 dataclass + 12 内置断言 kind 常量 + `refdes_prefix` / `match_glob` / `passes_or_violates` helper |
 | `.schlayout` 加载器 (`loader.py`) | ✅ Batch 1 | 6 种 `LayoutCheckError`(rules_file_not_found、yaml_parse_error、schema_version_mismatch、unknown_assert_kind、duplicate_rule_id、schematic_parse_error),9 个 pytest 全绿 |
-| KiCad / Protel parser | ⏳ Batch 2 | |
+| KiCad / Protel parser | ✅ Batch 2 | `circuit_graph/parsers/kicad_sch.py` 对真 lm321 fixture 抽 14 components / 29 wires / 5 nets;`layout_check/protel_adapter.py` 对真 FX-T268 抽 207 components / 118 nets / 0 wires;`layout_check/parsers.py` dispatch 按扩展名分派,大小写不敏感 |
 | 12 条断言实现 | ⏳ Batch 3-5 | |
 | `cg layout-check` CLI + 默认规则 | ⏳ Batch 6 | |
 
