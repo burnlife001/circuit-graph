@@ -130,7 +130,6 @@ def _make_value(kind: DeviceKind, magnitude: float | None) -> NormalizedValue | 
 def _build_ir(
     template: PrimitiveTemplate, spec: DesignSpec, resolved: dict[str, float]
 ) -> CircuitIR:
-    comps_by_id = {c.id: c for c in template.components}
     kinds: dict[str, DeviceKind] = {}
     designators: dict[str, str] = {}
     for index, comp in enumerate(template.components):
