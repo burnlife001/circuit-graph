@@ -19,7 +19,18 @@ The MVP covers four of the eight sections of `布局.md`:
 - **§5 元件排列对齐** — `same-orientation`, `grid-alignment`, `decoup-near-ic-power-pin`
 - **§6 标注可读性** — `designator-present`, `value-present`, `signal-name-on-net`
 
-Sections §2 (功能模块化分区), §4 (走线优化), §7 (层次化分页), §8 (复用/标准化) are out of scope for v1; §4 and §7 are also data-unsupported on `.NET` input (no wire geometry).
+Sections §2 (功能模块化分区), §4 (走线优化), §7 (层次化分页), §8 (复用/标准化) are out of scope for v1.
+
+### 1.1 Input format matrix
+
+Layout rules require **spatial data** (position, rotation, sheet, page, wires) that not all schematic formats carry. The MVP supports two input formats at different rule coverage:
+
+| Input format | Applicable rules | Why |
+|---|---|---|
+| `.NET` (Protel netlist) | §6 only: `designator-present`, `value-present`, `signal-name-on-net` | `.NET` is a pure logical netlist — no coordinates, no rotations, no wires |
+| `.kicad_sch` | All 12 rules | KiCad schematics carry full geometry (position, rotation, wire segments, hierarchical sheets) |
+
+Spatial rules in `.schlayout` are **auto-skipped** when the input format lacks the required data; the rule is counted in `summary.rules_skipped_unsupported_input`. The CLI exits 1 only if any *applicable* rule has a violation.
 
 ## 2. Architecture
 
@@ -29,8 +40,10 @@ Sections §2 (功能模块化分区), §4 (走线优化), §7 (层次化分页),
 ├──────────────────────────────────────────────────────────┤
 │ LayoutChecker           # orchestrator                    │
 │   ├── load_rules()      # YAML → RuleSpec[]               │
-│   ├── parse_schematic() # reuse circuit_graph.parsers.*   │
-│   ├── evaluate()        # RuleSpec × Schematic → Violation[] │
+│   ├── parse_schematic() # dispatch by extension           │
+│   │     ├── .NET   → parsers.protel → LayoutSchematic    │
+│   │     └── .kicad_sch → parsers.kicad_sch → LayoutSchematic │
+│   ├── evaluate()        # RuleSpec × LayoutSchematic → Violation[] │
 │   └── report()          # Violation[] → JSON              │
 ├──────────────────────────────────────────────────────────┤
 │ Assertions (12 built-in kinds, one class each)            │
@@ -45,9 +58,11 @@ Sections §2 (功能模块化分区), §4 (走线优化), §7 (层次化分页),
 │   routing.py      no-trace-through-component (best-effort)│
 │   base.py         Assertion ABC + Region dataclass        │
 ├──────────────────────────────────────────────────────────┤
-│ Schematic Model (reused)                                  │
-│   components[].{id, type, refdes_prefix, position, value}│
+│ Schematic Model (LAYOUT-GEOMETRY-AWARE, NEW)               │
+│   components[].{id, type, value, position_mm,             │
+│                  rotation_deg, refdes_prefix, sheet, page}│
 │   nets[].{name, kind, members[]}                          │
+│   wires[].{start_mm, end_mm, net}                         │ (kicad only)
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -59,18 +74,25 @@ circuit_graph/
     __init__.py
     checker.py            # LayoutChecker orchestrator
     loader.py             # .schlayout → RuleSpec[], schema errors
+    model.py              # RuleSpec / Violation / Region / LayoutSchematic dataclasses
     assertions/
         __init__.py
-        base.py           # Assertion ABC
+        base.py           # Assertion ABC + spatial helpers
         power.py        ground.py        alignment.py        decoupling.py        annotation.py        flow.py        routing.py
+
+  parsers/
+    kicad_sch.py          # NEW: extracts geometry-preserving IR from .kicad_sch
+                            # wraps kicad-sch-api (already a main dep) and
+                            # circuit_graph.layout.geometry helpers
 
 fixtures/
   rules/
     default.schlayout     # shipped default rule set
+                            # contains all 12 rules; spatial rules auto-skip on .NET
 
 tests/
   layout_check/
-    conftest.py
+    conftest.py           # fixtures: minimal .NET and .kicad_sch synthetics
     test_loader.py
     test_power.py
     test_ground.py
@@ -81,11 +103,22 @@ tests/
     test_routing.py
     test_checker.py
     test_cli.py
+
+  parsers/
+    test_kicad_sch.py     # parses real lm321_ccs schematic + synthetic edge cases
 ```
 
 ### Why a separate package, not `circuit_graph.layout.*`
 
 The 2026-07-11 spec defined `circuit_graph.layout` as the **placement generator** that *writes* component positions. This spec defines `circuit_graph.layout_check` that *validates* positions. Sharing a package would force one to import the other; the orchestrator independence is cleaner.
+
+### Why a new parser, not extend `parsers/protel.py`
+
+The existing `parsers/protel.py` strips position metadata because the current `CircuitIR` does not model geometry. Reusing it would mean augmenting `CircuitIR` (large blast radius: every exporter, every primitive recognizer, every simulator depends on `CircuitIR`). The layout-check pipeline uses its own `LayoutSchematic` model with geometry fields, and `parsers/kicad_sch.py` is a new sibling that emits geometry directly. `parsers/protel.py` stays untouched.
+
+### Why not augment `CircuitIR`
+
+The `circuit_graph.ir.Component` dataclass is the canonical model consumed by `primitives`, `erc`, `sim`, `generators`, `exporters`, and `visualization`. Adding optional `position_mm` / `rotation_deg` / `sheet` fields would either (a) require every downstream consumer to ignore unknown fields (risky) or (b) cascade changes through the whole package. The layout-check side-car with its own model is the lowest-risk path to deliver the MVP.
 
 ## 3. CLI Surface
 
@@ -156,7 +189,7 @@ rules:
 | `rules[].id` | str | yes | kebab-case, unique within file |
 | `rules[].enabled` | bool | no | Default `true`; `false` skips with no violation |
 | `rules[].applies_to` | object | no | Absent = applies to all |
-| `rules[].applies_to.refdes_prefix` | list[glob] | no | e.g. `["R*", "U1-*"]` |
+| `rules[].applies_to.refdes_prefix` | list[glob] | no | Matches against `refdes_prefix` (leading alphabetic prefix of `id`, e.g. `R96` → `R`); `R*` matches `R96`, `R5` |
 | `rules[].applies_to.type` | list[str] | no | Recognized type names |
 | `rules[].applies_to.net` | list[glob] | no | Net-name glob |
 | `rules[].applies_to.kind` | list[str] | no | Net kind: `power`, `ground`, `signal` |
@@ -164,6 +197,8 @@ rules:
 | `rules[].assert.<param>` | per-kind | per-kind | see §5 |
 
 Glob syntax: `*` matches any string (including empty); `?` matches one char. Same semantics as Python `fnmatch`.
+
+Glob patterns are matched against the **derived `refdes_prefix`** (the leading alphabetic run of the component `id`), not the full `id`. So `R*` matches `R96` (prefix `R`), and `R?6` matches `R96` while a full-id glob would too — this matches user intuition ("resistors are `R*`"). A user who really wants to match the full id can write a custom glob like `*-OUT`.
 
 ### 4.3 Filter semantics
 
@@ -303,9 +338,11 @@ This avoids naming a new "decoupling_cap" type and reuses existing data.
 ### 8.1 Unit tests per assertion
 
 For each of the 12 assertion kinds, **≥3 test cases** in `tests/layout_check/test_<area>.py`:
-1. **Pass case** — synthetic schematic where rule holds
-2. **Fail case** — minimal schematic where rule fails, asserts violation message + location
-3. **Boundary case** — exactly at the tolerance threshold (e.g., distance = `max_distance_mm`)
+1. **Pass case** — synthetic schematic where the rule holds (e.g., cap well within tolerance)
+2. **Fail case** — minimal schematic where the rule fails, asserts violation message + location
+3. **Boundary case** — exactly at the threshold (distance == `max_distance_mm`); the spec treats the threshold as **inclusive on the pass side** (`<= max` passes), so boundary tests assert pass
+
+Boundary semantics (`<= tolerance_mm` passes; `> tolerance_mm` fails) is uniform across all 12 assertions and documented in the Assertion base class.
 
 ### 8.2 Loader tests (`test_loader.py`)
 
