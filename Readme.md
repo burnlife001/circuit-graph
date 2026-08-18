@@ -425,7 +425,9 @@ circuit_graph/layout/
 | §5 去耦断言(`decoupling.py`) | ✅ Batch 4 | `DecoupNearIcPowerPin` 用 `100nF` 默认阈值挑选 cap,取最近 IC power pin 距离 ≤ `max_distance_mm`;13 个 pytest 全绿;cap value parser 加 IEEE-754 noise fix(round to 12 dp)防 100nF 在阈值边界被误拒 |
 | §3 电源断言(`power.py`) | ✅ Batch 4 | `PowerAtTop`(默认 page_height=210mm,Y-up 大 y 算顶部)/ `PowerLayerHierarchy`(解析 `5V`/`3V3`/`5V0`/`+12V` 电压后缀,y-带重叠 ≤ tolerance pass);11 个 pytest 全绿 |
 | §3 地线断言(`ground.py`) | ✅ Batch 4 | `GndAtBottom` 与 `PowerAtTop` 镜像(y ≤ tolerance 算底部)/ `SingleStarPoint`(AGND/DGND 收敛到一点,median 收 max_merge_distance);10 个 pytest 全绿 |
-| §1 信号流、§4 走线 + orchestrator | ⏳ Batch 5 | |
+| §1 信号流(`flow.py`) | ✅ Batch 5 | `SignalFlowAxis`:input vs output 中位数,`axis` 默认 `x`,`delta < 0` 触发(distance-pass ≤ tolerance),使用 `statistics.median`;8 个 pytest 全绿 |
+| §4 走线断言(`routing.py`) | ✅ Batch 5 | `NoTraceThroughComponent`:wire 段到 comp 点距离用 `_point_to_segment_distance`;**反向** boundary(`d ≥ tolerance → PASS`),tolerance 是 component 周围 buffer,`<= tolerance` 也算越界;7 个 pytest 全绿 |
+| LayoutChecker orchestrator(`checker.py`) | ✅ Batch 5 | 注册 12 个内置断言为单例,加载 `.schlayout` → 派 dispatcher → 跑断言 → JSON report;`summary` 含 `rules_total`/`rules_evaluated`/`rules_skipped_disabled`/`rules_skipped_unsupported_input`/`violations`/`checked_components`/`checked_nets`/`duration_ms`;`baseline_signature` round coord 到 1µm;baseline / diff-baseline 支持;14 个 pytest 全绿 |
 | `cg layout-check` CLI + 默认规则 | ⏳ Batch 6 | |
 
 直接调用 loader：
