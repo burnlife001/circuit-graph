@@ -140,6 +140,25 @@ class PrimitiveScoring:
 
 
 @dataclass(frozen=True)
+class DesignInput:
+    """A numeric input the designer must supply to instantiate the primitive."""
+
+    id: str
+    label: str | None = None
+    unit: str | None = None
+    default: str | float | None = None
+
+
+@dataclass(frozen=True)
+class RecommendedPart:
+    """A concrete part suggestion for a primitive component."""
+
+    pn: str
+    footprint: str | None = None
+    notes: str | None = None
+
+
+@dataclass(frozen=True)
 class PrimitiveTemplate:
     """In-memory representation of a primitive JSON template."""
 
@@ -153,6 +172,9 @@ class PrimitiveTemplate:
     constraints: PrimitiveConstraints
     scoring: PrimitiveScoring
     raw: dict[str, Any]
+    design_inputs: list[DesignInput] = field(default_factory=list)
+    parameters: dict[str, str] = field(default_factory=dict)
+    recommended_parts: dict[str, list[RecommendedPart]] = field(default_factory=dict)
     _signal_to_components: dict[str, list[str]] = field(
         default_factory=dict, repr=False, compare=False
     )
@@ -212,6 +234,9 @@ def _parse_primitive(raw: dict[str, Any]) -> PrimitiveTemplate:
     components = [_parse_component(c, signals) for c in raw.get("components", [])]
     constraints = _parse_constraints(raw.get("constraints", {}))
     scoring = _parse_scoring(raw.get("scoring", {}))
+    design_inputs = _parse_design_inputs(raw.get("design_inputs", []))
+    parameters = _parse_parameters(raw.get("parameters", {}), components)
+    recommended_parts = _parse_recommended_parts(raw.get("recommended_parts", {}), components)
 
     return PrimitiveTemplate(
         id=raw["id"],
@@ -223,6 +248,9 @@ def _parse_primitive(raw: dict[str, Any]) -> PrimitiveTemplate:
         components=components,
         constraints=constraints,
         scoring=scoring,
+        design_inputs=design_inputs,
+        parameters=parameters,
+        recommended_parts=recommended_parts,
         raw=raw,
     )
 
@@ -332,6 +360,82 @@ def _parse_scoring(raw: dict[str, Any]) -> PrimitiveScoring:
         weights=raw.get("weights", {}),
         thresholds=raw.get("thresholds", {}),
     )
+
+
+_PARAM_KEY_RE = re.compile(r"^([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)$")
+
+
+def _parse_design_inputs(raw: Any) -> list[DesignInput]:
+    if not isinstance(raw, list):
+        raise PrimitiveValidationError("design_inputs must be a list")
+    inputs: list[DesignInput] = []
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            raise PrimitiveValidationError(f"Invalid design_input entry: {item!r}")
+        inputs.append(
+            DesignInput(
+                id=item["id"],
+                label=item.get("label"),
+                unit=item.get("unit"),
+                default=item.get("default"),
+            )
+        )
+    return inputs
+
+
+def _parse_parameters(raw: Any, components: list[PrimitiveComponent]) -> dict[str, str]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise PrimitiveValidationError("parameters must be an object")
+    comp_ids = {c.id for c in components}
+    params: dict[str, str] = {}
+    for key, expr in raw.items():
+        m = _PARAM_KEY_RE.match(key)
+        if not m or m.group(1) not in comp_ids:
+            raise PrimitiveValidationError(
+                f"Parameter key {key!r} must be '<ComponentId>.<field>' "
+                f"referencing a known component"
+            )
+        if not isinstance(expr, str) or not expr.strip():
+            raise PrimitiveValidationError(f"Parameter {key!r} must be a non-empty string")
+        params[key] = expr
+    return params
+
+
+def _parse_recommended_parts(
+    raw: Any, components: list[PrimitiveComponent]
+) -> dict[str, list[RecommendedPart]]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise PrimitiveValidationError("recommended_parts must be an object")
+    comp_ids = {c.id for c in components}
+    parts: dict[str, list[RecommendedPart]] = {}
+    for comp_id, entries in raw.items():
+        if comp_id not in comp_ids:
+            raise PrimitiveValidationError(
+                f"recommended_parts key {comp_id!r} references an unknown component"
+            )
+        if not isinstance(entries, list) or not entries:
+            raise PrimitiveValidationError(
+                f"recommended_parts[{comp_id!r}] must be a non-empty list"
+            )
+        parsed: list[RecommendedPart] = []
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get("pn"), str):
+                raise PrimitiveValidationError(
+                    f"Invalid recommended part entry for {comp_id!r}: {entry!r}"
+                )
+            parsed.append(
+                RecommendedPart(
+                    pn=entry["pn"],
+                    footprint=entry.get("footprint"),
+                    notes=entry.get("notes"),
+                )
+            )
+        parts[comp_id] = parsed
+    return parts
 
 
 def _require_keys(raw: dict[str, Any], keys: set[str]) -> None:
