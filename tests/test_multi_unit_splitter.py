@@ -140,3 +140,37 @@ def test_multi_unit_splitter_ignores_non_multi_unit_devices() -> None:
     # R1 should not be split
     assert len(ir2.components) == 1
     assert ir2.components[0].id == "R1"
+
+
+def test_add_primitives_net_recognizes_lm358_units() -> None:
+    """End-to-end on fixtures/protel/add-primitives.NET: U2 (LM358) is split
+    into U2A/U2B/U2C and the two opamp units are recognised as
+    differential-amplifier (U2B + R4 feedback) and voltage-follower (U2C).
+    """
+    from pathlib import Path
+
+    from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
+
+    netlist = (
+        Path(__file__).resolve().parent.parent
+        / "fixtures"
+        / "protel"
+        / "add-primitives.NET"
+    )
+    if not netlist.exists():
+        pytest.skip(f"Fixture not found: {netlist}")
+
+    ir = ProtelNetParser().parse(ParserInput(file_path=str(netlist)))
+    ir2 = run_enrichers(ir, [MultiUnitSplitter(), TopologyRecognizer()]).ir
+
+    blocks = {b.id: b for b in ir2.blocks}
+
+    assert "opamp-unit-differential-amplifier-u2b" in blocks, (
+        f"Expected U2B differential-amplifier block; got: {sorted(blocks)}"
+    )
+    assert set(blocks["opamp-unit-differential-amplifier-u2b"].component_ids) == {"U2B", "R4"}
+
+    assert "opamp-unit-voltage-follower-u2c" in blocks, (
+        f"Expected U2C voltage-follower block; got: {sorted(blocks)}"
+    )
+    assert set(blocks["opamp-unit-voltage-follower-u2c"].component_ids) == {"U2C"}
