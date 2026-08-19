@@ -29,6 +29,7 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
   - 组 2（6 个，依赖 expected_role）：pull-up-resistor / pull-down-resistor / tvs-protection / npn-low-side-switch / nmos-low-side-switch / pmos-high-side-switch
   - 组 3（5 个，依赖 expected_role + direction + level）：flyback-diode / current-shunt-monitor / fet-level-shifter / lc-pi-filter / sallen-key-low-pass
 - 元件型号知识库：**SQLite 数据库**（`circuit_graph/knowledge/circuit_graph.db`）维护 part-number → 类别 / 引脚定义 / 属性
+- 多单元 IC 拆分（`MultiUnitSplitter`，priority=10）：根据 `circuit_graph/knowledge/multi_unit_devices.json` 把 LM358 / LM324 / TL072 / LM393 等多单元器件拆为虚拟子组件（U2A 电源 / U2B / U2C），引脚号改写为逻辑名（OUT / IN+ / IN-），让 `opamp-unit-differential-amplifier` / `opamp-unit-voltage-follower` 等 `strict_pin_matching` 模板可以按单元粒度识别拓扑
 - PDF 数据手册引脚提取：Camelot lattice 模式自动搜索引脚表页面，提取 `{引脚号: 引脚名}` 映射
 - 供电上下文（`cg view --with-power`）：从 USB / 电池 / 排针 → 稳压器 → 负载
 - 通信上下文（`cg view --with-comm`）：检测 I2C / UART / SPI / PWM 总线
@@ -524,7 +525,7 @@ circuit_graph/
 ├── comm_topology.py            # 通信总线识别（I2C/UART/SPI/PWM）
 ├── visualization.py            # 供电树 SVG 渲染
 ├── parsers/protel.py           # Protel .NET 解析器
-├── enrichers/                  # value_normalizer / net_classifier / pin_resolver / edge_semantic / topology_recognizer
+├── enrichers/                  # value_normalizer / net_classifier / pin_resolver / edge_semantic / multi_unit_splitter / topology_recognizer
 ├── generators/cg_graph.py       # cg-graph JSON 生成器（v2.1）
 ├── exporters/graphml.py        # yEd 兼容 GraphML
 ├── layout/                     # 原理图自动布局引擎
