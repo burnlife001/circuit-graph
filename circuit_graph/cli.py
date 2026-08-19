@@ -21,6 +21,7 @@ import click
 from circuit_graph.design import DesignError, DesignSpec, instantiate, parse_number
 from circuit_graph.enrichers import run_enrichers
 from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
+from circuit_graph.enrichers.multi_unit_splitter import MultiUnitSplitter
 from circuit_graph.enrichers.net_classifier import NetClassifier
 from circuit_graph.enrichers.pin_resolver import PinNameResolver
 from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
@@ -130,7 +131,11 @@ def view(
     db = ComponentDatabase.default()
     result = view_component(ir, designator, hops=hops, db=db)
     if result is None:
-        click.echo(json.dumps({"error": f"Component {designator} not found"}, indent=2))
+        payload = {"error": _not_found_message(ir, designator)}
+        sys.stdout.buffer.write(
+            json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
+        )
+        sys.stdout.buffer.write(b"\n")
         sys.exit(1)
 
     if with_power:
@@ -519,6 +524,33 @@ def sim(
 # Shared helpers
 
 
+def _not_found_message(ir: CircuitIR, designator: str) -> str:
+    """Build the "component not found" error message for ``cg view``.
+
+    When ``designator`` names a multi-unit device that MultiUnitSplitter has
+    split into per-unit virtual components (e.g. LM358 U2 -> U2A/U2B/U2C),
+    the bare designator no longer exists in the IR.  The message then lists
+    the split units — annotating the power unit — and suggests a concrete
+    signal unit to view instead.
+    """
+    base = f"Component {designator} not found"
+    units = sorted(
+        (c for c in ir.components if c.metadata.get("split_from") == designator),
+        key=lambda c: c.id,
+    )
+    if not units:
+        return base
+    labels = [
+        f"{u.id}(电源)" if u.metadata.get("unit_type") == "power" else u.id
+        for u in units
+    ]
+    suggested = next(
+        (u.id for u in units if u.metadata.get("unit_type") != "power"),
+        units[0].id,
+    )
+    return f"{base}. 已拆分为多单元: {', '.join(labels)} — 请用 cg view {suggested} 查看"
+
+
 def _parse_and_enrich(file: Path) -> CircuitIR:
     """Parse the netlist and run the standard enricher pipeline.
 
@@ -531,6 +563,7 @@ def _parse_and_enrich(file: Path) -> CircuitIR:
     ir = run_enrichers(
         ir,
         [
+            MultiUnitSplitter(),
             ValueNormalizer(),
             NetClassifier(),
             PinNameResolver(),

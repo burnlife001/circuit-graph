@@ -199,6 +199,41 @@ def test_cli_view_missing_component(runner: CliRunner, tmp_path: Path) -> None:
     assert "not found" in result.output
 
 
+def test_cli_view_multi_unit_parent_lists_split_units(runner: CliRunner) -> None:
+    """`cg view U2` on a split multi-unit device must list the split units.
+
+    U2 in add-primitives.NET is an LM358; MultiUnitSplitter turns it into
+    U2A (power) / U2B / U2C, so the bare designator no longer exists.  The
+    error must name the units and suggest a concrete unit to view.
+    """
+    fixture = FIXTURE_DIR / "add-primitives.NET"
+    if not fixture.exists():
+        pytest.skip(f"Fixture not found: {fixture}")
+
+    result = runner.invoke(main, ["view", "U2", str(fixture)])
+    assert result.exit_code == 1
+    assert "Component U2 not found" in result.output
+    assert "已拆分为多单元" in result.output
+    assert "U2A(电源)" in result.output
+    assert "U2B" in result.output
+    assert "U2C" in result.output
+    assert "cg view U2B" in result.output
+
+
+def test_cli_view_multi_unit_with_blocks(runner: CliRunner) -> None:
+    """`cg view U2B --with-blocks` hits the opamp-unit block after splitting."""
+    fixture = FIXTURE_DIR / "add-primitives.NET"
+    if not fixture.exists():
+        pytest.skip(f"Fixture not found: {fixture}")
+
+    result = runner.invoke(main, ["view", "U2B", str(fixture), "--with-blocks"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["designator"] == "U2B"
+    block_ids = {b["id"] for b in data["blocks"]}
+    assert "opamp-unit-differential-amplifier-u2b" in block_ids
+
+
 def test_cli_help(runner: CliRunner) -> None:
     result = runner.invoke(main, ["--help"])
     assert result.exit_code == 0
