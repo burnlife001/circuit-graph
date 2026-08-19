@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -199,39 +200,77 @@ def test_cli_view_missing_component(runner: CliRunner, tmp_path: Path) -> None:
     assert "not found" in result.output
 
 
+def _split_units(ir, designator: str) -> dict[str, str]:
+    """Return ``{unit_id: unit_type}`` for the units split from ``designator``.
+
+    Expectations are derived from the enriched IR itself so the multi-unit
+    tests follow whatever unit letters the device table assigns (LM358 →
+    A/B/C, LM324 → A..E) instead of hardcoding e.g. U2B.
+    """
+    return {
+        c.id: c.metadata.get("unit_type")
+        for c in ir.components
+        if c.metadata.get("split_from") == designator
+    }
+
+
 def test_cli_view_multi_unit_parent_lists_split_units(runner: CliRunner) -> None:
     """`cg view U2` on a split multi-unit device must list the split units.
 
-    U2 in add-primitives.NET is an LM358; MultiUnitSplitter turns it into
-    U2A (power) / U2B / U2C, so the bare designator no longer exists.  The
-    error must name the units and suggest a concrete unit to view.
+    U2 in add-primitives.NET is a multi-unit op-amp; MultiUnitSplitter turns
+    it into per-unit virtual components, so the bare designator no longer
+    exists.  The error must name every unit, annotate the power unit, and
+    suggest a concrete non-power unit to view.
     """
     fixture = FIXTURE_DIR / "add-primitives.NET"
     if not fixture.exists():
         pytest.skip(f"Fixture not found: {fixture}")
 
+    units = _split_units(_parse_and_enrich(fixture), "U2")
+    assert len(units) >= 2, f"U2 was not split into units; got {sorted(units)}"
+
     result = runner.invoke(main, ["view", "U2", str(fixture)])
     assert result.exit_code == 1
     assert "Component U2 not found" in result.output
     assert "已拆分为多单元" in result.output
-    assert "U2A(电源)" in result.output
-    assert "U2B" in result.output
-    assert "U2C" in result.output
-    assert "cg view U2B" in result.output
+    for unit_id, unit_type in units.items():
+        expected = f"{unit_id}(电源)" if unit_type == "power" else unit_id
+        assert expected in result.output
+    match = re.search(r"请用 cg view (\S+) 查看", result.output)
+    assert match, f"no unit suggestion in: {result.output}"
+    suggested = match.group(1)
+    assert suggested in units
+    assert units[suggested] != "power"
 
 
 def test_cli_view_multi_unit_with_blocks(runner: CliRunner) -> None:
-    """`cg view U2B --with-blocks` hits the opamp-unit block after splitting."""
+    """`cg view <unit> --with-blocks` hits the opamp-unit block after splitting.
+
+    The unit anchoring the differential amplifier depends on the device
+    (LM358 → B/C, LM324 → any of A..D), so it is discovered from the
+    enriched IR rather than hardcoded.
+    """
     fixture = FIXTURE_DIR / "add-primitives.NET"
     if not fixture.exists():
         pytest.skip(f"Fixture not found: {fixture}")
 
-    result = runner.invoke(main, ["view", "U2B", str(fixture), "--with-blocks"])
+    ir = _parse_and_enrich(fixture)
+    units = _split_units(ir, "U2")
+    blocks = [
+        b for b in ir.blocks if b.id.startswith("opamp-unit-differential-amplifier-")
+    ]
+    assert blocks, (
+        f"no opamp-unit-differential-amplifier block; "
+        f"got: {sorted(b.id for b in ir.blocks)}"
+    )
+    block = blocks[0]
+    focal = next(u for u in sorted(units) if u in block.component_ids)
+
+    result = runner.invoke(main, ["view", focal, str(fixture), "--with-blocks"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
-    assert data["designator"] == "U2B"
-    block_ids = {b["id"] for b in data["blocks"]}
-    assert "opamp-unit-differential-amplifier-u2b" in block_ids
+    assert data["designator"] == focal
+    assert block.id in {b["id"] for b in data["blocks"]}
 
 
 def test_cli_help(runner: CliRunner) -> None:
