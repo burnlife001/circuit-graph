@@ -15,15 +15,12 @@
 
 | # | 建议 ID | 名称 | 用途 | 关键 components | 关键 signals | 严格字段 | 优先级 |
 |---|---|---|---|---|---|---|---|
-| A1 | `ldo-regulator` | LDO 线性稳压器 | 三端稳压（VIN→VOUT）+ 输入/输出滤波电容 | U(ldo), C_in, C_out | VIN, VOUT, GND | role+level | ★★★ |
-| A2 | `decoupling-capacitor` | 电源去耦电容 | 电容直接跨接在 power 与 gnd 之间 | C | VCC, GND | role | ★★★ |
-| A3 | `multi-cap-decoupling` | 多容值并联去耦 | 100nF ‖ 10µF ‖ 1µF 并到同一对 power/gnd | C×N (N≥2) | VCC, GND | role | ★★ |
 | A4 | `buck-converter` | 同步/异步降压 | 控制器/集成功率级 + 电感 + 输出电容 + 反馈分压 | U(buck), L, C_out, R_fb1, R_fb2 | VIN, SW, VOUT, FB, GND | role+level | ★★★ |
 | A5 | `boost-converter` | 升压变换器 | 控制器 + 电感 + 整流管/同步管 + 输出电容 + 反馈分压 | U(boost), L, D/Q, C_out, R_fb×2 | VIN, SW, VOUT, FB | role+level | ★★ |
 | A6 | `feedback-divider` | 稳压反馈分压 | `voltage-divider` 的电源版：上/下电阻分压点接 FB 引脚 | R_top, R_bot | VOUT, FB, GND | role | ★★★ |
 | A7 | `ferrite-bead-filter` | 磁珠 + 电容滤波 | FB 串电源，两侧各一电容到地（π 型变体） | L(ferrite), C_in, C_out | VIN, VOUT, GND | role | ★★ |
 | A8 | `rc-snubber` | RC 吸收/缓冲 | R+C 串联后跨在 SW 与 GND（或开关管 D-S）之间 | R, C | SW, GND | role | ★★ |
-| A9 | `zener-shunt-reference` | 稳压二极管基准 | 限流电阻 + 齐纳管到地，输出接负载/基准 | R, D(zener) | VIN, VREF, GND | role | ★★ |
+| A9 | `zener-shunt-reference` | 稳压二极管/电压基准 | 限流电阻 + 齐纳管到地，输出接负载/基准 | R, D(zener) | VIN, VREF, GND | role | ★★ |
 | A10 | `tl431-shunt-regulator` | TL431 并联稳压 | TL431 + 上分压 + 阴极串联限流 | U(TL431), R_bias, R_top, R_bot | VIN, VOUT, REF, GND | role+level | ★ |
 
 ## B. 开关 / 驱动 / 保护
@@ -57,12 +54,11 @@
 
 | # | 建议 ID | 名称 | 用途 | 关键 components | 关键 signals | 严格字段 | 优先级 |
 |---|---|---|---|---|---|---|---|
-| D1 | `i2c-pull-up-pair` | I2C 双上拉 | SDA、SCL 各一颗上拉到同一 VCC | R×2 | SDA, SCL, VCC | role | ★★★ |
 | D2 | `series-termination` | 串联端接 | 电阻串在驱动源与走线之间 | R | SRC, DST | — | ★★ |
 | D3 | `differential-termination` | 差分对端接 | 电阻跨接差分线（100Ω/120Ω） | R | DP, DM | — | ★★ |
 | D4 | `can-termination-split` | CAN 分裂终端 | 两颗 60Ω 串联 + 中点电容到地 | R×2, C | CANH, CANL, GND | role | ★ |
 | D5 | `rs485-bias-network` | RS485 偏置 | 上拉 A、下拉 B、120Ω 终端 | R_pu, R_pd, R_term | A, B, VCC, GND | role | ★ |
-| D6 | `uart-level-divider` | 电阻分压降压 | 高压 TX 经分压进低压 RX（5V→3V3） | R×2 | TX_HV, RX_LV, GND | level | ★★ |
+| D6 | `mos-level-converter` | mos电平转换 |  |  |  |  | ★★ |
 
 ## E. 时钟 / 复位 / 启动
 
@@ -92,12 +88,6 @@
 | G4 | `inrush-ntc` | NTC 浪涌抑制 | NTC 串在 AC/DC 输入 | RT | IN, OUT | — | ★ |
 
 ---
-
-## 实现建议
-
-1. **第一梯队**（覆盖 fixture 现存电路）：A1, A2, A4, A6, B1, B3, C1, D1, E2
-2. **第二梯队**（常见但 fixture 暂未直接命中）：A3, A7, B2, B4, C2, D2, E3, F1
-3. **第三梯队**：其余按需扩展
 
 ## 落盘流程
 

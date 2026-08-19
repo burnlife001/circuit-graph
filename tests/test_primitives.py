@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -403,3 +405,177 @@ def test_signal_name_matches_does_not_treat_cgnd_as_gnd_fallback():
     assert signal_name_matches(r"^CGND$", "CGND", signal_id="gnd") is True
     # Sanity: GND itself still matches the fallback
     assert signal_name_matches(r"^X$", "GND", signal_id="gnd") is True
+
+
+# ---------------------------------------------------------------------------
+# Component type as a list (multi-type acceptance)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_component_accepts_type_list() -> None:
+    """Component ``type`` may be a list; normalised to a tuple."""
+    from circuit_graph.primitives import _parse_component, _parse_signal
+
+    sig = _parse_signal({"id": "s", "type": "net", "name_pattern": ".*"})
+    comp = _parse_component(
+        {
+            "id": "BD",
+            "type": ["Diode", "BridgeRectifier"],
+            "pins": [{"number": "1", "net": "s"}],
+        },
+        [sig],
+    )
+    assert comp.type == ("Diode", "BridgeRectifier")
+
+
+def test_parse_component_rejects_empty_type_list() -> None:
+    from circuit_graph.primitives import _parse_component, _parse_signal
+
+    sig = _parse_signal({"id": "s", "type": "net", "name_pattern": ".*"})
+    with pytest.raises(PrimitiveValidationError):
+        _parse_component(
+            {"id": "BD", "type": [], "pins": [{"number": "1", "net": "s"}]},
+            [sig],
+        )
+
+
+def test_component_type_matches_tuple() -> None:
+    """component_type_matches accepts any member of a type tuple."""
+    from circuit_graph.primitives import component_type_matches
+
+    diode = make_component("D1", DeviceKind.DIODE, [], raw_value="US1M")
+    bridge = make_component("BD1", DeviceKind.BRIDGE_RECTIFIER, [], raw_value="10A")
+    ic = make_component("U1", DeviceKind.IC, [], raw_value="LM358")
+
+    accepted = ("Diode", "BridgeRectifier")
+    assert component_type_matches(accepted, diode)
+    assert component_type_matches(accepted, bridge)
+    assert not component_type_matches(accepted, ic)
+    # Single-string form still works
+    assert component_type_matches("Diode", diode)
+    assert not component_type_matches("Diode", ic)
+
+
+def test_protel_parser_classifies_bridge_footprint() -> None:
+    """footprint containing 'BRIDGE' yields BRIDGE_RECTIFIER regardless of ref."""
+    from circuit_graph.parsers.protel import ProtelNetParser
+
+    kind = ProtelNetParser._infer_device_kind("BD1", "Bridge", "10A/1000V")
+    assert kind is DeviceKind.BRIDGE_RECTIFIER
+    # Prefix heuristics unaffected
+    assert ProtelNetParser._infer_device_kind("D1", "SMA", "US1M") is DeviceKind.DIODE
+    assert ProtelNetParser._infer_device_kind("B1", "SIP-4", None) is DeviceKind.UNKNOWN
+
+
+# --- design output extension (Task 1) ---
+
+
+def _write_primitive(tmp_path, name: str, raw: dict) -> Path:
+    p = tmp_path / name
+    p.write_text(json.dumps(raw), encoding="utf-8")
+    return p
+
+
+def test_load_primitive_with_design_fields(tmp_path: Path) -> None:
+    _write_primitive(
+        tmp_path,
+        "div.json",
+        {
+            "id": "div",
+            "name": "分压",
+            "signals": [
+                {"id": "vin", "type": "net", "name_pattern": "VIN"},
+                {"id": "vout", "type": "net", "name_pattern": "VOUT"},
+                {"id": "gnd", "type": "net", "name_pattern": "GND"},
+            ],
+            "components": [
+                {
+                    "id": "R_top",
+                    "type": "Resistor",
+                    "pins": [
+                        {"number": "1", "net": "vin"},
+                        {"number": "2", "net": "vout"},
+                    ],
+                },
+                {
+                    "id": "R_bottom",
+                    "type": "Resistor",
+                    "pins": [
+                        {"number": "1", "net": "vout"},
+                        {"number": "2", "net": "gnd"},
+                    ],
+                },
+            ],
+            "design_inputs": [
+                {"id": "vin", "label": "输入电压", "unit": "V"},
+                {"id": "vout", "label": "输出电压", "unit": "V"},
+                {"id": "r_bottom", "label": "下电阻", "unit": "Ω", "default": 10000},
+            ],
+            "parameters": {
+                "R_top.value": "(vin - vout) * r_bottom / vout",
+                "R_bottom.value": "r_bottom",
+            },
+            "recommended_parts": {
+                "R_top": [{"pn": "0603 1%", "footprint": "0603"}],
+                "R_bottom": [{"pn": "0603 1%", "footprint": "0603"}],
+            },
+        },
+    )
+    templates = load_primitives(tmp_path)
+    assert len(templates) == 1
+    t = templates[0]
+    assert [d.id for d in t.design_inputs] == ["vin", "vout", "r_bottom"]
+    assert t.design_inputs[2].default == 10000
+    assert t.parameters == {
+        "R_top.value": "(vin - vout) * r_bottom / vout",
+        "R_bottom.value": "r_bottom",
+    }
+    assert t.recommended_parts["R_top"][0].pn == "0603 1%"
+    assert t.recommended_parts["R_top"][0].footprint == "0603"
+
+
+def test_primitive_without_design_fields_still_loads(tmp_path: Path) -> None:
+    _write_primitive(
+        tmp_path,
+        "old.json",
+        {
+            "id": "old",
+            "name": "老模板",
+            "signals": [{"id": "gnd", "type": "net", "name_pattern": "GND"}],
+            "components": [
+                {
+                    "id": "R1",
+                    "type": "Resistor",
+                    "pins": [{"number": "1", "net": "gnd"}, {"number": "2", "net": "gnd"}],
+                }
+            ],
+        },
+    )
+    templates = load_primitives(tmp_path)
+    assert len(templates) == 1
+    t = templates[0]
+    assert t.design_inputs == []
+    assert t.parameters == {}
+    assert t.recommended_parts == {}
+
+
+def test_parameter_key_must_reference_known_component(tmp_path: Path) -> None:
+    _write_primitive(
+        tmp_path,
+        "bad.json",
+        {
+            "id": "bad",
+            "name": "坏模板",
+            "signals": [{"id": "gnd", "type": "net", "name_pattern": "GND"}],
+            "components": [
+                {
+                    "id": "R1",
+                    "type": "Resistor",
+                    "pins": [{"number": "1", "net": "gnd"}, {"number": "2", "net": "gnd"}],
+                }
+            ],
+            "parameters": {"R_missing.value": "1000"},
+        },
+    )
+    with pytest.raises(PrimitiveValidationError, match="R_missing"):
+        load_primitives(tmp_path)

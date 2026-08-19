@@ -1,0 +1,108 @@
+# Default rules file shipped with `cg layout-check`.
+#
+# All 12 built-in assertion kinds are listed below. Each rule has a
+# `enabled: false` annotation inverted if you'd rather suppress it:
+# just flip the boolean in your local copy.
+#
+# Boundary semantics:
+#   distance ≤ tolerance  → PASS
+#   distance >  tolerance  → FAIL
+# (Documented once in `circuit_graph/layout_check/assertions/base.py`.)
+#
+# Input format coverage:
+#   .NET       → §6 only (3 annotation rules). Spatial rules below auto-skip.
+#   .kicad_sch → all 12 (full geometry available).
+
+schema_version: 1
+
+rules:
+
+  # ---------------------------------------------------------------- §6 annotation
+  - id: designator-present
+    enabled: true
+    assert:
+      kind: designator-present
+
+  - id: value-not-forbidden
+    enabled: true
+    assert:
+      kind: value-present
+      # `forbidden_default` is the spec's default list; users can override it.
+      forbidden_default: ["0", "NC", "?"]
+
+  - id: signal-name-not-kicad-autoname
+    enabled: true
+    assert:
+      kind: signal-name-on-net
+      # Catch auto-generated KiCad names; matches the spec's default patterns.
+      forbidden_default_names: ["Net*", "NetU?_?", "NetC?_?"]
+
+  # --------------------------------------------------- §5 alignment (spatial)
+  - id: grid-alignment
+    enabled: true
+    assert:
+      kind: grid-alignment
+      grid_mm: 2.54           # KiCad default
+
+  - id: same-orientation
+    enabled: false
+    # kicad-sch-api 0.5.5 does not expose rotation_deg on `_data.position`
+    # (verified 2026-08-18).  Forward-compatible — flip enabled to true
+    # once rotation is wired in.
+    assert:
+      kind: same-orientation
+      tolerance_deg: 5
+
+  # ------------------------------------------------- §5 decoupling (spatial)
+  - id: decoupling-cap-near-ic-power-pin
+    enabled: true
+    assert:
+      kind: decoup-near-ic-power-pin
+      max_distance_mm: 10.0
+
+  # ----------------------------------------------------- §3 power (spatial)
+  - id: power-rail-on-top
+    enabled: true
+    assert:
+      kind: power-at-top
+      tolerance_mm: 5.0
+      # KiCad A4 landscape (210x297). Override for portrait.
+      page_height_mm: 210.0
+
+  - id: voltage-rail-hierarchy
+    enabled: true
+    assert:
+      kind: power-layer-hierarchy
+      voltage_tolerance_mm: 2.0
+
+  # ---------------------------------------------------- §3 ground (spatial)
+  - id: ground-rail-on-bottom
+    enabled: true
+    assert:
+      kind: gnd-at-bottom
+      tolerance_mm: 5.0
+      page_height_mm: 210.0
+
+  - id: single-star-point
+    enabled: true
+    assert:
+      kind: single-star-point
+      max_merge_distance_mm: 10.0
+
+  # ----------------------------------------------- §1 signal flow (spatial)
+  - id: signal-flow-axis
+    enabled: false
+    # The input/output refdes split is per-design; pick yours here.
+    assert:
+      kind: signal-flow-axis
+      input_refdes_prefix: ["R*"]
+      output_refdes_prefix: ["C*"]
+      tolerance_mm: 0.0
+      axis: x
+
+  # ---------------------------------------------------- §4 routing (KiCad only)
+  - id: no-trace-through-component
+    enabled: true
+    assert:
+      kind: no-trace-through-component
+      tolerance_mm: 1.0

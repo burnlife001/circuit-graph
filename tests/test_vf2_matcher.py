@@ -317,6 +317,43 @@ def test_find_matches_crystal_with_load_caps():
     assert {comp["C_p"], comp["C_n"]} == {"C30", "C31"}
 
 
+def _crystal_with_shield_ir():
+    """4-pin crystal whose shield pin (4) is tied to GND — the common SAW /
+    canned-crystal form factor, which the template's optional gnd pin covers."""
+    x = make_component(
+        "X1", DeviceKind.UNKNOWN,
+        [("1", "XTAL1"), ("2", "XTAL2"), ("4", "GND")],
+        raw_value="12MHz",
+    )
+    cp = make_component("C2", DeviceKind.CAPACITOR, [("1", "XTAL1"), ("2", "GND")],
+                        raw_value="20pF")
+    cn = make_component("C3", DeviceKind.CAPACITOR, [("1", "XTAL2"), ("2", "GND")],
+                        raw_value="20pF")
+    xp = make_net("N_XP", "XTAL1", NetType.SIGNAL)
+    xn = make_net("N_XN", "XTAL2", NetType.SIGNAL)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    return build_ir(
+        [x, cp, cn], [xp, xn, gnd],
+        [("X1.1", "N_XP"), ("X1.2", "N_XN"), ("X1.4", "N_GND"),
+         ("C2.1", "N_XP"), ("C2.2", "N_GND"),
+         ("C3.1", "N_XN"), ("C3.2", "N_GND")],
+    )
+
+
+def test_find_matches_crystal_with_load_caps_optional_shield_pin():
+    """The optional ground pin lets a 4-pin grounded crystal match while the
+    plain 2-pin crystal (test above) still matches via the pin-less variant."""
+    template = next(t for t in load_primitives() if t.id == "crystal-with-load-caps")
+    matcher = Vf2TopologyMatcher(_crystal_with_shield_ir())
+    result = matcher.find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    comp = result.matches[0].component_mapping
+    assert comp["X1"] == "X1"
+    assert {comp["C_p"], comp["C_n"]} == {"C2", "C3"}
+
+
 def _bridge_rectifier_ir():
     d1 = make_component("D1", DeviceKind.DIODE, [("A", "AC1"), ("K", "VDC")], raw_value="1N4007")
     d2 = make_component("D2", DeviceKind.DIODE, [("A", "AC2"), ("K", "VDC")], raw_value="1N4007")
@@ -755,3 +792,79 @@ def test_peak_envelope_detector_matches_protel_netlist():
         f"Expected a peak-envelope-detector block covering D3 branch; got: "
         f"{[(b.id, b.component_ids) for b in blocks]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# integrated-bridge-rectifier / bridge-rectifier-package
+# ---------------------------------------------------------------------------
+
+
+def test_find_matches_integrated_bridge_rectifier():
+    """Diode-typed single block bridging L/N/310V/GND matches the feature-based
+    integrated-bridge primitive (no footprint confirmation needed)."""
+    bd = make_component(
+        "D1", DeviceKind.DIODE,
+        [("1", "L"), ("2", "N"), ("3", "310V"), ("4", "GND")],
+        raw_value="US1M",
+    )
+    l_net = make_net("N_L", "L", NetType.SIGNAL)
+    n_net = make_net("N_N", "N", NetType.SIGNAL)
+    dc = make_net("N_310V", "310V", NetType.POWER)
+    gnd = make_net("N_GND", "GND", NetType.GND)
+    ir = build_ir(
+        [bd], [l_net, n_net, dc, gnd],
+        [("D1.1", "N_L"), ("D1.2", "N_N"), ("D1.3", "N_310V"), ("D1.4", "N_GND")],
+    )
+    template = next(t for t in load_primitives() if t.id == "integrated-bridge-rectifier")
+    result = Vf2TopologyMatcher(ir).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    sig = result.matches[0].signal_mapping
+    assert {sig["ac_l"], sig["ac_n"]} == {"N_L", "N_N"}
+    assert sig["dc_plus"] == "N_310V"
+    assert sig["dc_minus"] == "N_GND"
+
+
+def test_find_matches_bridge_rectifier_package_auto_named_nets():
+    """Footprint-confirmed bridge (BridgeRectifier) matches the package
+    primitive even when every net is Protel auto-named (NetBRG1_*)."""
+    brg = make_component(
+        "BRG1", DeviceKind.BRIDGE_RECTIFIER,
+        [("1", "NetBRG1_1"), ("2", "NetBRG1_2"), ("3", "NetBRG1_3"), ("4", "NetBRG1_4")],
+        raw_value="GBJ1510",
+    )
+    nets = [make_net(f"N{i}", f"NetBRG1_{i}", NetType.SIGNAL) for i in range(1, 5)]
+    ir = build_ir(
+        [brg], nets,
+        [(f"BRG1.{i}", f"N{i}") for i in range(1, 5)],
+    )
+    template = next(t for t in load_primitives() if t.id == "bridge-rectifier-package")
+    result = Vf2TopologyMatcher(ir).find_matches(template, timeout_seconds=2.0)
+
+    assert not result.aborted
+    assert len(result.matches) >= 1
+    assert result.matches[0].component_mapping["BD"] == "BRG1"
+
+
+def test_integrated_bridge_rectifier_matches_protel_ac_frontend():
+    """End-to-end: add-primitives.NET merges four US1M diodes into one D1
+    component bridging L / N / 310V / GND — the integrated-bridge primitive
+    must fire even though the designator is a plain 'D1'.
+    """
+    from pathlib import Path
+
+    from circuit_graph.enrichers import run_enrichers
+    from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
+    from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
+
+    netlist = Path(__file__).resolve().parent.parent / "fixtures" / "protel" / "add-primitives.NET"
+    ir = ProtelNetParser().parse(ParserInput(file_path=str(netlist)))
+    ir2 = run_enrichers(ir, [TopologyRecognizer()]).ir
+
+    blocks = [b for b in ir2.blocks if b.id.startswith("integrated-bridge-rectifier-")]
+    assert any("D1" in b.component_ids for b in blocks), (
+        f"Expected an integrated-bridge-rectifier block containing D1; got: "
+        f"{[(b.id, b.component_ids) for b in blocks]}"
+    )
+

@@ -9,13 +9,13 @@
     {
       "id": "pwr_in", "type": "net",
       "name_pattern": ".*",
-      "expected_role": "power",
+      "expected_role": ["power", "digital"],
       "required": true
     },
     {
       "id": "pwr_out", "type": "net",
       "name_pattern": ".*",
-      "expected_role": "power",
+      "expected_role": ["power", "digital"],
       "required": true
     },
     {

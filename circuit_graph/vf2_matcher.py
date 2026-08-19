@@ -8,7 +8,7 @@ large boards cannot hang the recognizer.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
 import networkx as nx
@@ -46,6 +46,46 @@ class MatchResult:
     aborted: bool = False
     duration_seconds: float = 0.0
     message: str = ""
+
+
+def _optional_pin_keepsets(
+    optional_pins: list[tuple[str, str]],
+) -> list[set[tuple[str, str]]]:
+    """All subsets of the optional pins — one per template variant.
+
+    A pin is identified by ``(component_id, pin_number)``. With ``n`` optional
+    pins the template is matched against ``2**n`` variants, so keep the count
+    small (1-2) in practice.
+    """
+    keepsets: list[set[tuple[str, str]]] = []
+    for mask in range(1 << len(optional_pins)):
+        keep = {
+            optional_pins[i] for i in range(len(optional_pins)) if mask & (1 << i)
+        }
+        keepsets.append(keep)
+    return keepsets
+
+
+def _concretize_template(
+    template: PrimitiveTemplate,
+    keep_optional: set[tuple[str, str]],
+) -> PrimitiveTemplate:
+    """Return a copy of ``template`` keeping only the selected optional pins.
+
+    ``keep_optional`` maps ``(component_id, pin_number)`` of the pins that must
+    stay in the variant; all other ``optional`` pins are dropped. The copy is
+    re-validated through ``__post_init__`` so the signal-to-component index is
+    rebuilt for the reduced pin set.
+    """
+    components = []
+    for comp in template.components:
+        pins = [
+            pin
+            for pin in comp.pins
+            if not pin.optional or (comp.id, pin.number) in keep_optional
+        ]
+        components.append(replace(comp, pins=pins))
+    return replace(template, components=components)
 
 
 def _node_match_circuit_to_primitive(
@@ -197,30 +237,76 @@ class Vf2TopologyMatcher:
     ) -> MatchResult:
         """Find all embeddings of ``template`` in the circuit.
 
+        Templates with ``optional`` pins are matched once per pin-combination
+        variant (e.g. a crystal shield pin that may or may not be grounded):
+        each variant is a concrete template where some optional pins are kept,
+        so induced-subgraph semantics still apply per variant. Duplicate
+        matches across variants are collapsed.
+
         Returns a :class:`MatchResult`.  If the matcher exceeds
         ``timeout_seconds`` it returns with ``aborted=True`` and zero matches.
         """
         start = time.perf_counter()
+        deadline = start + timeout_seconds
+
+        optional_pins = [
+            (comp.id, pin.number)
+            for comp in template.components
+            for pin in comp.pins
+            if pin.optional
+        ]
+        if not optional_pins:
+            variants = [template]
+        else:
+            variants = [
+                _concretize_template(template, keep)
+                for keep in _optional_pin_keepsets(optional_pins)
+            ]
+
+        matches: list[TopologyMatch] = []
+        seen: set[tuple[tuple[str, str], ...]] = set()
+        for variant in variants:
+            result = self._match_variant(variant, deadline, score_fn)
+            if result.aborted:
+                return MatchResult(
+                    matches=[],
+                    aborted=True,
+                    duration_seconds=time.perf_counter() - start,
+                    message=result.message,
+                )
+            for match in result.matches:
+                key = (
+                    tuple(sorted(match.component_mapping.items())),
+                    tuple(sorted(match.signal_mapping.items())),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                matches.append(match)
+
+        return MatchResult(
+            matches=matches,
+            aborted=False,
+            duration_seconds=time.perf_counter() - start,
+        )
+
+    def _match_variant(
+        self,
+        template: PrimitiveTemplate,
+        deadline: float,
+        score_fn: Callable[[TopologyMatch], float] | None,
+    ) -> MatchResult:
+        """Match a single concrete (optional pins already resolved) template."""
         primitive_graph = primitive_to_bipartite_graph(template)
 
         # Early pruning: reject primitives larger than the circuit.
         if len(primitive_graph) > len(self.circuit_graph):
-            return MatchResult(
-                matches=[],
-                aborted=False,
-                duration_seconds=time.perf_counter() - start,
-                message="primitive larger than circuit",
-            )
+            return MatchResult(matches=[], aborted=False, duration_seconds=0.0)
 
         # Pre-filter candidate roots by component type/label.
         root_candidates = self._candidate_components(template)
         if not root_candidates:
-            return MatchResult(
-                matches=[],
-                aborted=False,
-                duration_seconds=time.perf_counter() - start,
-                message="no candidate root components",
-            )
+            return MatchResult(matches=[], aborted=False, duration_seconds=0.0)
 
         def node_match(
             circuit_node_attrs: dict[str, Any],
@@ -239,7 +325,6 @@ class Vf2TopologyMatcher:
         )
 
         matches: list[TopologyMatch] = []
-        deadline = start + timeout_seconds
 
         # To honour the timeout we iterate manually instead of calling
         # subgraph_isomorphisms_iter() in a tight loop.
@@ -249,8 +334,8 @@ class Vf2TopologyMatcher:
                     return MatchResult(
                         matches=[],
                         aborted=True,
-                        duration_seconds=time.perf_counter() - start,
-                        message=f"timeout after {timeout_seconds}s",
+                        duration_seconds=0.0,
+                        message="timeout",
                     )
                 match = self._convert_mapping(mapping, template)
                 if match is not None:
@@ -261,16 +346,11 @@ class Vf2TopologyMatcher:
             return MatchResult(
                 matches=[],
                 aborted=True,
-                duration_seconds=time.perf_counter() - start,
+                duration_seconds=0.0,
                 message=f"matcher error: {exc}",
             )
 
-        duration = time.perf_counter() - start
-        return MatchResult(
-            matches=matches,
-            aborted=False,
-            duration_seconds=duration,
-        )
+        return MatchResult(matches=matches, aborted=False, duration_seconds=0.0)
 
     def _candidate_components(self, template: PrimitiveTemplate) -> set[str]:
         """Return circuit component ids that could anchor a match.
@@ -278,7 +358,12 @@ class Vf2TopologyMatcher:
         A candidate must share at least one device-kind label with a required
         primitive component.
         """
-        required_types = {comp.type.lower() for comp in template.components if comp.required}
+        required_types: set[str] = set()
+        for comp in template.components:
+            if not comp.required:
+                continue
+            accepted = (comp.type,) if isinstance(comp.type, str) else comp.type
+            required_types.update(t.lower() for t in accepted)
         return {
             comp.id
             for comp in self.component_map.values()

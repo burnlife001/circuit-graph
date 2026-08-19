@@ -100,10 +100,16 @@ class PrimitiveSignal:
 
 @dataclass(frozen=True)
 class PrimitivePin:
-    """A pin on a primitive component and the signal/net it must connect to."""
+    """A pin on a primitive component and the signal/net it must connect to.
+
+    ``optional`` pins are not strictly required: the matcher tries the
+    template both with and without them (e.g. a 4-pin crystal whose shield
+    pin may or may not be tied to ground).
+    """
 
     number: str
     net: str
+    optional: bool = False
 
 
 @dataclass(frozen=True)
@@ -111,7 +117,7 @@ class PrimitiveComponent:
     """A component signature inside a primitive template."""
 
     id: str
-    type: str
+    type: str | tuple[str, ...]
     required: bool = True
     value_pattern: str | None = None
     pins: list[PrimitivePin] = field(default_factory=list)
@@ -134,6 +140,25 @@ class PrimitiveScoring:
 
 
 @dataclass(frozen=True)
+class DesignInput:
+    """A numeric input the designer must supply to instantiate the primitive."""
+
+    id: str
+    label: str | None = None
+    unit: str | None = None
+    default: str | float | None = None
+
+
+@dataclass(frozen=True)
+class RecommendedPart:
+    """A concrete part suggestion for a primitive component."""
+
+    pn: str
+    footprint: str | None = None
+    notes: str | None = None
+
+
+@dataclass(frozen=True)
 class PrimitiveTemplate:
     """In-memory representation of a primitive JSON template."""
 
@@ -147,6 +172,9 @@ class PrimitiveTemplate:
     constraints: PrimitiveConstraints
     scoring: PrimitiveScoring
     raw: dict[str, Any]
+    design_inputs: list[DesignInput] = field(default_factory=list)
+    parameters: dict[str, str] = field(default_factory=dict)
+    recommended_parts: dict[str, list[RecommendedPart]] = field(default_factory=dict)
     _signal_to_components: dict[str, list[str]] = field(
         default_factory=dict, repr=False, compare=False
     )
@@ -206,6 +234,9 @@ def _parse_primitive(raw: dict[str, Any]) -> PrimitiveTemplate:
     components = [_parse_component(c, signals) for c in raw.get("components", [])]
     constraints = _parse_constraints(raw.get("constraints", {}))
     scoring = _parse_scoring(raw.get("scoring", {}))
+    design_inputs = _parse_design_inputs(raw.get("design_inputs", []))
+    parameters = _parse_parameters(raw.get("parameters", {}), components)
+    recommended_parts = _parse_recommended_parts(raw.get("recommended_parts", {}), components)
 
     return PrimitiveTemplate(
         id=raw["id"],
@@ -217,6 +248,9 @@ def _parse_primitive(raw: dict[str, Any]) -> PrimitiveTemplate:
         components=components,
         constraints=constraints,
         scoring=scoring,
+        design_inputs=design_inputs,
+        parameters=parameters,
+        recommended_parts=recommended_parts,
         raw=raw,
     )
 
@@ -271,6 +305,24 @@ def _parse_role(value: Any) -> str | tuple[str, ...] | None:
     )
 
 
+def _parse_component_type(value: Any) -> str | tuple[str, ...]:
+    """Normalize component ``type``: str -> str, non-empty list -> tuple."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        if not value:
+            raise PrimitiveValidationError("component type list must not be empty")
+        for item in value:
+            if not isinstance(item, str):
+                raise PrimitiveValidationError(
+                    f"component type entries must be strings, got {type(item).__name__}"
+                )
+        return tuple(value)
+    raise PrimitiveValidationError(
+        f"component type must be a string or list of strings, got {type(value).__name__}"
+    )
+
+
 def _parse_component(raw: dict[str, Any], signals: list[PrimitiveSignal]) -> PrimitiveComponent:
     _require_keys(raw, {"id", "type", "pins"})
     valid_signals = {s.id for s in signals}
@@ -280,10 +332,16 @@ def _parse_component(raw: dict[str, Any], signals: list[PrimitiveSignal]) -> Pri
             raise PrimitiveValidationError(f"Invalid pin definition: {p!r}")
         if p["net"] not in valid_signals:
             raise PrimitiveValidationError(f"Pin references undefined signal '{p['net']}'")
-        pins.append(PrimitivePin(number=str(p["number"]), net=p["net"]))
+        pins.append(
+            PrimitivePin(
+                number=str(p["number"]),
+                net=p["net"],
+                optional=p.get("optional", False),
+            )
+        )
     return PrimitiveComponent(
         id=raw["id"],
-        type=raw["type"],
+        type=_parse_component_type(raw["type"]),
         required=raw.get("required", True),
         value_pattern=raw.get("value_pattern"),
         pins=pins,
@@ -302,6 +360,82 @@ def _parse_scoring(raw: dict[str, Any]) -> PrimitiveScoring:
         weights=raw.get("weights", {}),
         thresholds=raw.get("thresholds", {}),
     )
+
+
+_PARAM_KEY_RE = re.compile(r"^([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)$")
+
+
+def _parse_design_inputs(raw: Any) -> list[DesignInput]:
+    if not isinstance(raw, list):
+        raise PrimitiveValidationError("design_inputs must be a list")
+    inputs: list[DesignInput] = []
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            raise PrimitiveValidationError(f"Invalid design_input entry: {item!r}")
+        inputs.append(
+            DesignInput(
+                id=item["id"],
+                label=item.get("label"),
+                unit=item.get("unit"),
+                default=item.get("default"),
+            )
+        )
+    return inputs
+
+
+def _parse_parameters(raw: Any, components: list[PrimitiveComponent]) -> dict[str, str]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise PrimitiveValidationError("parameters must be an object")
+    comp_ids = {c.id for c in components}
+    params: dict[str, str] = {}
+    for key, expr in raw.items():
+        m = _PARAM_KEY_RE.match(key)
+        if not m or m.group(1) not in comp_ids:
+            raise PrimitiveValidationError(
+                f"Parameter key {key!r} must be '<ComponentId>.<field>' "
+                f"referencing a known component"
+            )
+        if not isinstance(expr, str) or not expr.strip():
+            raise PrimitiveValidationError(f"Parameter {key!r} must be a non-empty string")
+        params[key] = expr
+    return params
+
+
+def _parse_recommended_parts(
+    raw: Any, components: list[PrimitiveComponent]
+) -> dict[str, list[RecommendedPart]]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise PrimitiveValidationError("recommended_parts must be an object")
+    comp_ids = {c.id for c in components}
+    parts: dict[str, list[RecommendedPart]] = {}
+    for comp_id, entries in raw.items():
+        if comp_id not in comp_ids:
+            raise PrimitiveValidationError(
+                f"recommended_parts key {comp_id!r} references an unknown component"
+            )
+        if not isinstance(entries, list) or not entries:
+            raise PrimitiveValidationError(
+                f"recommended_parts[{comp_id!r}] must be a non-empty list"
+            )
+        parsed: list[RecommendedPart] = []
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get("pn"), str):
+                raise PrimitiveValidationError(
+                    f"Invalid recommended part entry for {comp_id!r}: {entry!r}"
+                )
+            parsed.append(
+                RecommendedPart(
+                    pn=entry["pn"],
+                    footprint=entry.get("footprint"),
+                    notes=entry.get("notes"),
+                )
+            )
+        parts[comp_id] = parsed
+    return parts
 
 
 def _require_keys(raw: dict[str, Any], keys: set[str]) -> None:
@@ -396,7 +530,7 @@ _DEFAULT_SIGNAL_PATTERNS: dict[str, tuple[str, ...]] = {
     "ac1":       (r"^Net.*_1$", r"^AC\d?$", r"^A$"),
     "ac2":       (r"^Net.*_2$", r"^AC\d?$", r"^B$"),
     "dc_plus":   (r"^Net.*$", r"^D\+$", r"^DC\+$", r"^V\+IN$"),
-    "dc_minus":  (r"^Net.*$", r"^D\-$", r"^DC\-$", r"^V\-IN$"),
+    "dc_minus":  (r"^Net.*$", r"^D\-$", r"^DC\-$", r"^V\-IN$", r".+\-$"),
     "xtal_p":    (r"^Net.*$", r"^XT.*P$", r"^XI$", r"^XIN$"),
     "xtal_n":    (r"^Net.*$", r"^XT.*N$", r"^XO$", r"^XOUT$"),
 
@@ -438,9 +572,16 @@ def signal_name_matches(
     return False
 
 
-def component_type_matches(expected: str, comp: Component) -> bool:
-    """Check whether ``comp``'s device kind matches ``expected``."""
-    return comp.device_kind.value.lower() == expected.lower()
+def component_type_matches(expected: str | tuple[str, ...], comp: Component) -> bool:
+    """Check whether ``comp``'s device kind matches ``expected``.
+
+    ``expected`` may be a single type string or a tuple of accepted types;
+    the component matches when its kind equals any accepted type
+    (case-insensitive).
+    """
+    accepted = (expected,) if isinstance(expected, str) else expected
+    kind = comp.device_kind.value.lower()
+    return any(kind == t.lower() for t in accepted)
 
 
 def component_value_matches(pattern: str | None, comp: Component) -> bool:

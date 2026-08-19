@@ -6,9 +6,9 @@
   "role": "power",
   "version": "0.1.0",
   "signals": [
-    {"id": "ac1",     "type": "net", "name_pattern": "(AC|AC1|AC_L|AC_N|L|N)$", "required": true},
-    {"id": "ac2",     "type": "net", "name_pattern": "(AC|AC2|AC_L|AC_N|L|N)$", "required": true},
-    {"id": "dc_plus", "type": "net", "name_pattern": "(VDC|\\+V|DC\\+|VOUT|VBUS|\\+DC).*", "required": true},
+    {"id": "ac1",     "type": "net", "name_pattern": "^(AC\\d*|AC_L|AC_N|L|N)$", "required": true},
+    {"id": "ac2",     "type": "net", "name_pattern": "^(AC\\d*|AC_L|AC_N|L|N)$", "required": true},
+    {"id": "dc_plus", "type": "net", "name_pattern": "(VDC|\\+V|DC\\+|VOUT|VBUS|\\+DC|^\\d+V).*", "required": true},
     {"id": "dc_minus","type": "net", "name_pattern": "^(GND|PGND|VSS|DC\\-)$", "required": true}
   ],
   "components": [

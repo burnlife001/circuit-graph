@@ -41,7 +41,12 @@
         "required": ["id", "type", "pins"],
         "properties": {
           "id": {"type": "string"},
-          "type": {"type": "string"},
+          "type": {
+            "oneOf": [
+              {"type": "string"},
+              {"type": "array", "items": {"type": "string"}, "minItems": 1}
+            ]
+          },
           "required": {"type": "boolean", "default": true},
           "value_pattern": {"type": ["string", "null"]},
           "pins": {
@@ -51,7 +56,8 @@
               "required": ["number", "net"],
               "properties": {
                 "number": {"type": ["string", "integer"]},
-                "net": {"type": "string"}
+                "net": {"type": "string"},
+                "optional": {"type": "boolean", "default": false}
               }
             }
           }
@@ -70,6 +76,39 @@
       "properties": {
         "weights": {"type": "object"},
         "thresholds": {"type": "object"}
+      }
+    },
+    "design_inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": {"type": "string"},
+          "label": {"type": "string"},
+          "unit": {"type": "string"},
+          "default": {"type": ["number", "string"]}
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "recommended_parts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": ["pn"],
+          "properties": {
+            "pn": {"type": "string"},
+            "footprint": {"type": "string"},
+            "notes": {"type": "string"}
+          }
+        }
       }
     }
   }

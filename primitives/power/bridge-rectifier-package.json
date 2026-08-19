@@ -1,0 +1,30 @@
+{
+  "$schema": "./schema.json",
+  "id": "bridge-rectifier-package",
+  "name": "桥堆整流器（封装确认）",
+  "description": "封装已确认的集成桥堆（footprint 含 BRIDGE，如 GBJ1510/MB10S）：4 引脚器件跨接 2 路交流输入与正负直流母线。net 命名不限——AC 前端常由 Protel 自动命名（NetBRG1_*），但封装证据足以定性；前端通常伴随保险丝、压敏电阻（CNR/MOV）、Y 电容。与 integrated-bridge-rectifier 互补：那个靠 L/N/AC* 命名特征识别未确认封装的器件。",
+  "role": "power",
+  "version": "0.1.0",
+  "signals": [
+    {"id": "ac_l",    "type": "net", "name_pattern": ".*", "required": true},
+    {"id": "ac_n",    "type": "net", "name_pattern": ".*", "required": true},
+    {"id": "dc_plus", "type": "net", "name_pattern": ".*", "required": true},
+    {"id": "dc_minus","type": "net", "name_pattern": ".*", "required": true}
+  ],
+  "components": [
+    {
+      "id": "BD", "type": "BridgeRectifier", "required": true,
+      "pins": [
+        {"number": "1", "net": "ac_l"},
+        {"number": "2", "net": "ac_n"},
+        {"number": "3", "net": "dc_plus"},
+        {"number": "4", "net": "dc_minus"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.40, "naming": 0.30, "parametric": 0.10, "type": 0.20},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

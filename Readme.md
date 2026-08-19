@@ -20,10 +20,12 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
 
   **严格模式**：声明了任一 `expected_*` 的基元，circuit 边必须存在 `edge_semantic` 且值匹配；否则该基元识别为零（不是报错，是无结果）。现有未声明的基元不受影响。
 
-  当前基元清单（22 个）：完整对照表（名称 / 用途 / 严格模式字段）见 [`primitives/__index_primitives.md`](primitives/__index_primitives.md)，按 ID 字典序排列。
+  当前基元清单（24 个）：完整对照表（名称 / 用途 / 严格模式字段）见 [`primitives/__index_primitives.md`](primitives/__index_primitives.md)，按 ID 字典序排列。
   - 基元网名匹配：模板 `name_pattern` 之外，matcher 还查一份按 `signal.id` 键控的默认 fallback 表，让 Protel/Altium 自动命名（如 `NetR97_1`、`USB_5V`、`NetC82_1`）无需改任何 `.json` 也能命中。用户 pattern 命中时旁路 fallback。
+  - 基元组件 `type` 支持字符串或字符串列表（列表 = 任一命中即匹配），用于同一拓扑多种封装/命名的器件（如集成桥堆可为 Diode / BridgeRectifier / Unknown）。
+  - 基元引脚支持 `"optional": true`：matcher 按引脚子集枚举变体分别匹配（诱导子图语义在变体内仍严格），用于可接地可不接地的屏蔽脚——如 4 脚晶振的 GND 脚（`crystal-with-load-caps` 的 X1 第 4 脚）；可选引脚数控制在 1-2 个以免变体爆炸。
   - 既有 6 个：voltage-divider / non-inverting-amplifier / inverting-amplifier / differential-amplifier / parallel-termination / type-c-cc-pull-down
-  - 组 1（5 个，纯结构）：rc-low-pass / rc-high-pass / crystal-with-load-caps / bridge-rectifier / peak-envelope-detector
+  - 组 1（7 个，纯结构）：rc-low-pass / rc-high-pass / crystal-with-load-caps / bridge-rectifier / peak-envelope-detector / integrated-bridge-rectifier / bridge-rectifier-package
   - 组 2（6 个，依赖 expected_role）：pull-up-resistor / pull-down-resistor / tvs-protection / npn-low-side-switch / nmos-low-side-switch / pmos-high-side-switch
   - 组 3（5 个，依赖 expected_role + direction + level）：flyback-diode / current-shunt-monitor / fet-level-shifter / lc-pi-filter / sallen-key-low-pass
 - 元件型号知识库：**SQLite 数据库**（`circuit_graph/knowledge/circuit_graph.db`）维护 part-number → 类别 / 引脚定义 / 属性
@@ -70,6 +72,8 @@ cg view U2 fixtures/protel/FX-T268-V6-10米-5065.NET --with-comm
 # 同时附加供电 + 通信上下文
 cg view U2 fixtures/protel/FX-T268-V6-10米-5065.NET --with-all
 ```
+
+> **Protel .NET 编码自动识别**：解析器按 `UTF-8 → GBK → Latin-1` 顺序回退，无需 `--encoding` 参数。中文本地化 Altium Designer 导出的 GBK 网表（如 `fixtures/protel/M4-V8.03.NET`）也能直接 `cg view` 解析。
 
 > **`--with-power` fallback 行为**：当 focal 元件所在 rail 不是 `power_tree_recognizer` 已登记的输入源（USB / BAT / VIN / 排针等）或下游稳压器时，`power_context` 给出明确 fallback：
 > ```json
@@ -384,6 +388,104 @@ circuit_graph/layout/
     ├── default.json      # 默认布局参数
     └── lm321_ccs.json    # LM321 CCS per-unit 覆盖
 ```
+
+## 布局规则校验 (cg layout-check) — 进行中
+
+`circuit_graph.layout` 把 IR *变成* 布局；`circuit_graph.layout_check` 把布局 *拿来校验*。两者并列、互不依赖——后者是 Layout 完成后由 `cg layout-check <schematic> --rules rules.schlayout` 跑的二阶段检查器。
+
+设计参考：`docs/superpowers/specs/2026-08-18-cg-layout-check-rule-engine-design.md`
+
+### 目标
+
+把 `lm321_ccs/布局.md` 的 8 节准则变成**严格执行的规则引擎**：
+
+- **规则载体** — `.schlayout` YAML 文件（schema_version: 1）
+- **二元判定** — 全部 severity=error,任意违规 exit 1
+- **机器友好** — stdout JSON,violations 都有 location (x_mm, y_mm) + context
+- **可裁剪** — 单条规则 `enabled: false` 即可跳过,不影响其它
+- **格式矩阵** — `.kicad_sch` 走全 12 条;`.NET` 仅走 §6 三条标注检查（无几何信息）
+
+### 12 个内置断言
+
+| 区域 | 规则 |
+|---|---|
+| §1 信号流 | `signal-flow-axis` |
+| §3 电源 / 地 | `power-at-top`、`gnd-at-bottom`、`power-layer-hierarchy`、`single-star-point` |
+| §5 元件对齐 | `same-orientation`、`grid-alignment`、`decoup-near-ic-power-pin` |
+| §6 标注 | `designator-present`、`value-present`、`signal-name-on-net` |
+| §4 走线 | `no-trace-through-component`(best-effort,KiCad-only) |
+
+判定边界统一为 `distance ≤ tolerance` pass、`>` fail,基类 `Assertion` 的 docstring 已固化。
+
+### 当前进度（feat/cg-layout-check 分支）
+
+| 阶段 | 状态 | 落地物 |
+|---|---|---|
+| Scaffold (`__init__.py`、`model.py`、`assertions/base.py`) | ✅ Batch 1 | 9 个 dataclass + 12 内置断言 kind 常量 + `refdes_prefix` / `match_glob` / `passes_or_violates` helper |
+| `.schlayout` 加载器 (`loader.py`) | ✅ Batch 1 | 6 种 `LayoutCheckError`(rules_file_not_found、yaml_parse_error、schema_version_mismatch、unknown_assert_kind、duplicate_rule_id、schematic_parse_error),9 个 pytest 全绿 |
+| KiCad / Protel parser | ✅ Batch 2 | `circuit_graph/parsers/kicad_sch.py` 对真 lm321 fixture 抽 14 components / 29 wires / 5 nets;`layout_check/protel_adapter.py` 对真 FX-T268 抽 207 components / 118 nets / 0 wires;`layout_check/parsers.py` dispatch 按扩展名分派,大小写不敏感 |
+| §6 标注断言(`annotation.py`) | ✅ Batch 3 | `DesignatorPresent` / `ValuePresent` / `SignalNameOnNet` 三条;12 个 pytest 全绿 |
+| §5 对齐断言(`alignment.py`) | ✅ Batch 3 | `SameOrientation`(rot 跨度 ≤ tolerance_deg pass)/ `GridAlignment`(用 `pos − round(pos/grid)×grid` 处理负坐标,1µm 容差);10 个 pytest 全绿;`SameOrientation` 在 lm321 fixture 上因 kicad-sch-api 不暴露 rotation_deg 而 vacuous-pass,前向兼容 |
+| §5 去耦断言(`decoupling.py`) | ✅ Batch 4 | `DecoupNearIcPowerPin` 用 `100nF` 默认阈值挑选 cap,取最近 IC power pin 距离 ≤ `max_distance_mm`;13 个 pytest 全绿;cap value parser 加 IEEE-754 noise fix(round to 12 dp)防 100nF 在阈值边界被误拒 |
+| §3 电源断言(`power.py`) | ✅ Batch 4 | `PowerAtTop`(默认 page_height=210mm,Y-up 大 y 算顶部)/ `PowerLayerHierarchy`(解析 `5V`/`3V3`/`5V0`/`+12V` 电压后缀,y-带重叠 ≤ tolerance pass);11 个 pytest 全绿 |
+| §3 地线断言(`ground.py`) | ✅ Batch 4 | `GndAtBottom` 与 `PowerAtTop` 镜像(y ≤ tolerance 算底部)/ `SingleStarPoint`(AGND/DGND 收敛到一点,median 收 max_merge_distance);10 个 pytest 全绿 |
+| §1 信号流(`flow.py`) | ✅ Batch 5 | `SignalFlowAxis`:input vs output 中位数,`axis` 默认 `x`,`delta < 0` 触发(distance-pass ≤ tolerance),使用 `statistics.median`;8 个 pytest 全绿 |
+| §4 走线断言(`routing.py`) | ✅ Batch 5 | `NoTraceThroughComponent`:wire 段到 comp 点距离用 `_point_to_segment_distance`;**反向** boundary(`d ≥ tolerance → PASS`),tolerance 是 component 周围 buffer,`<= tolerance` 也算越界;7 个 pytest 全绿 |
+| LayoutChecker orchestrator(`checker.py`) | ✅ Batch 5 | 注册 12 个内置断言为单例,加载 `.schlayout` → 派 dispatcher → 跑断言 → JSON report;`summary` 含 `rules_total`/`rules_evaluated`/`rules_skipped_disabled`/`rules_skipped_unsupported_input`/`violations`/`checked_components`/`checked_nets`/`duration_ms`;`baseline_signature` round coord 到 1µm;baseline / diff-baseline 支持;14 个 pytest 全绿 |
+| `cg layout-check` CLI + 默认规则 | ✅ Batch 6 | 新增 `cg layout-check <schematics...>` 子命令,exit code 严格 0/1/2(全 pass / 违规 / 配置错);stdout 仅 JSON,stderr 可选 verbose 进度;`--rules` 默认 `fixtures/rules/default.schlayout`,`--baseline` / `--diff-baseline` round-trip 锁定 1µm noise;`fixtures/rules/default.schlayout` 含 12 条规则(2 关闭:`same-orientation` 因 kicad-sch-api 不暴露 rotation,`signal-flow-axis` 因 input/output prefix 视设计而定);`test_cli.py` 11 个 + `test_integration.py` 3 个 + `test_integration.snapshot.json` 锁 `lm321_ccs/1A_CCS_LM321_BJT.kicad_sch` 上违规数 = 15 |
+
+直接调用 loader：
+
+```python
+from pathlib import Path
+from circuit_graph.layout_check.loader import load_rules
+
+rules = load_rules(Path("fixtures/rules/default.schlayout"))
+# 返回 list[RuleSpec];失败抛 LayoutCheckError(kind=..., message=...)
+```
+
+CLI 范例：
+
+```powershell
+# 全套默认规则跑一遍真 schematic
+uv run cg layout-check lm321_ccs/1A_CCS_LM321_BJT.kicad_sch
+# exit 1,有 15 violations(stdout 是 JSON,详细 location+context)
+
+# 把当前违规存为基线
+uv run cg layout-check lm321_ccs/1A_CCS_LM321_BJT.kicad_sch --baseline output/baseline.json
+
+# 后续只对新违规报错
+uv run cg layout-check lm321_ccs/1A_CCS_LM321_BJT.kicad_sch --diff-baseline output/baseline.json
+
+# 一次性跑多个文件(NDJSON 风格,exit code 是所有 sub-result 的 max)
+uv run cg layout-check lm321_ccs/*.kicad_sch
+```
+
+直接调用 loader：
+
+```python
+from pathlib import Path
+from circuit_graph.layout_check.loader import load_rules
+
+rules = load_rules(Path("fixtures/rules/default.schlayout"))
+# 返回 list[RuleSpec];失败抛 LayoutCheckError(kind=..., message=...)
+```
+
+## 设计输出（design output）
+
+`primitives/` 拓扑模板除识别外，还可用作**参数化设计宏**：给定规格，实例化出具体电路并反向写出 Protel .NET 网表。
+
+```bash
+# 1. 写规格文件 spec.json
+#    {"inputs": {"vin": 12, "vout": 5}}   # 其余可选：nets / designators / start_index
+# 2. 实例化
+cg design voltage-divider --spec spec.json -o divider.NET
+# 3. 输出 IR JSON（调试用）
+cg design voltage-divider --spec spec.json --json -o divider.json
+```
+
+- 支持的设计字段（向后兼容，不影响识别）：`design_inputs`（必填规格项，可带默认值）、`parameters`（`"<组件>.value"` → 四则表达式，可引用设计输入或其他参数）、`recommended_parts`（选型建议：型号 + footprint）。
+- 目前仅 `voltage-divider` 落地 design 字段；其余模板可照 `primitives/power/voltage-divider.json` 补写。
 
 ## 人性化观察
 
