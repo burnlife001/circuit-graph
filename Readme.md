@@ -33,6 +33,7 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
 - PDF 数据手册引脚提取：Camelot lattice 模式自动搜索引脚表页面，提取 `{引脚号: 引脚名}` 映射
 - 供电上下文（`cg view --with-power`）：从 USB / 电池 / 排针 → 稳压器 → 负载
 - 通信上下文（`cg view --with-comm`）：检测 I2C / UART / SPI / PWM 总线
+- 功能块上下文（`cg view --with-blocks`）：列出覆盖 ego 图元件的 FunctionalBlock（含置信度与得分），回答"这个元件属于哪个功能电路"
 - 生成 cg-graph JSON（v2.1）：含 `part_number`、`circuit.rails`、每条 net 带 `degree`
 - 生成单个元件的 ego-subgraph 视图（默认 2 hops，可调；高扇出轨线不下钻）
 - 导出 yEd 兼容 GraphML
@@ -70,7 +71,10 @@ cg view U2 fixtures/protel/FX-T268-V6-10米-5065.NET --with-power
 # 在 view 输出中附加通信总线上下文
 cg view U2 fixtures/protel/FX-T268-V6-10米-5065.NET --with-comm
 
-# 同时附加供电 + 通信上下文
+# 在 view 输出中附加功能块归属（哪些 FunctionalBlock 覆盖了 ego 图内的元件）
+cg view R100 fixtures/protel/FX-T268-V6-10米-5065.NET --with-blocks
+
+# 同时附加供电 + 通信 + 功能块上下文
 cg view U2 fixtures/protel/FX-T268-V6-10米-5065.NET --with-all
 ```
 
@@ -574,7 +578,8 @@ CLI 命令速查：
 | `cg view <id> <file> [--hops N] [--pretty]` | 元件 ego-subgraph（默认 2 hops） |
 | `cg view <id> <file> --with-power` | 附加供电上下文 |
 | `cg view <id> <file> --with-comm` | 附加通信总线上下文 |
-| `cg view <id> <file> --with-all` | 同时附加供电 + 通信上下文 |
+| `cg view <id> <file> --with-blocks` | 附加功能块归属（覆盖 ego 图元件的 FunctionalBlock 列表） |
+| `cg view <id> <file> --with-all` | 同时附加供电 + 通信 + 功能块上下文 |
 | `cg erc check <schematic> [--engine native\|kicad]` | ERC 检查（默认原生引擎，4 个 validator） |
 | `cg kb init` | 初始化 / 升级 SQLite 知识库 |
 | `cg kb lookup <part_number>` | 查询元件 + 引脚 + 属性（含 `pin_source`） |

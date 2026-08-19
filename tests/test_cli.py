@@ -119,6 +119,47 @@ def test_cli_view_with_all(runner: CliRunner, tmp_path: Path) -> None:
     data = json.loads(result.output)
     assert "power_context" in data
     assert "comm_context" in data
+    assert "blocks" in data
+
+
+def test_cli_view_with_blocks(runner: CliRunner) -> None:
+    """--with-blocks lists functional blocks touching the ego subgraph."""
+    fixture = FIXTURE_DIR / "FX-T268-V6-10米-5065.NET"
+    if not fixture.exists():
+        pytest.skip(f"Fixture not found: {fixture}")
+
+    # R100 is the feedback resistor of the U7 (LM321) amplifier stage.
+    result = runner.invoke(main, ["view", "R100", str(fixture), "--with-blocks"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    blocks = {b["id"]: b for b in data["blocks"]}
+    assert "inverting-amplifier-u7" in blocks
+    assert {"R100", "R101", "U7"} <= set(blocks["inverting-amplifier-u7"]["component_ids"])
+    assert "voltage-divider-r100" in blocks
+
+
+def test_cli_view_without_blocks_flag_omits_context(runner: CliRunner) -> None:
+    fixture = FIXTURE_DIR / "FX-T268-V6-10米-5065.NET"
+    if not fixture.exists():
+        pytest.skip(f"Fixture not found: {fixture}")
+
+    result = runner.invoke(main, ["view", "R100", str(fixture)])
+    data = json.loads(result.output)
+    assert "blocks" not in data
+
+
+def test_cli_view_with_blocks_empty_when_unrecognised(runner: CliRunner) -> None:
+    """A component with no recognised blocks gets an empty list, not a missing key."""
+    fixture = FIXTURE_DIR / "433_RX.NET"
+    if not fixture.exists():
+        pytest.skip(f"Fixture not found: {fixture}")
+
+    # E1 is the 433MHz antenna pin header; no primitive covers it.  hops=0
+    # keeps the ego to E1 alone so no neighbourhood block spills in.
+    result = runner.invoke(main, ["view", "E1", str(fixture), "--hops", "0", "--with-blocks"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["blocks"] == []
 
 
 def test_cli_view_component_not_on_power_net(runner: CliRunner) -> None:

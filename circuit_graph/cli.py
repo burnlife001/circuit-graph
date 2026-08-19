@@ -2,10 +2,11 @@
 
 `cg view` is the single entry-point for circuit understanding: it returns a
 scoped ego-subgraph for a focal component, optionally annotated with the
-component's power-supply context (--with-power) and/or communication-bus
-context (--with-comm).  The legacy `cg power` / `cg comm` top-level commands
-were removed in favour of these flags — the underlying modules remain
-available programmatically.
+component's power-supply context (--with-power), communication-bus
+context (--with-comm) and/or the functional blocks touching the ego
+subgraph (--with-blocks).  The legacy `cg power` / `cg comm` top-level
+commands were removed in favour of these flags — the underlying modules
+remain available programmatically.
 """
 
 from __future__ import annotations
@@ -95,9 +96,14 @@ def export_graph(file: Path, output: Path, pretty: bool) -> None:
     help="Include `comm_context` describing the focal component's communication buses.",
 )
 @click.option(
+    "--with-blocks",
+    is_flag=True,
+    help="Include `blocks` listing functional blocks that touch the ego subgraph.",
+)
+@click.option(
     "--with-all",
     is_flag=True,
-    help="Shorthand for --with-power --with-comm.",
+    help="Shorthand for --with-power --with-comm --with-blocks.",
 )
 def view(
     designator: str,
@@ -106,16 +112,19 @@ def view(
     pretty: bool,
     with_power: bool,
     with_comm: bool,
+    with_blocks: bool,
     with_all: bool,
 ) -> None:
     """Output a scoped ego-subgraph for a single component.
 
-    Pass --with-power and/or --with-comm to enrich the output JSON with the
-    focal component's power-supply path and communication-bus participation.
+    Pass --with-power, --with-comm and/or --with-blocks to enrich the output
+    JSON with the focal component's power-supply path, communication-bus
+    participation and recognised functional blocks.
     """
     if with_all:
         with_power = True
         with_comm = True
+        with_blocks = True
 
     ir = _parse_and_enrich(file)
     db = ComponentDatabase.default()
@@ -132,6 +141,8 @@ def view(
         ctx = _build_comm_context(ir, designator)
         if ctx is not None:
             result["comm_context"] = ctx
+    if with_blocks:
+        result["blocks"] = _build_blocks_context(ir, result)
 
     output = json.dumps(result, indent=2 if pretty else None, ensure_ascii=False)
     sys.stdout.buffer.write(output.encode("utf-8"))
@@ -749,6 +760,32 @@ def _build_comm_context(ir: CircuitIR, designator: str) -> dict[str, object] | N
     if not buses:
         return None
     return {"buses": buses}
+
+
+def _build_blocks_context(ir: CircuitIR, view_result: dict[str, object]) -> list[dict[str, object]]:
+    """Return functional blocks that touch the ego subgraph in ``view_result``.
+
+    A block is included when at least one of its components appears in the
+    view's component set, so the focal component's block membership plus any
+    blocks spilling into the neighbourhood are both surfaced.  The list is
+    empty (not absent) when nothing was recognised — callers always get the
+    key when ``--with-blocks`` is passed.
+    """
+    ego_components = set(view_result.get("components", {}))
+    blocks: list[dict[str, object]] = []
+    for block in ir.blocks:
+        if not ego_components.intersection(block.component_ids):
+            continue
+        blocks.append(
+            {
+                "id": block.id,
+                "name": block.name,
+                "role": block.role.value,
+                "component_ids": list(block.component_ids),
+                "description": block.description,
+            }
+        )
+    return blocks
 
 
 # ---------------------------------------------------------------------------
