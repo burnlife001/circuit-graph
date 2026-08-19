@@ -197,6 +197,10 @@ def _match_signal_semantics(
     return True
 
 
+class _DeadlineExceeded(Exception):
+    """Raised inside semantic_feasibility to abort the VF2 iterator."""
+
+
 class _SemanticGraphMatcher(GraphMatcher):
     """GraphMatcher that enforces primitive expected_* semantics during VF2.
 
@@ -205,6 +209,10 @@ class _SemanticGraphMatcher(GraphMatcher):
     is the hook NetworkX calls every time it considers extending the mapping;
     it has access to ``self.core_1`` / ``self.core_2`` (the partial mapping),
     which lets us validate edge semantics at each step and prune early.
+
+    ``deadline`` (perf_counter epoch) is checked on every feasibility call so
+    the VF2 iterator terminates promptly even when the generator does not
+    yield for a long stretch (the caller-side check alone is not enough).
     """
 
     def __init__(
@@ -214,18 +222,39 @@ class _SemanticGraphMatcher(GraphMatcher):
         *,
         template: PrimitiveTemplate,
         edge_semantics: dict[tuple[str, str], dict[str, Any]],
+        deadline: float,
         node_match: Callable[[dict[str, Any], dict[str, Any]], bool] | None = None,
     ):
         super().__init__(circuit_graph, primitive_graph, node_match=node_match)
         self._template = template
         self._edge_semantics = edge_semantics
+        self._deadline = deadline
 
     def semantic_feasibility(self, G1_node: str, G2_node: str) -> bool:  # noqa: N803
+        if time.perf_counter() > self._deadline:
+            raise _DeadlineExceeded()
         if not super().semantic_feasibility(G1_node, G2_node):
             return False
         # G1 = circuit graph, G2 = primitive graph (NetworkX convention).
         prim_attrs = self.G2.nodes[G2_node]
-        if prim_attrs.get("kind") != "net":
+        kind = prim_attrs.get("kind")
+
+        # Component-pin consistency: all pins of a template component must map
+        # to pins of the same circuit component. Without this check VF2 can
+        # explore cross-component pin assignments and blow up the search space.
+        if kind == "component":
+            prim_comp_id = G2_node[2:].rsplit(":", 1)[0]
+            circ_comp_id = G1_node[2:].rsplit(":", 1)[0]
+            # core_2: primitive node -> circuit node
+            for other_prim_node, other_circ_node in self.core_2.items():
+                if not other_prim_node.startswith(f"c:{prim_comp_id}:"):
+                    continue
+                other_circ_comp_id = other_circ_node[2:].rsplit(":", 1)[0]
+                if other_circ_comp_id != circ_comp_id:
+                    return False
+            return True
+
+        if kind != "net":
             return True
         prim_signal: PrimitiveSignal = prim_attrs["data"]
         if (
@@ -359,13 +388,16 @@ class Vf2TopologyMatcher:
             primitive_graph,
             template=template,
             edge_semantics=self._edge_semantics,
+            deadline=deadline,
             node_match=node_match,
         )
 
         matches: list[TopologyMatch] = []
 
         # To honour the timeout we iterate manually instead of calling
-        # subgraph_isomorphisms_iter() in a tight loop.
+        # subgraph_isomorphisms_iter() in a tight loop. The deadline is also
+        # enforced inside semantic_feasibility via _DeadlineExceeded so the
+        # generator aborts even when no mapping is being yielded.
         try:
             for mapping in gm.subgraph_isomorphisms_iter():
                 if time.perf_counter() > deadline:
@@ -380,6 +412,13 @@ class Vf2TopologyMatcher:
                     if score_fn is not None:
                         match = self._score_match(match, score_fn)
                     matches.append(match)
+        except _DeadlineExceeded:
+            return MatchResult(
+                matches=[],
+                aborted=True,
+                duration_seconds=0.0,
+                message="timeout",
+            )
         except Exception as exc:  # pragma: no cover - defensive
             return MatchResult(
                 matches=[],
@@ -426,6 +465,11 @@ class Vf2TopologyMatcher:
                 prim_id = prim_parts[0]
                 circ_parts = circ_key[2:].rsplit(":", 1)
                 circ_id = circ_parts[0]
+                # All pins of the same template component must resolve to the
+                # same circuit component. Pin-level encoding removed this
+                # constraint, so we enforce it here.
+                if prim_id in component_mapping and component_mapping[prim_id] != circ_id:
+                    return None
                 component_mapping[prim_id] = circ_id
                 comp = self.component_map.get(circ_id)
                 if comp is not None:
