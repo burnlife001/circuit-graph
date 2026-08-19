@@ -128,6 +128,7 @@ def view(
         with_blocks = True
 
     ir = _parse_and_enrich(file)
+    designator = _canonical_designator(ir, designator)
     db = ComponentDatabase.default()
     result = view_component(ir, designator, hops=hops, db=db)
     if result is None:
@@ -524,6 +525,20 @@ def sim(
 # Shared helpers
 
 
+def _canonical_designator(ir: CircuitIR, designator: str) -> str:
+    """Resolve ``designator`` to the exact component id, case-insensitively.
+
+    Protel designators are uppercase by convention but users type ``u2b``;
+    an exact match always wins, otherwise the unique case-insensitive match
+    is used.  Returns the input unchanged when nothing matches.
+    """
+    ids = {c.id for c in ir.components}
+    if designator in ids:
+        return designator
+    lowered = designator.lower()
+    return next((i for i in sorted(ids) if i.lower() == lowered), designator)
+
+
 def _not_found_message(ir: CircuitIR, designator: str) -> str:
     """Build the "component not found" error message for ``cg view``.
 
@@ -531,15 +546,22 @@ def _not_found_message(ir: CircuitIR, designator: str) -> str:
     split into per-unit virtual components (e.g. LM358 U2 -> U2A/U2B/U2C),
     the bare designator no longer exists in the IR.  The message then lists
     the split units — annotating the power unit — and suggests a concrete
-    signal unit to view instead.
+    signal unit to view instead.  Matching is case-insensitive so ``u2``
+    still surfaces the hint for ``U2``.
     """
-    base = f"Component {designator} not found"
+    lowered = designator.lower()
     units = sorted(
-        (c for c in ir.components if c.metadata.get("split_from") == designator),
+        (
+            c
+            for c in ir.components
+            if str(c.metadata.get("split_from", "")).lower() == lowered
+        ),
         key=lambda c: c.id,
     )
     if not units:
-        return base
+        return f"Component {designator} not found"
+    parent = str(units[0].metadata["split_from"])
+    base = f"Component {parent} not found"
     labels = [
         f"{u.id}(电源)" if u.metadata.get("unit_type") == "power" else u.id
         for u in units

@@ -214,6 +214,38 @@ def _split_units(ir, designator: str) -> dict[str, str]:
     }
 
 
+def test_cli_view_designator_case_insensitive(runner: CliRunner) -> None:
+    """Lowercase designators resolve to their canonical (uppercase) ids."""
+    fixture = FIXTURE_DIR / "add-primitives.NET"
+    if not fixture.exists():
+        pytest.skip(f"Fixture not found: {fixture}")
+
+    ir = _parse_and_enrich(fixture)
+    units = _split_units(ir, "U2")
+    assert units, "U2 was not split into units"
+    focal = sorted(units)[0]
+
+    result = runner.invoke(main, ["view", focal.lower(), str(fixture)])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["designator"] == focal
+
+
+def test_cli_view_lowercase_parent_shows_unit_hint(runner: CliRunner) -> None:
+    """`cg view u2` (lowercase) must still surface the multi-unit hint."""
+    fixture = FIXTURE_DIR / "add-primitives.NET"
+    if not fixture.exists():
+        pytest.skip(f"Fixture not found: {fixture}")
+
+    units = _split_units(_parse_and_enrich(fixture), "U2")
+    assert len(units) >= 2, f"U2 was not split into units; got {sorted(units)}"
+
+    result = runner.invoke(main, ["view", "u2", str(fixture)])
+    assert result.exit_code == 1
+    assert "已拆分为多单元" in result.output
+    for unit_id in units:
+        assert unit_id in result.output
+
+
 def test_cli_view_multi_unit_parent_lists_split_units(runner: CliRunner) -> None:
     """`cg view U2` on a split multi-unit device must list the split units.
 
