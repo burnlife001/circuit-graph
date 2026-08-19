@@ -1,0 +1,67 @@
+{
+  "$schema": "./schema.json",
+  "id": "opamp-unit-differential-amplifier",
+  "name": "运放单元-差分放大器",
+  "description": "运放单元差分放大：R1/Rin1将VIN1接入反相端，R2/Rin2将VIN2接入同相端，Rf跨接输出与反相端，Rg连接同相端到地/参考。适用于多单元IC拆分后的独立运放单元。",
+  "role": "sensor",
+  "version": "0.1.0",
+  "strict_pin_matching": true,
+  "signals": [
+    {
+      "id": "in_p",
+      "type": "net",
+      "name_pattern": "^(IN\\+|VIN\\+|POS|VP|NON_INV|NINV|\\+IN|PLUS|AINP|VREF|V_REF|VSET|Net.*).*",
+      "required": true
+    },
+    {
+      "id": "in_n",
+      "type": "net",
+      "name_pattern": "^(IN\\-|VIN\\-|NEG|VN|INV|\\-IN|MINUS|AINN|FB|VFB|NFB|Net.*).*",
+      "required": true
+    },
+    {
+      "id": "out",
+      "type": "net",
+      "name_pattern": "^(V?OUT|VO|AMP_OUT|OA_OUT|OP_OUT|VOUT|VOUT1|AOUT|Net.*).*",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "opamp",
+      "type": "IC",
+      "required": true,
+      "pins": [
+        {"number": "IN+", "net": "in_p"},
+        {"number": "IN-", "net": "in_n"},
+        {"number": "OUT", "net": "out"}
+      ]
+    },
+    {
+      "id": "Rf",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "out"},
+        {"number": "2", "net": "in_n"}
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 2,
+    "exact_component_count": false
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.35,
+      "naming": 0.25,
+      "parametric": 0.15,
+      "type": 0.25
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.55,
+      "low": 0.0
+    }
+  }
+}

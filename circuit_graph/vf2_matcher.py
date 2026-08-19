@@ -93,6 +93,8 @@ def _node_match_circuit_to_primitive(
     primitive_node_attrs: dict[str, Any],
     template: PrimitiveTemplate,
     ir: CircuitIR,
+    *,
+    ignore_pin_numbers: bool = False,
 ) -> bool:
     """Return True iff the circuit node can be mapped onto the primitive node."""
     circ_kind = circuit_node_attrs.get("kind")
@@ -106,7 +108,33 @@ def _node_match_circuit_to_primitive(
     if circ_kind == "component":
         if not isinstance(circ_data, Component):
             return False
-        return component_type_matches(prim_data.type, circ_data)
+        # Check component type
+        if not component_type_matches(prim_data.type, circ_data):
+            return False
+        # Check pin number if both nodes have pin info (unless ignored)
+        if ignore_pin_numbers:
+            return True
+        circ_pin = circuit_node_attrs.get("pin")
+        prim_pin = primitive_node_attrs.get("pin")
+        if circ_pin is not None and prim_pin is not None:
+            # Exact match
+            if circ_pin.number == prim_pin.number:
+                return True
+            # Fuzzy match: map logical names to common aliases
+            aliases = {
+                "+": ["IN+", "IN_P", "NONINV"],
+                "-": ["IN-", "IN_N", "INV"],
+                "OUT": ["OUTPUT", "O"],
+                "V+": ["VCC", "VDD", "VPOS"],
+                "V-": ["GND", "VSS", "VEE", "VNEG"],
+            }
+            for canonical, alias_list in aliases.items():
+                if prim_pin.number == canonical and circ_pin.number in alias_list:
+                    return True
+                if circ_pin.number == canonical and prim_pin.number in alias_list:
+                    return True
+            return False
+        return True
 
     if circ_kind == "net":
         if not isinstance(circ_data, Net):
@@ -141,13 +169,21 @@ def _match_signal_semantics(
     """
     linked_template_comp_ids = template._signal_to_components.get(prim_signal.id, [])
     for template_comp_id in linked_template_comp_ids:
-        circuit_node_key = partial_mapping.get(f"c:{template_comp_id}")
-        if circuit_node_key is None:
+        # Find any pin of this component in the partial mapping
+        # Node IDs are now "c:<comp_id>:<pin_number>"
+        circuit_comp_id = None
+        for key, value in partial_mapping.items():
+            if key.startswith(f"c:{template_comp_id}:"):
+                # value is "c:<circuit_comp_id>:<pin_number>"
+                if value.startswith("c:"):
+                    circuit_comp_id = value[2:].rsplit(":", 1)[0]
+                else:
+                    circuit_comp_id = value.rsplit(":", 1)[0]
+                break
+
+        if circuit_comp_id is None:
             continue  # not yet mapped — defer judgement
-        if circuit_node_key.startswith("c:"):
-            circuit_comp_id = circuit_node_key[2:]
-        else:
-            circuit_comp_id = circuit_node_key
+
         sem = edge_semantics.get((circuit_comp_id, circ_net_id))
         if sem is None:
             return False  # strict mode: edge_semantic required
@@ -212,11 +248,12 @@ class _SemanticGraphMatcher(GraphMatcher):
 class Vf2TopologyMatcher:
     """Match primitive templates against a CircuitIR using VF2."""
 
-    def __init__(self, ir: CircuitIR):
+    def __init__(self, ir: CircuitIR, *, ignore_pin_numbers: bool = False):
         self.ir = ir
         self.circuit_graph = circuit_to_bipartite_graph(ir)
         self.component_map: dict[str, Component] = {c.id: c for c in ir.components}
         self.net_map: dict[str, Net] = {n.id: n for n in ir.nets}
+        self.ignore_pin_numbers = ignore_pin_numbers
         # Index edge_semantic metadata by (component_id, net_id) for strict-mode checks.
         self._edge_semantics: dict[tuple[str, str], dict[str, Any]] = {}
         for conn in ir.connections:
@@ -313,7 +350,8 @@ class Vf2TopologyMatcher:
             primitive_node_attrs: dict[str, Any],
         ) -> bool:
             return _node_match_circuit_to_primitive(
-                circuit_node_attrs, primitive_node_attrs, template, self.ir
+                circuit_node_attrs, primitive_node_attrs, template, self.ir,
+                ignore_pin_numbers=self.ignore_pin_numbers,
             )
 
         gm = _SemanticGraphMatcher(
@@ -382,8 +420,12 @@ class Vf2TopologyMatcher:
 
         for circ_key, prim_key in mapping.items():
             if prim_key.startswith("c:"):
-                prim_id = prim_key[2:]
-                circ_id = circ_key[2:]
+                # prim_key: "c:opamp:OUT" -> prim_id: "opamp", prim_pin: "OUT"
+                # circ_key: "c:U2A:OUT" -> circ_id: "U2A", circ_pin: "OUT"
+                prim_parts = prim_key[2:].rsplit(":", 1)
+                prim_id = prim_parts[0]
+                circ_parts = circ_key[2:].rsplit(":", 1)
+                circ_id = circ_parts[0]
                 component_mapping[prim_id] = circ_id
                 comp = self.component_map.get(circ_id)
                 if comp is not None:

@@ -689,47 +689,39 @@ def test_find_matches_lc_pi_filter():
 
 
 def _sallen_key_ir():
-    """Simplified Sallen-Key IR — direct connections without intermediate nets.
-
-    The Sallen-Key primitive is an *approximate* match (VF2 ignores pin
-    numbers), so we omit the R1/R2 daisy-chain via VIN_MID/VOUT_MID that a real
-    schematic would have. With direct vin↔vout and vout↔gnd connections the
-    5-component bipartite structure matches the primitive cleanly.
-    """
+    """Sallen-Key IR with intermediate nets (n1, n2) as required by the primitive."""
     u = make_component("U10", DeviceKind.IC,
                        [("+", "VIN"), ("-", "VOUT"), ("OUT", "VOUT"),
                         ("V+", "VCC"), ("V-", "GND")],
                        raw_value="LM358", part_number="LM358")
-    r1 = make_component("R400", DeviceKind.RESISTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="10K")
-    r2 = make_component("R401", DeviceKind.RESISTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="10K")
-    c1 = make_component("C50", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")],
-                       raw_value="10nF")
-    c2 = make_component("C51", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")],
-                       raw_value="10nF")
+    r1 = make_component("R400", DeviceKind.RESISTOR, [("1", ""), ("2", "")], raw_value="10K")
+    r2 = make_component("R401", DeviceKind.RESISTOR, [("1", ""), ("2", "")], raw_value="10K")
+    c1 = make_component("C50", DeviceKind.CAPACITOR, [("1", ""), ("2", "")], raw_value="10nF")
+    c2 = make_component("C51", DeviceKind.CAPACITOR, [("1", ""), ("2", "")], raw_value="10nF")
     vin = make_net("N_VIN", "VIN", NetType.SIGNAL)
     vout = make_net("N_VOUT", "VOUT", NetType.SIGNAL)
     vcc = make_net("N_VCC", "VCC", NetType.POWER)
     gnd = make_net("N_GND", "GND", NetType.GND)
+    n1 = make_net("N_N1", "NetR400_2", NetType.SIGNAL)  # intermediate net between R1/R2/C1
+    n2 = make_net("N_N2", "NetR401_2", NetType.SIGNAL)  # intermediate net between R2/C2/U_op.+
     return build_ir(
-        [u, r1, r2, c1, c2], [vin, vout, vcc, gnd],
-        [("U10.+", "N_VIN"), ("U10.-", "N_VOUT"), ("U10.OUT", "N_VOUT"),
+        [u, r1, r2, c1, c2], [vin, vout, vcc, gnd, n1, n2],
+        [("U10.+", "N_N2"), ("U10.-", "N_VOUT"), ("U10.OUT", "N_VOUT"),
          ("U10.V+", "N_VCC"), ("U10.V-", "N_GND"),
-         ("R400.1", "N_VIN"), ("R400.2", "N_VOUT"),
-         ("R401.1", "N_VIN"), ("R401.2", "N_VOUT"),
-         ("C50.1", "N_VOUT"), ("C50.2", "N_GND"),
-         ("C51.1", "N_VOUT"), ("C51.2", "N_GND")],
+         ("R400.1", "N_VIN"), ("R400.2", "N_N1"),
+         ("R401.1", "N_N1"), ("R401.2", "N_N2"),
+         ("C50.1", "N_N1"), ("C50.2", "N_VOUT"),
+         ("C51.1", "N_N2"), ("C51.2", "N_VOUT")],
         edge_semantics={
             ("U10.V+", "N_VCC"): {"role": "power", "direction": "load",         "level": "5V"},
             ("U10.V-", "N_GND"): {"role": "gnd",   "direction": "bidirectional", "level": None},
-            ("C50.2", "N_GND"):  {"role": "gnd",   "direction": "bidirectional", "level": None},
-            ("C51.2", "N_GND"):  {"role": "gnd",   "direction": "bidirectional", "level": None},
         },
     )
 
 
 def test_find_matches_sallen_key_low_pass():
     template = next(t for t in load_primitives() if t.id == "sallen-key-low-pass")
-    result = Vf2TopologyMatcher(_sallen_key_ir()).find_matches(template, timeout_seconds=2.0)
+    result = Vf2TopologyMatcher(_sallen_key_ir(), ignore_pin_numbers=True).find_matches(template, timeout_seconds=2.0)
 
     assert not result.aborted
     # Sallen-Key is approximate (VF2 ignores pin numbers); allow any number >= 1
@@ -744,6 +736,7 @@ def test_non_inverting_amplifier_matches_protel_auto_named_nets():
     from pathlib import Path
 
     from circuit_graph.enrichers import run_enrichers
+    from circuit_graph.enrichers.multi_unit_splitter import MultiUnitSplitter
     from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
     from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
 
@@ -754,7 +747,7 @@ def test_non_inverting_amplifier_matches_protel_auto_named_nets():
         / "FX-T268-V6-10米-5065.NET"
     )
     ir = ProtelNetParser().parse(ParserInput(file_path=str(netlist)))
-    ir2 = run_enrichers(ir, [TopologyRecognizer()]).ir
+    ir2 = run_enrichers(ir, [MultiUnitSplitter(), TopologyRecognizer()]).ir
 
     blocks = [b for b in ir2.blocks if b.id.startswith("non-inverting-amplifier-")]
     assert any("R97" in b.component_ids for b in blocks), (
@@ -771,6 +764,7 @@ def test_peak_envelope_detector_matches_protel_netlist():
     from pathlib import Path
 
     from circuit_graph.enrichers import run_enrichers
+    from circuit_graph.enrichers.multi_unit_splitter import MultiUnitSplitter
     from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
     from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
 
@@ -781,7 +775,7 @@ def test_peak_envelope_detector_matches_protel_netlist():
         / "FX-T268-V6-10米-5065.NET"
     )
     ir = ProtelNetParser().parse(ParserInput(file_path=str(netlist)))
-    ir2 = run_enrichers(ir, [TopologyRecognizer()]).ir
+    ir2 = run_enrichers(ir, [MultiUnitSplitter(), TopologyRecognizer()]).ir
 
     blocks = [b for b in ir2.blocks if b.id.startswith("peak-envelope-detector-")]
     assert any({"D2", "R54", "R49", "R58", "C56"} <= set(b.component_ids) for b in blocks), (
@@ -855,12 +849,13 @@ def test_integrated_bridge_rectifier_matches_protel_ac_frontend():
     from pathlib import Path
 
     from circuit_graph.enrichers import run_enrichers
+    from circuit_graph.enrichers.multi_unit_splitter import MultiUnitSplitter
     from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
     from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
 
     netlist = Path(__file__).resolve().parent.parent / "fixtures" / "protel" / "add-primitives.NET"
     ir = ProtelNetParser().parse(ParserInput(file_path=str(netlist)))
-    ir2 = run_enrichers(ir, [TopologyRecognizer()]).ir
+    ir2 = run_enrichers(ir, [MultiUnitSplitter(), TopologyRecognizer()]).ir
 
     blocks = [b for b in ir2.blocks if b.id.startswith("integrated-bridge-rectifier-")]
     assert any("D1" in b.component_ids for b in blocks), (

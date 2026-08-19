@@ -42,10 +42,13 @@ class TopologyRecognizer:
 
         component_map = {c.id: c for c in ir.components}
         net_map = {n.id: n for n in ir.nets}
-        matcher = Vf2TopologyMatcher(ir)
 
         for template in templates:
+            # Check if template requires strict pin matching
+            strict_mode = getattr(template, "strict_pin_matching", False)
+            matcher = Vf2TopologyMatcher(ir, ignore_pin_numbers=not strict_mode)
             result = matcher.find_matches(template, timeout_seconds=2.0)
+
             if result.aborted:
                 self.warnings.append(f"TOPOLOGY_MATCH_ABORTED: {template.id} — {result.message}")
                 continue
@@ -83,7 +86,12 @@ class TopologyRecognizer:
                 if not component_ids:
                     continue
 
-                anchor = component_ids[0]
+                # Prefer IC components as anchor (e.g. U2B instead of R4)
+                ic_components = [
+                    cid for cid in component_ids
+                    if component_map[cid].device_kind.value.lower() == "ic"
+                ]
+                anchor = ic_components[0] if ic_components else component_ids[0]
                 block_id = f"{template.id}-{anchor.lower()}"
                 if any(b.id == block_id for b in blocks):
                     continue

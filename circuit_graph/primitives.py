@@ -175,6 +175,7 @@ class PrimitiveTemplate:
     design_inputs: list[DesignInput] = field(default_factory=list)
     parameters: dict[str, str] = field(default_factory=dict)
     recommended_parts: dict[str, list[RecommendedPart]] = field(default_factory=dict)
+    strict_pin_matching: bool = False
     _signal_to_components: dict[str, list[str]] = field(
         default_factory=dict, repr=False, compare=False
     )
@@ -251,6 +252,7 @@ def _parse_primitive(raw: dict[str, Any]) -> PrimitiveTemplate:
         design_inputs=design_inputs,
         parameters=parameters,
         recommended_parts=recommended_parts,
+        strict_pin_matching=raw.get("strict_pin_matching", False),
         raw=raw,
     )
 
@@ -452,17 +454,22 @@ def _require_keys(raw: dict[str, Any], keys: set[str]) -> None:
 def circuit_to_bipartite_graph(ir: CircuitIR) -> nx.Graph:
     """Encode ``ir`` as an undirected component-net bipartite graph.
 
-    Nodes are labelled ``c:{component_id}`` and ``n:{net_id}``.  Node attributes
-    ``kind`` and ``data`` hold the original objects for downstream matching.
+    Nodes are labelled ``c:{component_id}:{pin_number}`` and ``n:{net_id}``.
+    Node attributes ``kind`` and ``data`` hold the original objects for
+    downstream matching.
+
+    Each pin becomes a separate node so that the VF2 matcher can distinguish
+    between different pins of the same component (e.g. IN+ vs IN- vs OUT).
     """
     g = nx.Graph()
     for comp in ir.components:
-        g.add_node(f"c:{comp.id}", kind=_NodeKind.COMPONENT, data=comp)
+        for pin in comp.pins:
+            g.add_node(f"c:{comp.id}:{pin.number}", kind=_NodeKind.COMPONENT, data=comp, pin=pin)
     for net in ir.nets:
         g.add_node(f"n:{net.id}", kind=_NodeKind.NET, data=net)
     for conn in ir.connections:
-        comp_id = conn.pin_id.rsplit(".", 1)[0]
-        g.add_edge(f"c:{comp_id}", f"n:{conn.net_id}")
+        comp_id, pin_num = conn.pin_id.rsplit(".", 1)
+        g.add_edge(f"c:{comp_id}:{pin_num}", f"n:{conn.net_id}")
     return g
 
 
@@ -471,15 +478,19 @@ def primitive_to_bipartite_graph(template: PrimitiveTemplate) -> nx.Graph:
 
     Nodes use the same ``c:`` / ``n:`` prefixes as the circuit graph so that
     the VF2 matcher can compare them directly.
+
+    Each pin becomes a separate node so that the VF2 matcher can distinguish
+    between different pins of the same component (e.g. IN+ vs IN- vs OUT).
     """
     g = nx.Graph()
     for comp in template.components:
-        g.add_node(f"c:{comp.id}", kind=_NodeKind.COMPONENT, data=comp)
+        for pin in comp.pins:
+            g.add_node(f"c:{comp.id}:{pin.number}", kind=_NodeKind.COMPONENT, data=comp, pin=pin)
     for sig in template.signals:
         g.add_node(f"n:{sig.id}", kind=_NodeKind.NET, data=sig)
     for comp in template.components:
         for pin in comp.pins:
-            g.add_edge(f"c:{comp.id}", f"n:{pin.net}")
+            g.add_edge(f"c:{comp.id}:{pin.number}", f"n:{pin.net}")
     return g
 
 

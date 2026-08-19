@@ -66,20 +66,22 @@ def test_parse_primitive_rejects_undefined_signal_reference() -> None:
 
 
 def test_circuit_to_bipartite_graph() -> None:
-    """CircuitIR is encoded as component and net nodes with connection edges."""
+    """CircuitIR is encoded as component-pin and net nodes with connection edges."""
     r = make_component("R1", DeviceKind.RESISTOR, [("1", "CC1"), ("2", "GND")], raw_value="5.1K")
     cc = make_net("N_CC1", "CC1", NetType.SIGNAL)
     gnd = make_net("N_GND", "GND", NetType.GND)
     ir = build_ir([r], [cc, gnd], [("R1.1", "N_CC1"), ("R1.2", "N_GND")])
 
     g = circuit_to_bipartite_graph(ir)
-    assert "c:R1" in g
+    assert "c:R1:1" in g
+    assert "c:R1:2" in g
     assert "n:N_CC1" in g
     assert "n:N_GND" in g
-    assert g.nodes["c:R1"]["kind"] == "component"
+    assert g.nodes["c:R1:1"]["kind"] == "component"
+    assert g.nodes["c:R1:1"]["pin"].number == "1"
     assert g.nodes["n:N_CC1"]["kind"] == "net"
-    assert g.has_edge("c:R1", "n:N_CC1")
-    assert g.has_edge("c:R1", "n:N_GND")
+    assert g.has_edge("c:R1:1", "n:N_CC1")
+    assert g.has_edge("c:R1:2", "n:N_GND")
 
 
 def test_primitive_to_bipartite_graph() -> None:
@@ -87,13 +89,15 @@ def test_primitive_to_bipartite_graph() -> None:
     template = next(t for t in load_primitives() if t.id == TYPE_C_TEMPLATE_ID)
     g = primitive_to_bipartite_graph(template)
 
-    assert "c:R_pull" in g
+    assert "c:R_pull:1" in g
+    assert "c:R_pull:2" in g
     assert "n:cc" in g
     assert "n:gnd" in g
-    assert g.nodes["c:R_pull"]["kind"] == "component"
+    assert g.nodes["c:R_pull:1"]["kind"] == "component"
+    assert g.nodes["c:R_pull:1"]["pin"].number == "1"
     assert g.nodes["n:cc"]["kind"] == "net"
-    assert g.has_edge("c:R_pull", "n:cc")
-    assert g.has_edge("c:R_pull", "n:gnd")
+    assert g.has_edge("c:R_pull:1", "n:cc")
+    assert g.has_edge("c:R_pull:2", "n:gnd")
 
 
 def test_load_primitives_skips_schema_file() -> None:
@@ -299,8 +303,8 @@ def test_template_signal_to_components_derived() -> None:
 
 def test_template_signal_to_components_deterministic() -> None:
     """Derived index is sorted so repeated loads give identical lists."""
-    t1 = next(t for t in load_primitives() if t.id == "non-inverting-amplifier")
-    t2 = next(t for t in load_primitives() if t.id == "non-inverting-amplifier")
+    t1 = next(t for t in load_primitives() if t.id == "opamp-unit-voltage-follower")
+    t2 = next(t for t in load_primitives() if t.id == "opamp-unit-voltage-follower")
     assert t1._signal_to_components == t2._signal_to_components
 
 

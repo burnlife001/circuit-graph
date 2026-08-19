@@ -1,0 +1,52 @@
+{
+  "$schema": "./schema.json",
+  "id": "opamp-unit-voltage-follower",
+  "name": "运放单元-电压跟随器",
+  "description": "运放单元 unity-gain buffer：反相端(-)与输出端(OUT)短接作为反馈网络，同相端(+)接输入；电压增益=1、阻抗变换。适用于多单元IC拆分后的独立运放单元。",
+  "role": "interface",
+  "version": "0.1.0",
+  "strict_pin_matching": true,
+  "signals": [
+    {
+      "id": "in",
+      "type": "net",
+      "name_pattern": "^(VIN|IN|INPUT|VSIG|AI[NP]?|\\+IN|SIG|BUFFER_IN|VIN_?BUF|Net.*).*$",
+      "required": true
+    },
+    {
+      "id": "out",
+      "type": "net",
+      "name_pattern": "^(V?OUT|VO|AMP_OUT|OA_OUT|OP_OUT|VOUT|VOUT1|AOUT|COMP_OUT|DET|INT|RFDIN|BUFFER_OUT|Net.*).*$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "opamp",
+      "type": "IC",
+      "required": true,
+      "pins": [
+        {"number": "IN+", "net": "in"},
+        {"number": "IN-", "net": "out"},
+        {"number": "OUT", "net": "out"}
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.40,
+      "naming": 0.20,
+      "parametric": 0.15,
+      "type": 0.25
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.55,
+      "low": 0.0
+    }
+  }
+}

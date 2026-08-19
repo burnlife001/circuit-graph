@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from circuit_graph.enrichers import run_enrichers
+from circuit_graph.enrichers.multi_unit_splitter import MultiUnitSplitter
 from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
 from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
 from circuit_graph.primitives import load_primitives
@@ -36,7 +37,7 @@ def main():
 
     for net_file in files:
         ir = parse_net(net_file)
-        ir2 = run_enrichers(ir, [TopologyRecognizer()]).ir
+        ir2 = run_enrichers(ir, [MultiUnitSplitter(), TopologyRecognizer()]).ir
         print(f"== {net_file.name} (components={len(ir.components)}) ==")
         if not ir2.blocks:
             print("  (no blocks)")

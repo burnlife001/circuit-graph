@@ -1,10 +1,10 @@
 {
   "$schema": "./schema.json",
   "id": "sallen-key-low-pass",
-  "name": "Sallen-Key 二阶低通滤波器",
-  "description": "运放 + 2R + 2C 构成的单位增益二阶有源低通。",
+  "name": "Sallen-Key 二阶RC低通滤波器",
+  "description": "运放电压跟随器 + 2R + 2C 构成的单位增益二阶有源低通：C1、C2 均接 Vout 形成正反馈，决定截止频率与 Q 值。",
   "role": "unknown",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "signals": [
     {"id": "vin",  "type": "net", "name_pattern": ".*", "required": true},
     {"id": "vout", "type": "net", "name_pattern": ".*", "required": true},
@@ -19,45 +19,47 @@
       "name_pattern": "^(VCC|VDD|\\+?\\d+\\.?\\d*V).*",
       "expected_role": "power",
       "required": true
-    }
+    },
+    {"id": "n1", "type": "net", "name_pattern": ".*", "required": true},
+    {"id": "n2", "type": "net", "name_pattern": ".*", "required": true}
   ],
   "components": [
     {
       "id": "U_op", "type": "IC", "required": true,
       "pins": [
-        {"number": "+",  "net": "vin"},
-        {"number": "-",  "net": "vout"},
-        {"number": "OUT","net": "vout"},
-        {"number": "V+", "net": "vcc"},
-        {"number": "V-", "net": "gnd"}
+        {"number": "+",   "net": "n2"},
+        {"number": "-",   "net": "vout"},
+        {"number": "OUT", "net": "vout"},
+        {"number": "V+",  "net": "vcc"},
+        {"number": "V-",  "net": "gnd"}
       ]
     },
     {
       "id": "R1", "type": "Resistor", "required": true,
       "pins": [
         {"number": "1", "net": "vin"},
-        {"number": "2", "net": "vout"}
+        {"number": "2", "net": "n1"}
       ]
     },
     {
       "id": "R2", "type": "Resistor", "required": true,
       "pins": [
-        {"number": "1", "net": "vin"},
-        {"number": "2", "net": "vout"}
+        {"number": "1", "net": "n1"},
+        {"number": "2", "net": "n2"}
       ]
     },
     {
       "id": "C1", "type": "Capacitor", "required": true,
       "pins": [
-        {"number": "1", "net": "vout"},
-        {"number": "2", "net": "gnd"}
+        {"number": "1", "net": "n1"},
+        {"number": "2", "net": "vout"}
       ]
     },
     {
       "id": "C2", "type": "Capacitor", "required": true,
       "pins": [
-        {"number": "1", "net": "vout"},
-        {"number": "2", "net": "gnd"}
+        {"number": "1", "net": "n2"},
+        {"number": "2", "net": "vout"}
       ]
     }
   ],
