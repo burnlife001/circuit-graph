@@ -1,0 +1,78 @@
+{
+  "$schema": "./schema.json",
+  "id": "differential-comparator",
+  "name": "差分比较器",
+  "description": "运放无反馈、差分输入：同相端/反相端直连差分信号，输出饱和至 VCC 或 GND；常用于 RF 信号电平判定、差分→单端转换。",
+  "role": "interface",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "vcc",
+      "type": "net",
+      "name_pattern": "^(VCC|VDD|V\\+?|VPOS|AVCC|AVDD|VCCA|\\+5V\\d*|\\+3V3\\d*|\\+12V|PVCC|VANA).*",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|GND\\d+|VSS|VEE|V\\-?|AVSS|VNEG).*",
+      "required": true
+    },
+    {
+      "id": "in_p",
+      "type": "net",
+      "name_pattern": "^(IN\\+|VIN\\+|POS|VP|NON_INV|NINV|\\+IN|PLUS|AINP|RFD\\+|SIG\\+|DIFF\\+|SENSE\\+|V_P|POS_SIG).*",
+      "required": true
+    },
+    {
+      "id": "in_n",
+      "type": "net",
+      "name_pattern": "^(IN\\-|VIN\\-|NEG|VN|INV|\\-IN|MINUS|AINN|FB|VFB|NFB|RFD\\-|SIG\\-|DIFF\\-|SENSE\\-|V_N|NEG_SIG).*",
+      "required": true
+    },
+    {
+      "id": "out",
+      "type": "net",
+      "name_pattern": "^(V?OUT|VO|AMP_OUT|OA_OUT|OP_OUT|VOUT|VOUT1|AOUT|COMP_OUT|DET|INT|RFDIN|Net.*)$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "opamp",
+      "type": "IC",
+      "required": true,
+      "pins": [
+        {"number": "V+", "net": "vcc"},
+        {"number": "V-", "net": "gnd"},
+        {"number": "+", "net": "in_p"},
+        {"number": "-", "net": "in_n"},
+        {"number": "OUT", "net": "out"}
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.35,
+      "naming": 0.25,
+      "parametric": 0.15,
+      "type": 0.25
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.55,
+      "low": 0.0
+    }
+  },
+  "recommended_parts": {
+    "opamp": [
+      {"pn": "LM358", "footprint": "SOP-8", "notes": "双运放，单电源，最常见的 RF/低频比较器"},
+      {"pn": "LM393", "footprint": "SOP-8", "notes": "双比较器，开漏输出需上拉"},
+      {"pn": "TLV3202", "footprint": "SOT-23-8", "notes": "推挽输出，轨到轨，低压供电"}
+    ]
+  }
+}

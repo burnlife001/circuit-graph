@@ -1,0 +1,10 @@
+Output: Protel
+Type  : ProtelNetlist
+From  : Project [Free Documents]
+   Generated File[add-primitives.NET]
+
+
+Files Generated   : 1
+Documents Printed : 0
+
+Finished Output Generation At 11:33:42 AM On 8/19/2026
