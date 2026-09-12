@@ -148,6 +148,7 @@ function Get-DisplayWidth([string]$s) {
 }
 
 function Show-DoneBox($skillDir, $guiDir, $dataDir) {
+    $shimDir = Join-Path $env:USERPROFILE 'bin'
     $lines = @(
         '',
         '部署完成！',
@@ -156,9 +157,10 @@ function Show-DoneBox($skillDir, $guiDir, $dataDir) {
         "atk_bg.exe:    $skillDir\tools\atk_bg\atk_bg.exe",
         "ATK-Logic:     $guiDir",
         "数据目录:      $dataDir",
+        "PATH shim:     $shimDir\atk.cmd, $shimDir\atk",
         '',
-        '快速测试:',
-        '  python atk_cli.py capture start --duration 2s',
+        '快速测试（任意目录）:',
+        '  atk capture start --duration 2s',
         ''
     )
 
@@ -261,6 +263,39 @@ $logDir  = 'E:\__electric\atk-logic-data\logs'
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
 New-Item -ItemType Directory -Force -Path $logDir  | Out-Null
 Write-OK "Ensured: $dataDir / logs"
+
+# ── 4b/5 install PATH shim ───────────────────────────────────────────────
+
+Write-Step '4b/5  Installing PATH shim (`atk` command)'
+
+$userBin = Join-Path $env:USERPROFILE 'bin'
+$srcBin  = Join-Path $DST_DIR 'bin'
+
+if (-not (Test-Path $srcBin)) {
+    Write-Warn "Skill bin/ not found at $srcBin — skipping shim install."
+} else {
+    New-Item -ItemType Directory -Force -Path $userBin | Out-Null
+    foreach ($f in 'atk.cmd', 'atk', 'atk.py') {
+        $s = Join-Path $srcBin $f
+        $d = Join-Path $userBin $f
+        if (Test-Path $s) {
+            Copy-Item -Force $s $d
+            Write-OK "Shim: $d"
+        }
+    }
+
+    $currentUserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if ($currentUserPath -notlike "*$userBin*") {
+        [Environment]::SetEnvironmentVariable(
+            'Path',
+            "$userBin;$currentUserPath",
+            'User'
+        )
+        Write-OK "Added $userBin to user PATH (restart shell to pick up)."
+    } else {
+        Write-OK "$userBin already on user PATH."
+    }
+}
 
 # ── preflight ────────────────────────────────────────────────────────────
 

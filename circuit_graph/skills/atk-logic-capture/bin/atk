@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# atk — bash shim for atk-logic-capture. See bin/atk.py for discovery logic.
+exec python "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/atk.py" "$@"

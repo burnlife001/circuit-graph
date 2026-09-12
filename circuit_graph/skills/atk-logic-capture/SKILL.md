@@ -11,30 +11,24 @@ C# helper (`atk_bg.exe`). No DLL injection, no fake DLL, no TCP server.
 
 ## Scripts Inventory
 
-SKILL_SCRIPTS = `C:/Users/yg/.claude/skills/atk-logic-capture/scripts/`
+The skill exposes a single `atk` command that auto-discovers the install
+location — see [Find your install](#find-your-install) below.
 
-### Configuration & Bootstrap
-| File | Purpose |
+| Path (relative to skill root) | Purpose |
 |------|---------|
-| `__init__.py` | Package marker |
-| `_config.py` | Centralized path configuration — GUI, DATA_DIR, atk_bg.exe, log dirs. |
+| `bin/atk.py` | Self-discovering dispatcher (resolves SCRIPTS_DIR, forwards to atk_cli.py / atk_classify.py / …) |
+| `bin/atk` | Bash shim (`exec python $(dirname $0)/atk.py "$@"`) |
+| `bin/atk.cmd` | Windows shim (`python "%~dp0atk.py" %*`) |
+| `scripts/atk_cli.py` | Main CLI — `info`, `export`, `decode`, `capture`, `config`, `list-decoders`, `where` |
+| `scripts/capture/atk_preflight.py` | DLL-free preflight (6 checks + atk_bg.exe + set.ini shortcuts + GUI window) |
+| `scripts/analyze/atk_classify.py` | **Main analysis entry** — auto-scans channels, classifies signal types, dispatches to per-protocol analyzers |
+| `scripts/_config.py` | Centralized path configuration — GUI, DATA_DIR, atk_bg.exe, log dirs. |
+| `scripts/capture_reader.py` | `.atkdl` / `.bin` file reader — `CaptureReader`, `EdgeEvent`, `parse_time()` |
+| `scripts/config_sync.py` | Syncs capture params (channels, setHz, threshold) between CLI args and set.ini. Backup-on-change. |
+| `scripts/session_state.py` | Persistence of `preflight_ok` + `is_ctrl_s_pressed` to `%APPDATA%\ALIENTEK\ATK-LogicView\skill_state.json`. GUI-session-scoped via `gui_pid` + `gui_start` matching. |
+| `scripts/analyze/_proto_common.py` | `ProtoFrame`, `_EdgeHelper`, `normalize_options` shared by native decoders. |
 
-### Shared modules (scripts/)
-| File | Purpose |
-|------|---------|
-| `capture_reader.py` | `.atkdl` / `.bin` file reader — `CaptureReader`, `EdgeEvent`, `parse_time()` |
-| `config_sync.py` | Syncs capture params (channels, setHz, threshold) between CLI args and set.ini. Backup-on-change. |
-| `session_state.py` | Persistence of `preflight_ok` + `is_ctrl_s_pressed` to `%APPDATA%\ALIENTEK\ATK-LogicView\skill_state.json`. GUI-session-scoped via `gui_pid` + `gui_start` matching. |
-| `analyze/_proto_common.py` | `ProtoFrame`, `_EdgeHelper`, `normalize_options` shared by native decoders. |
-
-### User-facing Entry Points
-| File | Purpose |
-|------|---------|
-| `atk_cli.py` | Main CLI — `info`, `export`, `decode`, `capture`, `config`, `list-decoders` |
-| `capture/atk_preflight.py` | DLL-free preflight (6 checks + atk_bg.exe + set.ini shortcuts + GUI window) |
-| `analyze/atk_classify.py` | **Main analysis entry** — auto-scans channels, classifies signal types, dispatches to per-protocol analyzers |
-
-### Per-protocol analyzers (auto-invoked by `atk_classify.py`)
+### Per-protocol analyzers (auto-invoked by `atk classify`)
 | File | Purpose |
 |------|---------|
 | `analyze/atk_pwm.py` | PWM / breathing LED analyzer — carrier freq, duty range, modulation |
@@ -42,7 +36,17 @@ SKILL_SCRIPTS = `C:/Users/yg/.claude/skills/atk-logic-capture/scripts/`
 | `analyze/atk_i2c.py` | Native I²C decoder |
 | `analyze/atk_spi.py` | Native SPI decoder |
 
-These can also be invoked directly, or via `atk_cli.py decode --decoder <uart|i2c|spi>`.
+These can also be invoked directly via `atk <protocol> <file.atkdl>`.
+
+### Per-protocol analyzers (auto-invoked by `atk classify`)
+| File | Purpose |
+|------|---------|
+| `analyze/atk_pwm.py` | PWM / breathing LED analyzer — carrier freq, duty range, modulation |
+| `analyze/atk_uart.py` | Native UART decoder — supports baud/data-bits/parity/stop-bits/polarity |
+| `analyze/atk_i2c.py` | Native I²C decoder |
+| `analyze/atk_spi.py` | Native SPI decoder |
+
+These can also be invoked directly via `atk uart|pwm|i2c|spi <file.atkdl>` or `atk decode --decoder <id> <file>`.
 
 ### Drivers (C# .NET 4.0)
 | File | Purpose |
@@ -57,17 +61,34 @@ These can also be invoked directly, or via `atk_cli.py decode --decoder <uart|i2
 | `capture/spike_e2e.py` | End-to-end spike: F1 → 3s → F2 → 3s → F12 + Save-As dialog fill via raw Win32. Proved the non-disturbing path before productionizing into `atk_bg.exe`. |
 | `capture/spike_dialog.py` | Dumps the ATK-Logic Save-As dialog's #32770 child tree (Edit/Button ids/text). Used to confirm control ids `Edit=1001`, `Button id=1 text="保存(&S)"`. |
 
-### Dependency Graph
+## Find your install
+
+The `atk` shim auto-discovers the skill — **you never need to remember a path**. Just run `atk <subcmd>`. Discovery order (first hit wins):
+
+| # | Where | When this fires |
+|---|-------|-----------------|
+| 1 | `$ATK_SCRIPTS_DIR` env var | Manual override (debugging, custom install) |
+| 2 | `<bin>/../scripts/atk_cli.py` | Sibling layout — skill installed with its own `bin/` next to `scripts/` |
+| 3 | Walk up from cwd: `.claude/skills/atk-logic-capture/scripts/atk_cli.py` | Project-level install (this repo) |
+| 4 | `$HOME/.claude/skills/atk-logic-capture/scripts/atk_cli.py` | User-level install (after running `install.ps1`) |
+
+Sanity-check what got picked:
+
+```bash
+atk --where
+# prints the resolved SCRIPTS_DIR, e.g.
+# E:\__electric\__workspace\coding\04_QPnano_LED_Key_ModeSwitch\.claude\skills\atk-logic-capture\scripts
 ```
-_config.py        ─► atk_cli.py, capture/atk_preflight.py
-session_state.py  ─► atk_cli.py, capture/atk_preflight.py
-config_sync.py    ─► atk_cli.py
-capture_reader.py ─► atk_cli.py, analyze/atk_classify.py, analyze/atk_pwm.py, analyze/atk_uart.py,
-                    analyze/atk_i2c.py, analyze/atk_spi.py
-atk_bg.exe (C#)   ◄── atk_cli.py (subprocess for F1/F2/F12/save)
-analyze/atk_pwm.py ◄── analyze/atk_classify.py (auto-dispatch via subprocess)
-analyze/atk_uart.py ◄── analyze/atk_classify.py (auto-dispatch in-process)
-```
+
+If `atk` reports it can't find the skill:
+- **bash/pwsh direct invocation works** → run `atk.cmd` / `bash bin/atk` to see if the shim resolves correctly.
+- **nothing works** → re-run `install.ps1`, or set `ATK_SCRIPTS_DIR` manually.
+
+### Install locations
+
+- **Project-level (default)**: `<repo>/.claude/skills/atk-logic-capture/`. Tracked in git. Works from anywhere inside the repo via discovery step 3 (walk-up).
+- **User-level** (`%USERPROFILE%/.claude/skills/atk-logic-capture/`): created by `install.ps1`. Works from any directory via discovery step 4.
+- **PATH shim** (`%USERPROFILE%/bin/atk.cmd` + `atk`): also installed by `install.ps1`. Once your shell is restarted, `atk` resolves from anywhere.
 
 ## Key Locations
 
@@ -86,18 +107,20 @@ analyze/atk_uart.py ◄── analyze/atk_classify.py (auto-dispatch in-process)
 
 ### Step 1: Capture waveform
 
-`cmd_capture` handles preflight automatically — no manual preflight step needed. It consults `skill_state.json`:
-
-- **`preflight_ok == true`** (current GUI session) → skip preflight, go straight to capture.
-- **`preflight_ok == false`** or session mismatch → auto-run `atk_preflight.py --fix --json`, then continue.
+Use the `atk` shim (auto-discovers the skill — see [Find your install](#find-your-install)):
 
 ```bash
 # Default: 3s
-python C:/Users/yg/.claude/skills/atk-logic-capture/scripts/atk_cli.py capture start
+atk capture start
 
 # Custom channels + duration
-python .../atk_cli.py capture start --ch 2,3 --duration 10s
+atk capture start --ch 2,3 --duration 10s
 ```
+
+`cmd_capture` handles preflight automatically — no manual preflight step needed. It consults `skill_state.json`:
+
+- **`preflight_ok == true`** (current GUI session) → skip preflight, go straight to capture.
+- **`preflight_ok == false`** or session mismatch → auto-run `atk preflight --fix --json`, then continue.
 
 **Save flow with state-file flag (`is_ctrl_spressed`)**
 
@@ -137,14 +160,9 @@ taskkill /im ATK-Logic.exe
 ### Config management (manual):
 
 ```bash
-# Read current set.ini params
-python .../atk_cli.py config show
-
-# Write params to set.ini (backs up first if changes needed)
-python .../atk_cli.py config set --ch 0,1,2,3 --hz 20000000 --threshold 1.5
-
-# Dry-run: preview what would change
-python .../atk_cli.py config set --ch 0,1 --dry-run
+atk config show
+atk config set --ch 0,1,2,3 --hz 20000000 --threshold 1.5
+atk config set --ch 0,1 --dry-run
 ```
 
 ## Driver: atk_bg.exe (C# .NET 4.0)
@@ -197,22 +215,20 @@ Lifecycle:
 `atk_classify.py` is the single entry point. It auto-scans channels, classifies
 the signal type, and **auto-dispatches** detected protocols to the matching analyzer.
 
-**Note on Windows**: use the full path — `~` does NOT expand in `python ~/...` commands.
-
 ### Step 1: Classify + auto-dispatch (recommended)
 
 ```bash
 # Auto-scan all channels, dispatch PWM → atk_pwm.py, serial_data → atk_uart.py
-python C:/Users/yg/.claude/skills/atk-logic-capture/scripts/analyze/atk_classify.py <file.atkdl>
+atk classify <file.atkdl>
 
 # Specific channels
-python .../atk_classify.py <file.atkdl> --ch 0,1 --end 2s
+atk classify <file.atkdl> --ch 0,1 --end 2s
 
 # JSON output (classification + dispatch results embedded)
-python .../atk_classify.py <file.atkdl> --ch 4 --json
+atk classify <file.atkdl> --ch 4 --json
 
 # Classify only, skip auto-dispatch
-python .../atk_classify.py <file.atkdl> --no-dispatch
+atk classify <file.atkdl> --no-dispatch
 ```
 
 Auto-dispatch behavior:
@@ -224,16 +240,16 @@ Auto-dispatch behavior:
 
 ```bash
 # Run a specific protocol decoder directly (skip classification)
-python .../atk_cli.py decode <file> --decoder uart --rx 0 --option baudrate=115200
-python .../atk_cli.py decode <file> --decoder i2c  --scl 0 --sda 1
-python .../atk_cli.py decode <file> --decoder spi  --clk 0 --mosi 0 --miso 1
+atk decode <file> --decoder uart --rx 0 --option baudrate=115200
+atk decode <file> --decoder i2c  --scl 0 --sda 1
+atk decode <file> --decoder spi  --clk 0 --mosi 0 --miso 1
 
-# Or call the decoder script directly
-python .../analyze/atk_uart.py <file> --rx 4 --baudrate 115200
-python .../analyze/atk_pwm.py <file> --ch 1 --window 200ms
+# Or call the per-protocol analyzer directly
+atk uart <file> --rx 4 --baudrate 115200
+atk pwm  <file> --ch 1 --window 200ms
 
 # Export raw edge events
-python .../atk_cli.py export <file> --ch 0,1 --start 0 --end 2s
+atk export <file> --ch 0,1 --start 0 --end 2s
 ```
 
 ## Path Configuration
@@ -327,3 +343,31 @@ app reads physical-key state. Keeping save on a plain F12 is the design constrai
    removed from repo); atk_cli now drives the GUI entirely through
    Win32 PostMessage / SendMessage via atk_bg.exe. No code runs inside
    the ATK-Logic process; no extra listen sockets; no interception.
+
+9. **set.ini shortcuts must be single keys (F1/F2/F12) — never modifiers.**
+   Modifier combos (`Ctrl+S`, `Ctrl+Shift+S`, etc.) cannot be PostMessage-injected — atk_bg only emits plain F-keys. The GUI ships with `saveFile=Ctrl+S`, which silently breaks the save flow.
+
+   **Fix once per host** (run BEFORE `capture start`):
+   ```powershell
+   $ini = "$env:APPDATA\ALIENTEK\ATK-LogicView\set.ini"
+   Copy-Item $ini "$ini.pre-readonly.bak"
+   (Get-Content $ini -Raw) -replace '(?m)^saveFile=Ctrl\+S\s*$','saveFile=F12' |
+     Set-Content -Path $ini -Encoding UTF8 -NoNewline
+   Set-ItemProperty -Path $ini -Name IsReadOnly -Value $true   # GUI rewrites set.ini on launch — block that
+   & "D:/Programs/ATK-Logic/ATK-Logic.exe"
+   ```
+   To restore user shortcuts later: `Set-ItemProperty ... IsReadOnly $false`, then GUI → Settings → Keyboard Shortcuts.
+
+10. **`atk_preflight.py` flat-search misses bare-section keys.** set.ini puts the shortcut block as bare `key=value` lines at the file tail (no `[section]` header). `_ensure_save_file_shortcut()` only collects keys seen inside a recognised section, so it reports `saveFile='' (expected 'F12')` even after a correct patch. Fix: also collect lines matching `^[A-Za-z][A-Za-z0-9_]*=` before any section header.
+
+11. **GUI rewrites set.ini on launch.** Qt calls `QSettings.sync()` shortly after startup and overwrites any out-of-band edits. External patches must be paired with `IsReadOnly = $true` — otherwise the next capture cycle sees `Ctrl+S` again (see issue 9).
+
+12. **Git Bash quoting hazards on Windows.** The shell is `bash` but every multi-token PowerShell command must be wrapped or written to a file.
+    - `taskkill /im ...` — bash treats `/im` as a path → use `powershell -Command "Stop-Process -Name ..."` or a `.ps1` file.
+    - `powershell -Command "...$_..."` — `$_` is consumed by bash extglob before PowerShell sees it. Write to a `.ps1` and invoke via `-File`.
+    - `python -c "..."` with newlines/`$_`-like tokens — same class of failure. Prefer a tiny `.py` next to the skill scripts over inline `-c`.
+    - `cd <path> && python ...` does NOT persist — each Bash call is a fresh shell. Use absolute paths.
+
+13. **Auto-classify GBK decode traceback is cosmetic.** When GUI logs are GBK, `atk_pwm.py` subprocess prints `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xa1`. The classifier's own report above the traceback is unaffected — read it, ignore the traceback. Real fix: pass `encoding='gbk'` to the dispatch Popen.
+
+14. **`atk.cmd` cosmetic 'M is not recognized' warning.** When `atk.cmd` is invoked via `cmd /c` (or via `powershell & atk.cmd`) under pyenv-win's `python.bat` shim, cmd.exe prints `'M' is not recognized as an internal or external command` once before the actual output. The actual command output is unaffected — read past it. Cause: pyenv-win's `python.bat` chain (`chcp 1250 > NUL` + `call pyenv exec %~n0 %*`) emits a stray line during `cmd /c` chain invocations. **Workaround**: prefer `bash atk` or `atk` (after PATH-shim install) on Windows — both bypass the .cmd shim entirely.

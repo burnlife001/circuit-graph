@@ -877,8 +877,17 @@ def main():
                    help="Show what would change without writing")
     p.set_defaults(func=cmd_config)
 
+    # where — print SCRIPTS_DIR (for shell wrappers / path discovery)
+    p = sub.add_parser("where", help="Print absolute path of the scripts directory and exit")
+    p.set_defaults(func=_cmd_where)
+
     args = parser.parse_args()
     args.func(args)
+
+
+def _cmd_where(args):
+    """Print SCRIPTS_DIR absolute path."""
+    print(SCRIPTS_DIR)
 
 
 if __name__ == "__main__":
