@@ -38,6 +38,11 @@ def test_view_with_power_text_context_on_t268(runner: CliRunner) -> None:
     # T268 has no annotated regulator part numbers, so source tracing may
     # surface ``unknown`` while still reporting the rail identity.
     assert ctx["rail"] in {"5V2", "5V", "3.3V"}
+    # confidence maps the resolution level: deep path=high, direct source=medium,
+    # rail-only fallback=low; T268 (no annotated regulators) lands on low.
+    assert ctx["confidence"] in {"high", "medium", "low"}
+    if ctx["source_kind"] == "unknown":
+        assert ctx["confidence"] == "low"
     assert isinstance(ctx["upstream_regulators"], list)
 
 

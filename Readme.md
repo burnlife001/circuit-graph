@@ -34,6 +34,7 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
 - 供电上下文（`cg view --with-power`）：从 USB / 电池 / 排针 → 稳压器 → 负载
 - 通信上下文（`cg view --with-comm`）：检测 I2C / UART / SPI / PWM 总线
 - 功能块上下文（`cg view --with-blocks`）：列出覆盖 ego 图元件的 FunctionalBlock（含置信度与得分），回答"这个元件属于哪个功能电路"
+- 识别结果可质疑（可选键，向后兼容）：net 带 `classification: {source: "name_heuristic", confidence: high|medium}`（NetClassifier 名称启发式的出处）；`power_context.confidence` 区分 deep path=high / 直连source=medium / 仅轨线=low；`blocks[].source` 透传 manual|rule|imported
 - 生成 cg-graph JSON（v2.1）：含 `part_number`、`circuit.rails`、每条 net 带 `degree`
 - 生成单个元件的 ego-subgraph 视图（默认 2 hops，可调；高扇出轨线不下钻）
 - 导出 yEd 兼容 GraphML

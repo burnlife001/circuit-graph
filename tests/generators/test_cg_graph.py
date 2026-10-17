@@ -155,6 +155,31 @@ def test_net_entry_kind_degree_members_ids_only():
         assert isinstance(member, str)
 
 
+def test_net_entry_surfaces_classification_provenance():
+    """Nets classified by name heuristics expose source + confidence."""
+    from circuit_graph.generators.cg_graph import _net_entry
+
+    classified = Net(
+        id="N1",
+        name="5V2",
+        type=NetType.POWER,
+        metadata={
+            "classification": {"source": "name_heuristic", "confidence": "high"}
+        },
+    )
+    entry = _net_entry(classified, ["U2"])
+    assert entry["kind"] == "power"
+    assert entry["classification"] == {
+        "source": "name_heuristic",
+        "confidence": "high",
+    }
+
+    unknown_net = Net(id="N2", name="Mystery", type=NetType.UNKNOWN)
+    unknown_entry = _net_entry(unknown_net, ["R1"])
+    assert "kind" not in unknown_entry
+    assert "classification" not in unknown_entry
+
+
 def test_no_inline_neighbor_type_value_anywhere():
     data = generate_cg_graph(_sample_ir())
     # A neighbour's type/value must live only in its own component entry.

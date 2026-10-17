@@ -29,12 +29,19 @@ class NetClassifier:
             if net.type is not None:
                 nets.append(net)
                 continue
+            net_type, confidence = _classify_net(net.name)
+            metadata = dict(net.metadata)
+            if net_type is not NetType.UNKNOWN and confidence is not None:
+                metadata["classification"] = {
+                    "source": "name_heuristic",
+                    "confidence": confidence,
+                }
             nets.append(
                 Net(
                     id=net.id,
                     name=net.name,
-                    type=_classify_net(net.name),
-                    metadata=net.metadata,
+                    type=net_type,
+                    metadata=metadata,
                 )
             )
         return CircuitIR(
@@ -45,20 +52,27 @@ class NetClassifier:
             blocks=ir.blocks,
             semantic_edges=ir.semantic_edges,
             version=ir.version,
+            metadata=ir.metadata,
         )
 
 
-def _classify_net(name: str) -> NetType:
+def _classify_net(name: str) -> tuple[NetType, str | None]:
+    """Classify a net by name; returns (type, confidence).
+
+    Confidence is ``None`` for unknown nets (callers omit classification
+    metadata in that case), ``high`` for strong name conventions
+    (GND families, voltage rails), ``medium`` for weaker heuristics.
+    """
     upper = name.upper()
 
     if re.match(r"^(C?GND|PGND|AGND|DGND|SGND)", upper):
-        return NetType.GND
+        return NetType.GND, "high"
     if re.search(r"\d+\.?\d*V", upper) or re.search(r"VBUS|VCC|VDD|VEE|VBAT|VIN", upper):
-        return NetType.POWER
+        return NetType.POWER, "high"
     if re.match(r"^(CC1|CC2|SBU1|SBU2|DP|DM|D\+|D-)$", upper):
-        return NetType.SIGNAL
+        return NetType.SIGNAL, "medium"
     if re.search(r"CLK|OSC", upper):
-        return NetType.CLOCK
+        return NetType.CLOCK, "medium"
     if re.search(r"AIN|ADC|DAC|ANALOG", upper):
-        return NetType.ANALOG
-    return NetType.UNKNOWN
+        return NetType.ANALOG, "medium"
+    return NetType.UNKNOWN, None

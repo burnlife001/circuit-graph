@@ -660,6 +660,7 @@ def _build_power_context(ir: CircuitIR, designator: str) -> dict[str, object] | 
         ):
             best = info
     if best is not None:
+        best["confidence"] = "high"
         return best
 
     # 2) Fallback: the focal component sits directly on a source net.
@@ -679,6 +680,7 @@ def _build_power_context(ir: CircuitIR, designator: str) -> dict[str, object] | 
                 "source_net": net.name if net else net_id,
                 "source_kind": source_net_lookup[net_id],
                 "upstream_regulators": [],
+                "confidence": "medium",
             }
 
     # 3) Last-resort fallback: the component sits on a POWER-typed net but
@@ -696,6 +698,7 @@ def _build_power_context(ir: CircuitIR, designator: str) -> dict[str, object] | 
             "source_net": None,
             "source_kind": "unknown",
             "upstream_regulators": [],
+            "confidence": "low",
         }
 
     return None
@@ -838,6 +841,7 @@ def _build_blocks_context(ir: CircuitIR, view_result: dict[str, object]) -> list
                 "role": block.role.value,
                 "component_ids": list(block.component_ids),
                 "description": block.description,
+                "source": block.source,
             }
         )
     return blocks

@@ -148,6 +148,29 @@ def test_net_classifier():
     assert types["Mystery"] == NetType.UNKNOWN
 
 
+def test_net_classifier_records_classification_metadata():
+    """Classified nets carry provenance; unknown nets carry nothing."""
+    ir = _sample_ir()
+    result = run_enrichers(ir, [NetClassifier()])
+    by_id = {n.id: n for n in result.ir.nets}
+    assert by_id["PGND"].metadata["classification"] == {
+        "source": "name_heuristic",
+        "confidence": "high",
+    }
+    assert by_id["VBUS"].metadata["classification"]["confidence"] == "high"
+    assert by_id["CC2"].metadata["classification"]["confidence"] == "medium"
+    assert "classification" not in by_id["Mystery"].metadata
+
+
+def test_enricher_pipeline_preserves_top_level_metadata():
+    """Enrichers must not drop CircuitIR.metadata (unknown-fields carrier)."""
+    from dataclasses import replace
+
+    ir = replace(_sample_ir(), metadata={"_unknown_fields": {"future": 1}})
+    result = run_enrichers(ir, [NetClassifier(), ValueNormalizer(), TopologyRecognizer()])
+    assert result.ir.metadata == {"_unknown_fields": {"future": 1}}
+
+
 def test_net_classifier_treats_cgnd_as_gnd():
     """CGND (chassis / common ground) is a ground net, not digital/unknown.
 

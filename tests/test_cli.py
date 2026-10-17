@@ -137,6 +137,8 @@ def test_cli_view_with_blocks(runner: CliRunner) -> None:
     assert "inverting-amplifier-u7" in blocks
     assert {"R100", "R101", "U7"} <= set(blocks["inverting-amplifier-u7"]["component_ids"])
     assert "voltage-divider-r100" in blocks
+    # rule-recognised blocks disclose their provenance
+    assert blocks["inverting-amplifier-u7"]["source"] == "rule"
 
 
 def test_cli_view_without_blocks_flag_omits_context(runner: CliRunner) -> None:

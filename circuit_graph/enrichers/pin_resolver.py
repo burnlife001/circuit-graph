@@ -102,6 +102,7 @@ class PinNameResolver:
             blocks=ir.blocks,
             semantic_edges=ir.semantic_edges,
             version=ir.version,
+            metadata=ir.metadata,
         )
 
 

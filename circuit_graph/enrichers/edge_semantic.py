@@ -198,6 +198,7 @@ class EdgeSemanticEnricher:
             blocks=list(ir.blocks),
             semantic_edges=list(ir.semantic_edges),
             version=ir.version,
+            metadata=ir.metadata,
         )
 
 

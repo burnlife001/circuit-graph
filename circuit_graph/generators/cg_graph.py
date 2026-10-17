@@ -287,11 +287,19 @@ def _component_entry(
 
 
 def _net_entry(net: Net, members: list[str]) -> dict[str, Any]:
-    """Build a cg-graph net entry: kind + degree + id-only members."""
+    """Build a cg-graph net entry: kind + degree + id-only members.
+
+    When the NetClassifier recorded how the kind was derived, that
+    provenance is surfaced under ``classification`` so consumers can tell
+    rule-based guesses from facts.
+    """
     entry: dict[str, Any] = {"degree": len(members), "members": members}
     kind = _normalize_net_kind(net.type)
     if kind != "unknown":
         entry["kind"] = kind
+        classification = net.metadata.get("classification")
+        if isinstance(classification, dict):
+            entry["classification"] = classification
     return entry
 
 
