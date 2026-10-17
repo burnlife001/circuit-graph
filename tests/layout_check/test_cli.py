@@ -46,6 +46,8 @@ def test_layout_check_missing_rules_file_exits_two(tmp_path):
     is what surfaces the error in the JSON report.
     """
     missing_rules = tmp_path / "nope.schlayout"
+    if not _LM321.exists():
+        pytest.skip("lm321 fixture missing (gitignored local dataset)")
     result = _invoke([str(_LM321), "--rules", str(missing_rules)])
     assert result.exit_code == 2
     payload = json.loads(result.output)

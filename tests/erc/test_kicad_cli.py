@@ -20,7 +20,10 @@ def test_runner_detects_kicad_cli():
 
 def test_runner_parses_json_report(tmp_path: Path):
     """A synthetic kicad-cli JSON report is parsed into an ErcReport."""
-    runner = KicadCliRunner()
+    try:
+        runner = KicadCliRunner()
+    except KicadCliNotFoundError:
+        pytest.skip("kicad-cli not installed on this machine")
     report_file = tmp_path / "fake-erc.json"
     report_file.write_text(
         json.dumps(
