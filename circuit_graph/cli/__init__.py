@@ -13,7 +13,6 @@ from circuit_graph.cli.app import (
     _discover_bundled_skills,
     _parse_and_enrich,
     design,
-    erc,
     export,
     init_cmd,
     init_orchestrator_cmd,
@@ -22,6 +21,7 @@ from circuit_graph.cli.app import (
     sim,
     view,
 )
+from circuit_graph.cli.erc import erc
 from circuit_graph.cli.kb import kb
 
 __all__ = [
