@@ -9,7 +9,7 @@ from it without mutation.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from enum import Enum, EnumMeta
 from typing import Any, Literal
@@ -91,6 +91,7 @@ class ResistanceValue:
     magnitude: float = 0.0
     unit: Literal["Ω", "kΩ", "MΩ"] = "Ω"
     tolerance: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -101,6 +102,7 @@ class CapacitanceValue:
     tolerance: float | None = None
     dielectric: str | None = None
     voltage_rating: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -109,6 +111,7 @@ class InductanceValue:
     magnitude: float = 0.0
     unit: Literal["nH", "µH", "mH"] = "µH"
     tolerance: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,7 @@ class VoltageValue:
     kind: Literal["voltage"] = "voltage"
     magnitude: float = 0.0
     unit: Literal["V", "mV"] = "V"
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -123,6 +127,7 @@ class CurrentValue:
     kind: Literal["current"] = "current"
     magnitude: float = 0.0
     unit: Literal["A", "mA"] = "A"
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -130,12 +135,14 @@ class FrequencyValue:
     kind: Literal["frequency"] = "frequency"
     magnitude: float = 0.0
     unit: Literal["Hz", "kHz", "MHz"] = "Hz"
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class UnknownValue:
     kind: Literal["unknown"] = "unknown"
     raw: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 NormalizedValue = (
@@ -156,6 +163,7 @@ class Pin:
     name: str | None = None
     type: Literal["input", "output", "power", "gnd", "passive", "unknown"] | None = None
     net_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         comp_id, pin_num = parse_pin_id(self.id)
@@ -200,6 +208,7 @@ class FunctionalBlock:
     component_ids: list[str] = field(default_factory=list)
     description: str | None = None
     source: Literal["manual", "rule", "imported"] = "rule"
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -243,6 +252,7 @@ class CircuitMeta:
     parsed_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     sheet_count: int | None = None
     generator: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -253,7 +263,8 @@ class CircuitIR:
     connections: list[Connection] = field(default_factory=list)
     blocks: list[FunctionalBlock] = field(default_factory=list)
     semantic_edges: list[SemanticEdge] = field(default_factory=list)
-    version: Literal["0.1.0"] = "0.1.0"
+    version: str = "0.1.0"
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -325,9 +336,67 @@ class _IREncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+# Key under an object's ``metadata`` where fields not present in the current
+# schema are preserved so a from_dict/to_dict round trip never loses data.
+UNKNOWN_FIELDS_KEY = "_unknown_fields"
+
+
+def _collect(data: dict[str, Any], known: set[str]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Split ``data`` into known fields and metadata carrying the unknown rest."""
+    md = dict(data.get("metadata") or {})
+    unknown = {k: v for k, v in data.items() if k not in known and k != "metadata"}
+    if unknown:
+        prior = md.get(UNKNOWN_FIELDS_KEY)
+        if isinstance(prior, dict):
+            unknown = {**prior, **unknown}
+        md[UNKNOWN_FIELDS_KEY] = unknown
+    return {k: v for k, v in data.items() if k in known}, md
+
+
+def _restore(d: dict[str, Any], *, keep_metadata: bool) -> None:
+    """Lift ``metadata[_unknown_fields]`` back to the object level, in place.
+
+    Known schema fields always win over restored unknowns.  ``keep_metadata``
+    is True for classes that already emitted ``metadata`` before the
+    unknown-field mechanism existed (Component/Net/Connection/SemanticEdge);
+    for all others the key is removed when empty to keep the output stable.
+    """
+    md = d.get("metadata")
+    if not isinstance(md, dict):
+        return
+    unknown = md.pop(UNKNOWN_FIELDS_KEY, None)
+    if isinstance(unknown, dict):
+        for key, value in unknown.items():
+            d.setdefault(key, value)
+    if not keep_metadata and not md:
+        d.pop("metadata", None)
+
+
 def ir_to_dict(ir: CircuitIR) -> dict[str, Any]:
-    """Serialize a CircuitIR to a plain dictionary compatible with JSON."""
-    return asdict(ir)
+    """Serialize a CircuitIR to a plain dictionary compatible with JSON.
+
+    Unknown fields collected during deserialization are restored to their
+    original position, so ``ir_to_dict(ir_from_dict(doc)) == doc`` even when
+    ``doc`` carries fields this schema version does not know.
+    """
+    data = asdict(ir)
+    _restore(data, keep_metadata=False)
+    _restore(data["meta"], keep_metadata=False)
+    for comp in data.get("components", []):
+        _restore(comp, keep_metadata=True)
+        if comp.get("value"):
+            _restore(comp["value"], keep_metadata=False)
+        for pin in comp.get("pins", []):
+            _restore(pin, keep_metadata=False)
+    for net in data.get("nets", []):
+        _restore(net, keep_metadata=True)
+    for conn in data.get("connections", []):
+        _restore(conn, keep_metadata=True)
+    for block in data.get("blocks", []):
+        _restore(block, keep_metadata=False)
+    for edge in data.get("semantic_edges", []):
+        _restore(edge, keep_metadata=True)
+    return data
 
 
 def ir_to_json(ir: CircuitIR, indent: int | None = 2) -> str:
@@ -335,28 +404,50 @@ def ir_to_json(ir: CircuitIR, indent: int | None = 2) -> str:
     return json.dumps(ir_to_dict(ir), cls=_IREncoder, indent=indent, ensure_ascii=False)
 
 
+_NORMALIZED_VALUE_TYPES: dict[str, type] = {
+    "resistance": ResistanceValue,
+    "capacitance": CapacitanceValue,
+    "inductance": InductanceValue,
+    "voltage": VoltageValue,
+    "current": CurrentValue,
+    "frequency": FrequencyValue,
+    "unknown": UnknownValue,
+}
+
+
 def _reconstruct_normalized(value: dict[str, Any]) -> NormalizedValue | None:
-    kind = value.get("kind")
-    if kind == "resistance":
-        return ResistanceValue(**value)
-    if kind == "capacitance":
-        return CapacitanceValue(**value)
-    if kind == "inductance":
-        return InductanceValue(**value)
-    if kind == "voltage":
-        return VoltageValue(**value)
-    if kind == "current":
-        return CurrentValue(**value)
-    if kind == "frequency":
-        return FrequencyValue(**value)
-    if kind == "unknown":
-        return UnknownValue(**value)
-    return None
+    cls = _NORMALIZED_VALUE_TYPES.get(value.get("kind"))
+    if cls is None:
+        return None
+    known = {f.name for f in fields(cls)} - {"metadata"}
+    kwargs, md = _collect(value, known)
+    return cls(**kwargs, metadata=md)
+
+
+_PIN_FIELDS = {"id", "number", "name", "type", "net_id"}
+
+
+def _reconstruct_pin(data: dict[str, Any]) -> Pin:
+    kwargs, md = _collect(data, _PIN_FIELDS)
+    return Pin(**kwargs, metadata=md)
+
+
+_COMPONENT_FIELDS = {
+    "id",
+    "device_kind",
+    "footprint",
+    "value",
+    "raw_value",
+    "manufacturer",
+    "part_number",
+    "pins",
+}
 
 
 def _reconstruct_component(data: dict[str, Any]) -> Component:
     raw_value = data.get("value")
     value = _reconstruct_normalized(raw_value) if raw_value else None
+    _, md = _collect(data, _COMPONENT_FIELDS)
     return Component(
         id=data["id"],
         device_kind=DeviceKind(data["device_kind"]),
@@ -365,62 +456,105 @@ def _reconstruct_component(data: dict[str, Any]) -> Component:
         raw_value=data.get("raw_value"),
         manufacturer=data.get("manufacturer"),
         part_number=data.get("part_number"),
-        pins=[Pin(**p) for p in data.get("pins", [])],
-        metadata=data.get("metadata", {}),
+        pins=[_reconstruct_pin(p) for p in data.get("pins", [])],
+        metadata=md,
     )
 
 
+_META_FIELDS = {"source", "format", "parsed_at", "sheet_count", "generator"}
+
+
+def _reconstruct_meta(data: dict[str, Any]) -> CircuitMeta:
+    kwargs, md = _collect(data, _META_FIELDS)
+    return CircuitMeta(**kwargs, metadata=md)
+
+
+_NET_FIELDS = {"id", "name", "type"}
+
+
+def _reconstruct_net(data: dict[str, Any]) -> Net:
+    _, md = _collect(data, _NET_FIELDS)
+    return Net(
+        id=data["id"],
+        name=data["name"],
+        type=NetType(data["type"]) if data.get("type") else None,
+        metadata=md,
+    )
+
+
+_CONNECTION_FIELDS = {"pin_id", "net_id", "provenance"}
+
+
+def _reconstruct_connection(data: dict[str, Any]) -> Connection:
+    _, md = _collect(data, _CONNECTION_FIELDS)
+    return Connection(
+        pin_id=data["pin_id"],
+        net_id=data["net_id"],
+        provenance=Provenance(data.get("provenance", "netlist")),
+        metadata=md,
+    )
+
+
+_BLOCK_FIELDS = {"id", "name", "role", "component_ids", "description", "source"}
+
+
+def _reconstruct_block(data: dict[str, Any]) -> FunctionalBlock:
+    _, md = _collect(data, _BLOCK_FIELDS)
+    return FunctionalBlock(
+        id=data["id"],
+        name=data["name"],
+        role=BlockRole(data["role"]),
+        component_ids=data.get("component_ids", []),
+        description=data.get("description"),
+        source=data.get("source", "rule"),
+        metadata=md,
+    )
+
+
+_SEMANTIC_EDGE_FIELDS = {"source", "target", "kind", "provenance"}
+
+
+def _reconstruct_semantic_edge(data: dict[str, Any]) -> SemanticEdge:
+    _, md = _collect(data, _SEMANTIC_EDGE_FIELDS)
+    return SemanticEdge(
+        source=data["source"],
+        target=data["target"],
+        kind=data["kind"],
+        provenance=Provenance(data.get("provenance", "enriched")),
+        metadata=md,
+    )
+
+
+_TOP_LEVEL_FIELDS = {
+    "meta",
+    "components",
+    "nets",
+    "connections",
+    "blocks",
+    "semantic_edges",
+    "version",
+}
+
+
 def ir_from_dict(data: dict[str, Any]) -> CircuitIR:
-    """Deserialize a plain dictionary into a CircuitIR instance."""
-    meta = CircuitMeta(**data["meta"])
-    components = [_reconstruct_component(c) for c in data.get("components", [])]
-    nets = [
-        Net(
-            id=n["id"],
-            name=n["name"],
-            type=NetType(n["type"]) if n.get("type") else None,
-            metadata=n.get("metadata", {}),
-        )
-        for n in data.get("nets", [])
-    ]
-    connections = [
-        Connection(
-            pin_id=c["pin_id"],
-            net_id=c["net_id"],
-            provenance=Provenance(c.get("provenance", "netlist")),
-            metadata=c.get("metadata", {}),
-        )
-        for c in data.get("connections", [])
-    ]
-    blocks = [
-        FunctionalBlock(
-            id=b["id"],
-            name=b["name"],
-            role=BlockRole(b["role"]),
-            component_ids=b.get("component_ids", []),
-            description=b.get("description"),
-            source=b.get("source", "rule"),
-        )
-        for b in data.get("blocks", [])
-    ]
-    semantic_edges = [
-        SemanticEdge(
-            source=se["source"],
-            target=se["target"],
-            kind=se["kind"],
-            provenance=Provenance(se.get("provenance", "enriched")),
-            metadata=se.get("metadata", {}),
-        )
-        for se in data.get("semantic_edges", [])
-    ]
+    """Deserialize a plain dictionary into a CircuitIR instance.
+
+    Fields not present in this schema version are preserved under each
+    object's ``metadata["_unknown_fields"]`` and restored by ``ir_to_dict``,
+    so round trips never lose data.
+    """
+    _, top_md = _collect(data, _TOP_LEVEL_FIELDS)
     return CircuitIR(
-        meta=meta,
-        components=components,
-        nets=nets,
-        connections=connections,
-        blocks=blocks,
-        semantic_edges=semantic_edges,
+        meta=_reconstruct_meta(data["meta"]),
+        components=[_reconstruct_component(c) for c in data.get("components", [])],
+        nets=[_reconstruct_net(n) for n in data.get("nets", [])],
+        connections=[_reconstruct_connection(c) for c in data.get("connections", [])],
+        blocks=[_reconstruct_block(b) for b in data.get("blocks", [])],
+        semantic_edges=[
+            _reconstruct_semantic_edge(se) for se in data.get("semantic_edges", [])
+        ],
         version=data.get("version", "0.1.0"),
+        metadata=top_md,
     )
 
 

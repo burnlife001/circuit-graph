@@ -514,6 +514,13 @@ uv sync --extra dev
 uv run pytest -q
 ```
 
+### IR 前向兼容（未知字段不丢失）
+
+`ir_from_dict` 遇到当前 schema 不认识的字段时不会丢弃或报错：未知字段收存到对应对象的
+`metadata["_unknown_fields"]`，`ir_to_dict` 序列化时原样还原到原位置。因此读写往返
+`from_dict → to_dict` 逐字节一致（含顶层未知键与更高的 `version` 值），IR.json 不再丢信息。
+回归锁定见 `tests/test_ir.py` 的 round-trip 用例。
+
 ## 项目结构
 
 ```
