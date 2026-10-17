@@ -531,7 +531,9 @@ circuit_graph/
 ├── ir.py                       # 核心 IR 数据模型（唯一权威）
 ├── graph.py                    # NetworkX 异构图
 ├── query.py                    # trace / neighbors / bfs / dfs
-├── cli.py                      # 命令行入口（cg ...）
+├── cli/                        # 命令行入口（cg ...）：app.py(main/export/layout-check/design/sim + _parse_and_enrich)
+│   │                           #   + view.py(cg view 与 _build_* 上下文) + kb.py + erc.py + init.py
+│   │                           #   __init__.py 保持旧导入兼容(from circuit_graph.cli import main 等)
 ├── primitives.py               # 基元库加载 + 二部图编码
 ├── vf2_matcher.py              # VF2 子图匹配（带超时）
 ├── scoring.py                  # 四源融合评分

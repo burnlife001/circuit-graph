@@ -14,7 +14,6 @@ from circuit_graph.cli.app import (
     layout_check,
     main,
     sim,
-    view,
 )
 from circuit_graph.cli.erc import erc
 from circuit_graph.cli.init import (
@@ -25,6 +24,7 @@ from circuit_graph.cli.init import (
     init_orchestrator_cmd,
 )
 from circuit_graph.cli.kb import kb
+from circuit_graph.cli.view import view
 
 __all__ = [
     "_BUNDLED_SKILLS_DIR",

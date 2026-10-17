@@ -9,9 +9,7 @@ from pathlib import Path
 import click
 
 from circuit_graph.cli.app import main
-from circuit_graph.erc import ErcReport, ElectricalRulesChecker, KicadCliRunner
-
-
+from circuit_graph.erc import ElectricalRulesChecker, ErcReport, KicadCliRunner
 
 # ---------------------------------------------------------------------------
 # cg erc — electrical rules check (Level 1 kicad-cli + Level 2 native)

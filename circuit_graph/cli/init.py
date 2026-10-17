@@ -11,8 +11,6 @@ import click
 
 from circuit_graph.cli.app import main
 
-
-
 # ---------------------------------------------------------------------------
 # cg initskill — bootstrap another project with all bundled skills
 # ---------------------------------------------------------------------------

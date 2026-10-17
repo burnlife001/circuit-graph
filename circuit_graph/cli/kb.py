@@ -8,12 +8,10 @@ from pathlib import Path
 
 import click
 
-from circuit_graph.cli.app import DEFAULT_KB_PATH, main
+from circuit_graph.cli.app import _PROJECT_ROOT, DEFAULT_KB_PATH, main
 from circuit_graph.knowledge.db import ComponentDatabase
 from circuit_graph.parsers.protel import ParserInput
 from circuit_graph.parsers.registry import parse_netlist
-
-
 
 # ---------------------------------------------------------------------------
 # cg kb — knowledge base sub-commands
@@ -173,9 +171,9 @@ def kb_extract_pins(
     """
     from circuit_graph.config import load as _load_config
     from circuit_graph.knowledge.pdf_pin_extract import (
-        search_pin_pages,
-        extract_pin_table,
         extract_from_datasheet,
+        extract_pin_table,
+        search_pin_pages,
     )
 
     _load_config()
