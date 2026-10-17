@@ -47,7 +47,8 @@ from typing import Any, Iterable, Iterator, NamedTuple, Optional
 
 from circuit_graph.ir import DeviceKind
 from circuit_graph.knowledge import chip_resolver as chip_resolver_mod
-from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
+from circuit_graph.parsers.protel import ParserInput
+from circuit_graph.parsers.registry import parse_netlist
 
 _NON_PASSIVE_KINDS: frozenset[DeviceKind] = frozenset(
     {DeviceKind.IC, DeviceKind.MOSFET, DeviceKind.DIODE, DeviceKind.CONNECTOR}
@@ -796,7 +797,7 @@ class ComponentDatabase:
         ics: list[tuple[str, Optional[str]]] = []
         for path in _iter_net_files(netlist_path):
             content = _read_text_with_fallback(path)
-            ir = ProtelNetParser().parse(
+            ir = parse_netlist(
                 ParserInput(content=content, source_id=str(path))
             )
             if not ir.components:

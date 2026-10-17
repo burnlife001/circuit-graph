@@ -33,7 +33,8 @@ from circuit_graph.graph import create_graph
 from circuit_graph.ir import CircuitIR
 from circuit_graph.ir import ir_to_json
 from circuit_graph.knowledge import ComponentDatabase
-from circuit_graph.parsers.protel import ParserInput, ProtelNetParser
+from circuit_graph.parsers.protel import ParserInput
+from circuit_graph.parsers.registry import parse_netlist
 from circuit_graph.primitives import load_primitives
 from circuit_graph.sim.deck_builder import DeckBuilder
 from circuit_graph.sim.spice_deck import SimulationDeck
@@ -580,8 +581,7 @@ def _parse_and_enrich(file: Path) -> CircuitIR:
     CLI command routes through it so that downstream consumers always see
     normalised values, classified nets and recognised topology blocks.
     """
-    parser = ProtelNetParser()
-    ir = parser.parse(ParserInput(source_id=str(file), file_path=str(file)))
+    ir = parse_netlist(ParserInput(source_id=str(file), file_path=str(file)))
     ir = run_enrichers(
         ir,
         [
@@ -1140,9 +1140,8 @@ def kb_resolve(
 ) -> None:
     """Scan ``netlist`` and resolve unnamed pins via KB + pin2json."""
     db = _open_kb(ctx)
-    parser = ProtelNetParser()
     try:
-        ir = parser.parse(
+        ir = parse_netlist(
             ParserInput(source_id=str(netlist), file_path=str(netlist))
         )
     except Exception as exc:  # noqa: BLE001
