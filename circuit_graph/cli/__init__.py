@@ -17,12 +17,12 @@ from circuit_graph.cli.app import (
     export,
     init_cmd,
     init_orchestrator_cmd,
-    kb,
     layout_check,
     main,
     sim,
     view,
 )
+from circuit_graph.cli.kb import kb
 
 __all__ = [
     "_BUNDLED_SKILLS_DIR",
