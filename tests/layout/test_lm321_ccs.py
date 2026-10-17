@@ -17,6 +17,14 @@ ksa = pytest.importorskip("kicad_sch_api")
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _LM321_CCS_DIR = _PROJECT_ROOT / "lm321_ccs"
 
+# lm321_ccs/ is a gitignored local dataset; skip cleanly where it is absent
+# (e.g. CI checkouts) instead of crashing at collection time.
+if not (_LM321_CCS_DIR / "convert_to_kicad.py").exists():
+    pytest.skip(
+        "lm321_ccs dataset not present (gitignored local fixture)",
+        allow_module_level=True,
+    )
+
 sys.path.insert(0, str(_LM321_CCS_DIR))
 from convert_to_kicad import _ir_from_spice, abs_pins, create_ccs_schematic_layout
 
