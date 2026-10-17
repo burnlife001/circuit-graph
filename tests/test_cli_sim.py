@@ -64,3 +64,19 @@ class TestSimCommand:
         result = runner.invoke(main, ["sim", "R100", "nonexistent.NET", "--dry-run"])
 
         assert result.exit_code != 0
+
+    def test_sim_preflight_fails_clearly_without_ngspice(self, monkeypatch):
+        """Non-dry-run without a SPICE executable: clear error, non-zero exit."""
+        import json
+
+        import circuit_graph.cli as cli_module
+
+        monkeypatch.setattr(cli_module.shutil, "which", lambda _bin: None)
+        runner = CliRunner()
+        result = runner.invoke(main, ["sim", "R100", str(FIXTURE)])
+
+        assert result.exit_code != 0
+        # result.output mixes stderr (the PoC warning); stdout carries the JSON
+        payload = json.loads(result.stdout)
+        assert "SPICE executable not found" in payload["error"]
+        assert "--dry-run" in payload["error"]

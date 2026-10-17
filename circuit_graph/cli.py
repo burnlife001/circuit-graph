@@ -483,9 +483,28 @@ def sim(
             click.echo(spice_text)
         return
 
+    # Pre-flight: fail fast with a clear message when Ngspice is absent
+    # instead of dying inside the subprocess call.
+    config = SpiceRunnerConfig(timeout_seconds=30.0)
+    if shutil.which(config.ngspice_bin) is None:
+        click.echo(
+            json.dumps(
+                {
+                    "error": (
+                        f"SPICE executable not found: {config.ngspice_bin!r}. "
+                        "Install ngspice (see the Readme 仿真 section) "
+                        "or re-run with --dry-run to only generate the deck."
+                    )
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        sys.exit(1)
+
     # Run Ngspice
     try:
-        runner = SpiceRunner(SpiceRunnerConfig(timeout_seconds=30.0))
+        runner = SpiceRunner(config)
         result = runner.run(deck)
     except Exception as exc:
         click.echo(json.dumps({"error": str(exc)}, indent=2))

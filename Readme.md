@@ -166,6 +166,8 @@ Phase 1 使用硬编码的 LM321 同相放大器电路（Rf=10k, Rg=1k, VCC=5V�
 
 Ngspice 安装：从 [SourceForge](https://sourceforge.net/projects/ngspice/files/ng-spice-rework/46/ngspice-46_64.7z/download) 下载，解压后 `Spice64\bin\ngspice_con.exe` 加入 PATH（控制台版，无 GUI 弹窗）。
 
+> 非 `--dry-run` 运行时 `cg sim` 会先预检 `ngspice_con` 是否在 PATH 中；缺失时输出 JSON 错误并以非零码退出（不会拖到子进程调用才失败）。只想生成 deck 时用 `--dry-run`，无需安装 Ngspice。
+
 ## 知识库 CLI
 
 ```powershell
