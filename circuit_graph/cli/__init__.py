@@ -8,20 +8,22 @@ is unchanged.
 """
 
 from circuit_graph.cli.app import (
-    _BUNDLED_SKILLS_DIR,
-    _discover_bundled_docs,
-    _discover_bundled_skills,
     _parse_and_enrich,
     design,
     export,
-    init_cmd,
-    init_orchestrator_cmd,
     layout_check,
     main,
     sim,
     view,
 )
 from circuit_graph.cli.erc import erc
+from circuit_graph.cli.init import (
+    _BUNDLED_SKILLS_DIR,
+    _discover_bundled_docs,
+    _discover_bundled_skills,
+    init_cmd,
+    init_orchestrator_cmd,
+)
 from circuit_graph.cli.kb import kb
 
 __all__ = [
