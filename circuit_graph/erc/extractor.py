@@ -497,9 +497,17 @@ class NetlistExtractor:
 
         # 4. Mark power-symbol anchors. For each power symbol, the pin point
         # carries the value as a candidate net name. The pin is already a
-        # point; we just attach the value to its root.
+        # point; we just attach the value to its root. PWR_FLAG is a KiCad
+        # ERC marker (it tells ERC where power comes from) — its value
+        # ("PWR_FLAG") would clobber the real rail name when both happen to
+        # share a root, so we skip those.
         for comp in components:
-            if comp.is_power_symbol and comp.value and comp.pins:
+            if (
+                comp.is_power_symbol
+                and comp.value
+                and comp.pins
+                and not comp.lib_id.endswith(":PWR_FLAG")
+            ):
                 # Power symbol pin 1 is the only pin; its absolute position is
                 # the anchor we just registered.
                 pin = comp.pins[0]

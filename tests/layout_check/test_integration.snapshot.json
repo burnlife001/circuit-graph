@@ -1,8 +1,9 @@
 {
   "rules_sha256": "bfd49414443b377953e5ade7b4656651c4081fde8b7f0ea1db6c40b00131ab25",
   "schematic": "lm321_ccs\\1A_CCS_LM321_BJT.kicad_sch",
-  "violation_count": 15,
+  "violation_count": 16,
   "rule_breakdown": {
-    "no-trace-through-component": 15
+    "grid-alignment": 4,
+    "no-trace-through-component": 12
   }
 }

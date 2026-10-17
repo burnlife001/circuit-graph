@@ -37,8 +37,10 @@ def test_returns_layout_schematic(lm321_schematic):
 
 
 def test_lm321_has_expected_components(lm321_schematic):
-    # The lm321 fixture has 14 components (we counted them via probe).
-    assert len(lm321_schematic.components) == 14
+    # The lm321 fixture has 6 functional components (RS, RLOAD, Q1, RB,
+    # CF, XU1) plus 4 power symbols (#PWR01, #PWR02, #FLG01, #FLG02) =
+    # 10 instances in total.
+    assert len(lm321_schematic.components) == 10
 
 
 def test_lm321_refdes_prefixes(lm321_schematic):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
+from typing import Any
 
 from circuit_graph.ir import CircuitIR
 from circuit_graph.layout.config import LayoutConfig

@@ -9,8 +9,12 @@ construction.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from kicad_utils import is_ground_name, is_power_net_name, parse_value
+
+if TYPE_CHECKING:
+    from netlist_queries import NetlistQueries
 
 
 @dataclass
