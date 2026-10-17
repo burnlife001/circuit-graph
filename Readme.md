@@ -519,6 +519,8 @@ uv run pytest -q
 
 CI（`.github/workflows/ci.yml`）在 push/PR 时跑同一份 pytest，并以 `ruff --select F821,F823`（未定义名字）为门禁；仓库现存约 950 条风格类 ruff 发现暂不入门禁。4 个在 base commit 上已失败的用例在 CI 中暂时 deselect（workflow 注释内有清单），修复后应重新启用。
 
+> 遗留问题（deselect 清单、2 处 latent bug、存量 lint）的排查方向与验收标准见 [`todolist.md`](todolist.md)。
+
 ### IR 前向兼容（未知字段不丢失）
 
 `ir_from_dict` 遇到当前 schema 不认识的字段时不会丢弃或报错：未知字段收存到对应对象的
