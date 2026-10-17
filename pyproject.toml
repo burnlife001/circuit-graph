@@ -2,7 +2,7 @@
 name = "circuit-graph"
 version = "0.1.0"
 description = "Python circuit understanding platform with CircuitOps LPG export"
-readme = "README.md"
+readme = "Readme.md"
 requires-python = ">=3.10"
 dependencies = [
     "networkx>=3.0",
