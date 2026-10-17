@@ -69,7 +69,7 @@ class TestSimCommand:
         """Non-dry-run without a SPICE executable: clear error, non-zero exit."""
         import json
 
-        import circuit_graph.cli as cli_module
+        import circuit_graph.cli.app as cli_module
 
         monkeypatch.setattr(cli_module.shutil, "which", lambda _bin: None)
         runner = CliRunner()

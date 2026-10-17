@@ -41,7 +41,9 @@ from circuit_graph.sim.spice_deck import SimulationDeck
 from circuit_graph.sim.spice_runner import SpiceRunner, SpiceRunnerConfig
 from circuit_graph.erc import ErcReport, ElectricalRulesChecker, KicadCliRunner
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# app.py lives one level deeper than the historical cli.py (cli/ package),
+# so the project root is three parents up: cli/app.py -> cli -> circuit_graph -> root.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_GRAPH_FILE = _PROJECT_ROOT / "output" / "circuit.graph.json"
 DEFAULT_GRAPHML_FILE = _PROJECT_ROOT / "output" / "circuit.graphml"
 DEFAULT_KB_PATH = _PROJECT_ROOT / "circuit_graph" / "knowledge" / "circuit_graph.db"
@@ -1442,7 +1444,8 @@ def erc_check(
 # Skills ship as data directories under the Python package. Each immediate
 # subdirectory that contains a SKILL.md is treated as one skill. Top-level
 # files (router docs, comparisons) are copied alongside the skills.
-_BUNDLED_SKILLS_DIR = Path(__file__).resolve().parent / "skills"
+# (cli/app.py is one level deeper than the historical cli.py — hence parent.parent.)
+_BUNDLED_SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
 
 
 def _discover_bundled_skills() -> list[Path]:
