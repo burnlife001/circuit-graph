@@ -43,6 +43,7 @@ CASES = [
     # --- interface ---
     ("fet-level-shifter", "extra-primitives.NET", "fet-level-shifter-q1", {"Q1", "R3", "R4"}),
     # --- power ---
+    ("bootstrap-cap", "FX-T268-V6-10米-5065.NET", "bootstrap-cap-c27", {"C27"}),
     ("bridge-rectifier-package", "500W-TX-Main-Zero.NET", "bridge-rectifier-package-bd1", {"BD1"}),
     ("bridge-rectifier", "add-primitives.NET", "bridge-rectifier-d1", {"D1"}),
     ("current-shunt-monitor", "433_RX.NET", "current-shunt-monitor-r1", {"R1"}),
@@ -53,6 +54,7 @@ CASES = [
     ("voltage-divider", "500W-RX.NET", "voltage-divider-r1", {"R1"}),
     # --- protection ---
     ("flyback-diode", "extra-primitives.NET", "flyback-diode-d1", {"D1", "L1"}),
+    ("rc-snubber", "FX-T268-V6-10米-5065.NET", "rc-snubber-c9", {"C9", "R26"}),
     ("tvs-protection", "500W-TX-Main.NET", "tvs-protection-d5", {"D5"}),
     # --- switch ---
     ("nmos-low-side-switch", "500W-TX-Main-Zero.NET", "nmos-low-side-switch-q1", {"Q1"}),

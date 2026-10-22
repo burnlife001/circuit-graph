@@ -1,0 +1,36 @@
+{
+  "$schema": "./schema.json",
+  "id": "bootstrap-cap",
+  "name": "自举电容",
+  "description": "自举电容接在开关节点与 BST 引脚之间（100nF 典型），为高压侧栅极驱动提供浮地电源。",
+  "role": "power",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "sw", "type": "net",
+      "name_pattern": "^SW\\d+$",
+      "required": true
+    },
+    {
+      "id": "bst", "type": "net",
+      "name_pattern": "^Net.+_\\d+$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "C_boot", "type": "Capacitor", "required": true,
+      "strict_value": true,
+      "value_pattern": "100\\s*n[Ff]",
+      "pins": [
+        {"number": "1", "net": "sw"},
+        {"number": "2", "net": "bst"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.30, "naming": 0.15, "parametric": 0.25, "type": 0.30},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

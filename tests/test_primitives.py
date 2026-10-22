@@ -583,3 +583,24 @@ def test_parameter_key_must_reference_known_component(tmp_path: Path) -> None:
     )
     with pytest.raises(PrimitiveValidationError, match="R_missing"):
         load_primitives(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# JSON-schema validation against primitives/schema.json (todolist P1-6)
+
+
+def test_all_primitives_validate_against_schema() -> None:
+    """Every primitive JSON must satisfy primitives/schema.json."""
+    jsonschema = pytest.importorskip("jsonschema")
+
+    primitives_dir = Path(__file__).resolve().parent.parent / "primitives"
+    schema = json.loads((primitives_dir / "schema.json").read_text(encoding="utf-8"))
+    files = [
+        p
+        for p in sorted(primitives_dir.rglob("*.json"))
+        if p.name not in ("schema.json",)
+    ]
+    assert files, "no primitive JSON files found"
+    for path in files:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        jsonschema.validate(doc, schema)

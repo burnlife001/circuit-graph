@@ -1,9 +1,10 @@
 # Primitives 索引
 
-> 由 [`scripts/build_primitive_index.py`](./scripts/build_primitive_index.py) 自动生成于 2026-10-22，共 25 个基元。请勿手改。
+> 由 [`scripts/build_primitive_index.py`](./scripts/build_primitive_index.py) 自动生成于 2026-10-22，共 27 个基元。请勿手改。
 
 | ID | 名称 | 用途 | 严格模式 | 文件 |
 |---|---|---|---|---|
+| `bootstrap-cap` | 自举电容 | 自举电容接在开关节点与 BST 引脚之间（100nF 典型），为高压侧栅极驱动提供浮地电源。 | — | [power/bootstrap-cap.json](./power/bootstrap-cap.json) |
 | `bridge-rectifier` | 桥式整流器 | 4 个二极管组成全波整流桥：2 个 AC 输入，1 个 DC+ 输出，1 个 DC- 输出（通常接地）。 | — | [power/bridge-rectifier.json](./power/bridge-rectifier.json) |
 | `bridge-rectifier-package` | 桥堆整流器（封装确认） | 封装已确认的集成桥堆（footprint 含 BRIDGE，如 GBJ1510/MB10S）：4 引脚器件跨接 2 路… | — | [power/bridge-rectifier-package.json](./power/bridge-rectifier-package.json) |
 | `crystal-with-load-caps` | 晶振 + 负载电容 | 晶体 / 陶瓷谐振器两端各接一个负载电容到地（Pierce 振荡器拓扑）。 | — | [timing/crystal-with-load-caps.json](./timing/crystal-with-load-caps.json) |
@@ -25,6 +26,7 @@
 | `pull-up-resistor` | 上拉电阻 | 电阻一端接电源（role=power），另一端接数字信号（role=digital），将信号默认拉到高电平。 | role | [termination/pull-up-resistor.json](./termination/pull-up-resistor.json) |
 | `rc-high-pass` | RC 高通滤波器 | 电容串联、电阻从输出节点到地：高频通过、低频/直流被电容阻断。 | — | [filter/rc-high-pass.json](./filter/rc-high-pass.json) |
 | `rc-low-pass` | RC 低通滤波器 | 电阻串联、电容从输出节点到地：低频通过、高频被电容旁路。 | — | [filter/rc-low-pass.json](./filter/rc-low-pass.json) |
+| `rc-snubber` | RC 吸收电路 | 开关节点 RC 吸收：电阻从开关节点串联到中间网，电容从中间网到地（2Ω + 4.7nF 典型），抑制开关振铃。 | role | [protection/rc-snubber.json](./protection/rc-snubber.json) |
 | `sallen-key-low-pass` | Sallen-Key 二阶RC低通滤波器 | 运放电压跟随器 + 2R + 2C 构成的单位增益二阶有源低通：C1、C2 均接 Vout 形成正反馈，决定截止频率与… | role | [amplifier/sallen-key-low-pass.json](./amplifier/sallen-key-low-pass.json) |
 | `tvs-protection` | TVS 保护二极管 | TVS 二极管跨接在被保护信号/电源与地之间，过压时击穿钳位。 | role | [protection/tvs-protection.json](./protection/tvs-protection.json) |
 | `type-c-cc-pull-down` | Type-C CC Pull-down | USB Type-C CC pin pulled to ground through a 5.1 kΩ resisto… | — | [termination/type-c-cc-pull-down.json](./termination/type-c-cc-pull-down.json) |
