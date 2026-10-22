@@ -77,6 +77,32 @@
 
 - Protel `.NET` 的 lint（悬空网 / 重复位号 / 电源冲突等）——本轮不做，`cg erc` 仍只支持 KiCad `.kicad_sch`。
 
+## 简易验收（收尾自检，一次跑完）
+
+前置（在 circuit-graph 仓库根目录）：
+
+```powershell
+$CG  = ".\.venv\Scripts\cg.exe"
+$NET = "fixtures\protel\FX-T268-V6-10米-5065.NET"
+```
+
+| # | 检查项 | 命令 | 期望 |
+|---|--------|------|------|
+| 1 | 拓扑提速 | `Measure-Command { & $CG view C9 $NET \| Out-Null }` | < 1.5 s |
+| 2 | 缓存生效 | 同上，连续跑第二次 | < 0.3 s |
+| 3 | warnings 可见 | `(& $CG view C9 $NET \| ConvertFrom-Json).warnings` | 是数组（可为空），键存在 |
+| 4 | 无超时模板 | `& $CG view C9 $NET --with-blocks \| Select-String "ABORTED"` | 无输出 |
+| 5 | RC 滤波不再丢失 | `& $CG view C9 $NET --with-blocks \| Select-String "rc-low-pass"` | 有命中 |
+| 6 | 假阳性消除 | `& $CG view Q5 $NET --with-blocks` | 不同时出现 `nmos-low-side-switch-q5` 与 `pmos-high-side-switch-q5` |
+| 7 | 新基元生效 | `& $CG view C9 $NET --with-blocks` | 出现 `rc-snubber`（C9）与 `bootstrap`（C27） |
+| 8 | 对称组 | `& $CG view C9 $NET --with-blocks` | 输出 4 路对称组（SW1/SW2/SW3/SW4） |
+| 9 | query 命令 | `& $CG query $NET --conn C9` | 输出 < 20 行且含 `NetC9_2` |
+| 10 | 输出截断 | `(& $CG view C9 $NET).Length` | 较改动前下降 > 60% |
+| 11 | KB 反查 | `& $CG kb lookup SW5001 --usage-in $NET` | 输出 Q5 / Q7 及其所在网络 |
+| 12 | 回归 | `uv run pytest` | 无新增失败 |
+
+> 第 1~11 项全绿后，再跑一次 `uv run python scripts/build_primitive_index.py` 更新基元索引。
+
 ## 完成后清理
 
-- 以上全部完成后，删除本文件，并在 `Readme.md` 中同步移除对应的"待办 / 进行中"描述。
+- 上表 12 项全部通过后，删除本文件，并在 `Readme.md` 中同步移除对应的"待办 / 进行中"描述。
