@@ -45,7 +45,6 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator, NamedTuple, Optional
 
 from circuit_graph.ir import DeviceKind
-from circuit_graph.knowledge import chip_resolver as chip_resolver_mod
 from circuit_graph.parsers.protel import ParserInput
 from circuit_graph.parsers.registry import parse_netlist
 
@@ -967,6 +966,8 @@ class ComponentDatabase:
         pin_types: dict[str, str] = payload.get("pin_types", {})
         if not pin_types and isinstance(pins, dict):
             try:
+                from circuit_graph.knowledge import chip_resolver as chip_resolver_mod
+
                 pin_types = chip_resolver_mod.classify_pin_types(pins)
             except Exception:
                 pin_types = {}
@@ -1096,6 +1097,8 @@ class ComponentDatabase:
         # Stage 4 — batch JLCPCB resolution with package-match gating.
         if jl_candidates:
             try:
+                from circuit_graph.knowledge import chip_resolver as chip_resolver_mod
+
                 batch = chip_resolver_mod.resolve_parts_batch(jl_candidates)
             except Exception:
                 batch = [None] * len(jl_candidates)
@@ -1536,9 +1539,13 @@ def _invoke_pin2json(
     """
     try:
         if is_lcsc:
+            from circuit_graph.knowledge import chip_resolver as chip_resolver_mod
+
             return chip_resolver_mod.resolve_lcsc(str(target))
         target_str = str(target)
         if os.path.exists(target_str):
+            from circuit_graph.knowledge import chip_resolver as chip_resolver_mod
+
             symbol_name, pins = chip_resolver_mod.parse_kicad_sym(target_str)
             pin_dict = {p["number"]: p["name"] for p in pins}
             sym = symbol_name or target_str

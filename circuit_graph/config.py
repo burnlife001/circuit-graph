@@ -9,8 +9,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _ENV_PATH = _PROJECT_ROOT / ".env"
 
@@ -18,6 +16,8 @@ _ENV_PATH = _PROJECT_ROOT / ".env"
 def load() -> None:
     """Load ``.env`` into ``os.environ``.  Idempotent — safe to call multiple times."""
     if _ENV_PATH.exists():
+        from dotenv import load_dotenv
+
         load_dotenv(_ENV_PATH, override=False)
 
 

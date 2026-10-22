@@ -561,14 +561,9 @@ def _parse_and_enrich(
     ``use_cache=False`` to bypass.  Cache hits restore the warnings too, so
     diagnostics stay visible on warm runs.
     """
-    from circuit_graph.cache import cache_key, default_cache_dir, load_cached, save_cached
-    from circuit_graph.enrichers import run_enrichers
-    from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
-    from circuit_graph.enrichers.multi_unit_splitter import MultiUnitSplitter
-    from circuit_graph.enrichers.net_classifier import NetClassifier
-    from circuit_graph.enrichers.pin_resolver import PinNameResolver
-    from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
-    from circuit_graph.enrichers.value_normalizer import ValueNormalizer
+    # Cache lookup first: a warm hit must not pay the enricher import chain
+    # (enrichers → matcher → networkx is ~0.3 s).
+    from circuit_graph.cache import cache_key, default_cache_dir, load_cached
 
     cache_root = cache_dir if cache_dir is not None else default_cache_dir()
     key: str | None = None
@@ -584,6 +579,15 @@ def _parse_and_enrich(
                 if warnings_out is not None:
                     warnings_out.extend(cached_warnings)
                 return ir
+
+    from circuit_graph.cache import save_cached
+    from circuit_graph.enrichers import run_enrichers
+    from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
+    from circuit_graph.enrichers.multi_unit_splitter import MultiUnitSplitter
+    from circuit_graph.enrichers.net_classifier import NetClassifier
+    from circuit_graph.enrichers.pin_resolver import PinNameResolver
+    from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
+    from circuit_graph.enrichers.value_normalizer import ValueNormalizer
 
     ir = parse_netlist(ParserInput(source_id=str(file), file_path=str(file)))
     collected: list[str] = []

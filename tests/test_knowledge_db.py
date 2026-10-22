@@ -15,6 +15,7 @@ import pytest
 
 from circuit_graph.enrichers.pin_resolver import PinNameResolver
 from circuit_graph.ir import CircuitIR, CircuitMeta, Component, DeviceKind, Pin
+from circuit_graph.knowledge import chip_resolver as chip_resolver_mod
 from circuit_graph.knowledge.db import (
     SCHEMA_DDL,
     ComponentDatabase,
@@ -704,7 +705,7 @@ def test_auto_resolve_ics_match_writes_to_board(monkeypatch, tmp_path: Path) -> 
     board_id = db.get_component("JW5065").id
 
     monkeypatch.setattr(
-        db_mod.chip_resolver_mod, "resolve_parts_batch",
+        chip_resolver_mod, "resolve_parts_batch",
         lambda pairs: _fake_batch_result({"JW5065": "TSOT-23-8"}),
     )
     try:
@@ -740,7 +741,7 @@ def test_auto_resolve_ics_mismatch_creates_variant(monkeypatch, tmp_path: Path) 
 
     # JLCPCB returns LQFP-64 — different package family, must NOT overwrite.
     monkeypatch.setattr(
-        db_mod.chip_resolver_mod, "resolve_parts_batch",
+        chip_resolver_mod, "resolve_parts_batch",
         lambda pairs: _fake_batch_result({"MM32F0144": "LQFP-64"}),
     )
     try:
@@ -780,7 +781,7 @@ def test_auto_resolve_ics_mismatch_idempotent(monkeypatch, tmp_path: Path) -> No
     db = ComponentDatabase.open(tmp_path / "kb.db")
     db._upsert_component("MM32F0144", package="LQFP-48", pin_count=48)
     monkeypatch.setattr(
-        db_mod.chip_resolver_mod, "resolve_parts_batch",
+        chip_resolver_mod, "resolve_parts_batch",
         lambda pairs: _fake_batch_result({"MM32F0144": "LQFP-64"}),
     )
     try:
@@ -800,7 +801,7 @@ def test_auto_resolve_ics_match_qfn_dimensions(monkeypatch, tmp_path: Path) -> N
     db = ComponentDatabase.open(tmp_path / "kb.db")
     db._upsert_component("SW5001", package="QFN-26", pin_count=26)
     monkeypatch.setattr(
-        db_mod.chip_resolver_mod, "resolve_parts_batch",
+        chip_resolver_mod, "resolve_parts_batch",
         lambda pairs: _fake_batch_result({"SW5001": "QFN-26(4x4)"}),
     )
     try:
@@ -830,7 +831,7 @@ def test_auto_resolve_ics_stage5_datasheet_pdf(monkeypatch, tmp_path: Path) -> N
 
     # Mock Stage 4 to return nothing (batch fails).
     monkeypatch.setattr(
-        db_mod.chip_resolver_mod, "resolve_parts_batch",
+        chip_resolver_mod, "resolve_parts_batch",
         lambda pairs: [None] * len(pairs),
     )
     # Mock pdf_pin_extract._find_datasheet to return the fake PDF.
@@ -886,7 +887,7 @@ def test_auto_resolve_ics_stage5_skips_when_already_resolved(
 
     # Stage 4 succeeds with matching package.
     monkeypatch.setattr(
-        db_mod.chip_resolver_mod, "resolve_parts_batch",
+        chip_resolver_mod, "resolve_parts_batch",
         lambda pairs: _fake_batch_result({"JW5065": "TSOT-23-8"}),
     )
 

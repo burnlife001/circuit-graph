@@ -127,10 +127,20 @@ def view(
         if ctx is not None:
             result["comm_context"] = ctx
     if with_blocks:
-        result["blocks"] = _build_blocks_context(ir, result)
-        groups = _build_symmetry_context(ir, result)
+        from circuit_graph.symmetry import detect_symmetry_groups, groups_touching
+
+        ego_components = set(result.get("components", {}))
+        groups = groups_touching(detect_symmetry_groups(ir), ego_components)
         if groups:
-            result["symmetry_groups"] = groups
+            result["symmetry_groups"] = [g.to_dict() for g in groups]
+        # Symmetry siblings count as focal-relevant: viewing one channel's
+        # snubber cap surfaces the bootstrap caps of all four switch nodes.
+        symmetry_blocks = {
+            inst.block_id for g in groups for inst in g.instances
+        }
+        result["blocks"] = _build_blocks_context(
+            ir, result, extra_ids=symmetry_blocks
+        )
 
     output = json.dumps(result, indent=2 if pretty else None, ensure_ascii=False)
     sys.stdout.buffer.write(output.encode("utf-8"))
@@ -412,30 +422,19 @@ def _build_comm_context(ir: CircuitIR, designator: str) -> dict[str, object] | N
     return {"buses": buses}
 
 
-def _build_symmetry_context(
-    ir: CircuitIR, view_result: dict[str, object]
+def _build_blocks_context(
+    ir: CircuitIR,
+    view_result: dict[str, object],
+    *,
+    extra_ids: set[str] | None = None,
 ) -> list[dict[str, object]]:
-    """Return repeated-structure groups touching the ego subgraph.
-
-    Only templates that declare a ``symmetry`` block participate (see
-    ``circuit_graph.symmetry``); groups need ≥2 instances board-wide and at
-    least one instance intersecting the view's component set to be listed.
-    """
-    from circuit_graph.symmetry import detect_symmetry_groups, groups_touching
-
-    ego_components = set(view_result.get("components", {}))
-    groups = detect_symmetry_groups(ir)
-    return [g.to_dict() for g in groups_touching(groups, ego_components)]
-
-
-def _build_blocks_context(ir: CircuitIR, view_result: dict[str, object]) -> list[dict[str, object]]:
     """Return functional blocks that touch the ego subgraph in ``view_result``.
 
-    A block is included when it contains the focal component or at least one
+    A block is included when it contains the focal component, at least one
     fully-detailed ego component (stub entries from folded rails/multi-hop
-    traversal do not count), so blocks dragged in only via a shared GND do
-    not clutter the output.  The list is empty (not absent) when nothing was
-    recognised — callers always get the key when ``--with-blocks`` is passed.
+    traversal do not count), or its id appears in ``extra_ids`` (symmetry
+    siblings).  The list is empty (not absent) when nothing was recognised —
+    callers always get the key when ``--with-blocks`` is passed.
     """
     focal = str(view_result.get("focal", ""))
     components = view_result.get("components", {})
@@ -447,16 +446,23 @@ def _build_blocks_context(ir: CircuitIR, view_result: dict[str, object]) -> list
     blocks: list[dict[str, object]] = []
     for block in ir.blocks:
         block_comps = set(block.component_ids)
-        if focal not in block_comps and not block_comps & detailed:
+        if (
+            focal not in block_comps
+            and not block_comps & detailed
+            and (extra_ids is None or block.id not in extra_ids)
+        ):
             continue
-        blocks.append(
-            {
-                "id": block.id,
-                "name": block.name,
-                "role": block.role.value,
-                "component_ids": list(block.component_ids),
-                "description": block.description,
-                "source": block.source,
-            }
-        )
+        direct = focal in block_comps or bool(block_comps & detailed)
+        entry: dict[str, object] = {
+            "id": block.id,
+            "name": block.name,
+            "role": block.role.value,
+            "component_ids": list(block.component_ids),
+            "source": block.source,
+        }
+        # Symmetry siblings included for context only skip the long
+        # description, so a 4-way group does not quadruple the blocks section.
+        if direct:
+            entry["description"] = block.description
+        blocks.append(entry)
     return blocks

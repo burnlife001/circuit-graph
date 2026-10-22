@@ -9,7 +9,9 @@ from pathlib import Path
 import click
 
 from circuit_graph.cli.app import main
-from circuit_graph.erc import ElectricalRulesChecker, ErcReport, KicadCliRunner
+
+# The ERC engine chain (sexpdata, kicad_cli, ~0.02 s) is imported lazily
+# inside the command bodies so non-erc commands do not pay for it at startup.
 
 # ---------------------------------------------------------------------------
 # cg erc — electrical rules check (Level 1 kicad-cli + Level 2 native)
@@ -28,7 +30,7 @@ def _color(text: str, code: str, enabled: bool) -> str:
 
 
 def _format_violations_text(
-    report: ErcReport,
+    report: "ErcReport",
     *,
     severity_filter: str,
     color_enabled: bool,
@@ -95,7 +97,8 @@ def _format_violations_text(
     return "\n".join(lines)
 
 
-def _run_native_erc(sch_file: Path) -> ErcReport:
+def _run_native_erc(sch_file: Path) -> "ErcReport":
+    from circuit_graph.erc import ElectricalRulesChecker
     """Run the pure-Python native engine on a .kicad_sch file."""
     from circuit_graph.erc.extractor import NetlistExtractor
 
@@ -107,14 +110,15 @@ def _run_native_erc(sch_file: Path) -> ErcReport:
 def _run_kicad_erc(
     sch_file: Path,
     severity_filter: str,
-) -> ErcReport:
+) -> "ErcReport":
+    from circuit_graph.erc import KicadCliRunner
     """Run kicad-cli ERC wrapper on a .kicad_sch file."""
     severities = None if severity_filter == "all" else [severity_filter]
     return KicadCliRunner().run_erc(sch_file, severities=severities)
 
 
 def _format_report(
-    report: ErcReport,
+    report: "ErcReport",
     *,
     fmt: str,
     severity_filter: str,

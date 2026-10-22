@@ -9,13 +9,17 @@ from pathlib import Path
 import click
 
 from circuit_graph.cli.app import _PROJECT_ROOT, DEFAULT_KB_PATH, main
-from circuit_graph.knowledge.db import ComponentDatabase
-from circuit_graph.parsers.protel import ParserInput
-from circuit_graph.parsers.registry import parse_netlist
 
-# ---------------------------------------------------------------------------
-# cg kb — knowledge base sub-commands
-# ---------------------------------------------------------------------------
+# The knowledge-DB chain (sqlite + chip_resolver, ~0.12 s) is imported lazily
+# inside the command bodies so that non-kb commands (cg view / query / export)
+# do not pay for it at CLI startup.
+
+
+def _open_kb(ctx: click.Context) -> "ComponentDatabase":
+    from circuit_graph.knowledge.db import ComponentDatabase
+
+    db_path: Path = ctx.obj["kb_path"]
+    return ComponentDatabase.open(db_path)
 
 
 @main.group()
@@ -31,11 +35,6 @@ def kb(ctx: click.Context, db_path: Path) -> None:
     """Query and update the component knowledge base (SQLite)."""
     ctx.ensure_object(dict)
     ctx.obj["kb_path"] = db_path
-
-
-def _open_kb(ctx: click.Context) -> ComponentDatabase:
-    db_path: Path = ctx.obj["kb_path"]
-    return ComponentDatabase.open(db_path)
 
 
 @kb.command(name="init")
@@ -89,8 +88,11 @@ def kb_lookup(ctx: click.Context, part_number: str, usage_netlist: Path | None) 
     click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
-def _usage_in(db: ComponentDatabase, part_number: str, netlist: Path) -> dict[str, object]:
+def _usage_in(db: "ComponentDatabase", part_number: str, netlist: Path) -> dict[str, object]:
     """Find designators using ``part_number`` in ``netlist`` and their nets."""
+    from circuit_graph.parsers.protel import ParserInput
+    from circuit_graph.parsers.registry import parse_netlist
+
     ir = parse_netlist(ParserInput(source_id=str(netlist), file_path=str(netlist)))
     net_names = {n.id: n.name for n in ir.nets}
     needle = part_number.lower()
@@ -361,6 +363,9 @@ def kb_resolve(
     dry_run: bool,
 ) -> None:
     """Scan ``netlist`` and resolve unnamed pins via KB + pin2json."""
+    from circuit_graph.parsers.protel import ParserInput
+    from circuit_graph.parsers.registry import parse_netlist
+
     db = _open_kb(ctx)
     try:
         ir = parse_netlist(

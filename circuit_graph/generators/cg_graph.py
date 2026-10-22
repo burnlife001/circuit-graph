@@ -233,30 +233,34 @@ def _ensure_enriched(ir: CircuitIR) -> CircuitIR:
     The cg-graph format relies on normalized values, classified nets and
     topology blocks.  This helper makes the generator safe to call on a bare
     parsed IR while avoiding duplicate work when the caller already enriched it.
-    Enrichers are imported lazily so that importing this module (and any
-    warm-cache CLI path that skips enrichment) does not pull in the matcher.
+    Each enricher is imported inside its own branch so that warm-cache paths
+    (fully enriched IR) never pull in the matcher → networkx chain.
     """
-    from circuit_graph.enrichers import run_enrichers
-    from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
-    from circuit_graph.enrichers.net_classifier import NetClassifier
-    from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
-    from circuit_graph.enrichers.value_normalizer import ValueNormalizer
-
     enrichers: list[Any] = []
     if any(c.raw_value and c.value is None for c in ir.components):
+        from circuit_graph.enrichers.value_normalizer import ValueNormalizer
+
         enrichers.append(ValueNormalizer())
     if any(n.type is None for n in ir.nets):
+        from circuit_graph.enrichers.net_classifier import NetClassifier
+
         enrichers.append(NetClassifier())
     # EdgeSemanticEnricher only adds work when connections lack metadata; the
     # `can_enrich` predicate inside run_enrichers will skip it if everything is
     # already annotated.
     if any(not (c.metadata or {}).get("edge_semantic") for c in ir.connections):
+        from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
+
         enrichers.append(EdgeSemanticEnricher())
     # TopologyRecognizer is idempotent by block id, so it is safe to run when
     # no blocks have been emitted yet.
     if not ir.blocks:
+        from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
+
         enrichers.append(TopologyRecognizer())
     if enrichers:
+        from circuit_graph.enrichers import run_enrichers
+
         return run_enrichers(ir, enrichers).ir
     return ir
 
