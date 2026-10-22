@@ -284,7 +284,10 @@ def detect_voltage_dividers(ctx: AnalysisContext) -> dict:
                     r1, r2 = r2, r1
 
                 # One end should be power, other should be ground (or another power)
-                if not (ctx.is_power_net(top_net) and (ctx.is_ground(bot_net) or ctx.is_power_net(bot_net))):
+                if not (
+                    ctx.is_power_net(top_net)
+                    and (ctx.is_ground(bot_net) or ctx.is_power_net(bot_net))
+                ):
                     # Also catch feedback dividers: output -> mid -> ground.
                     # After the KH-238 normalization above, an unnamed
                     # top_net with ground bot_net reaches this branch
@@ -317,8 +320,16 @@ def detect_voltage_dividers(ctx: AnalysisContext) -> dict:
                     ratio = r_bot / (r_top + r_bot)
 
                     divider = {
-                        "r_top": {"ref": r_top_ref, "value": ctx.comp_lookup[r_top_ref]["value"], "ohms": r_top},
-                        "r_bottom": {"ref": r_bot_ref, "value": ctx.comp_lookup[r_bot_ref]["value"], "ohms": r_bot},
+                        "r_top": {
+                            "ref": r_top_ref,
+                            "value": ctx.comp_lookup[r_top_ref]["value"],
+                            "ohms": r_top,
+                        },
+                        "r_bottom": {
+                            "ref": r_bot_ref,
+                            "value": ctx.comp_lookup[r_bot_ref]["value"],
+                            "ohms": r_bot,
+                        },
                         "top_net": top_net,
                         "mid_net": mid_net,
                         "bottom_net": bot_net,
@@ -344,13 +355,21 @@ def detect_voltage_dividers(ctx: AnalysisContext) -> dict:
                                     divider["confidence"] = "deterministic"
                                     divider["evidence_source"] = "topology"
                                     divider["summary"] = f"Voltage divider {r_top_ref}/{r_bot_ref}"
-                                    divider["description"] = "Feedback network voltage divider detected"
+                                    divider["description"] = (
+                                        "Feedback network voltage divider detected"
+                                    )
                                     divider["components"] = [r_top_ref, r_bot_ref]
                                     divider["nets"] = []
                                     divider["pins"] = []
                                     divider["recommendation"] = ""
-                                    divider["report_context"] = {"section": "Voltage Dividers", "impact": "", "standard_ref": ""}
-                                    divider["provenance"] = make_provenance("vd_two_resistor", "deterministic", [r_top_ref, r_bot_ref])
+                                    divider["report_context"] = {
+                                        "section": "Voltage Dividers",
+                                        "impact": "", "standard_ref": "",
+                                    }
+                                    divider["provenance"] = make_provenance(
+                                        "vd_two_resistor", "deterministic",
+                                        [r_top_ref, r_bot_ref],
+                                    )
                                     feedback_networks.append(divider)
                                     break
 
@@ -368,8 +387,12 @@ def detect_voltage_dividers(ctx: AnalysisContext) -> dict:
                     divider["nets"] = []
                     divider["pins"] = []
                     divider["recommendation"] = ""
-                    divider["report_context"] = {"section": "Voltage Dividers", "impact": "", "standard_ref": ""}
-                    divider["provenance"] = make_provenance("vd_two_resistor", "deterministic", [r_top_ref, r_bot_ref])
+                    divider["report_context"] = {
+                        "section": "Voltage Dividers", "impact": "", "standard_ref": ""
+                    }
+                    divider["provenance"] = make_provenance(
+                        "vd_two_resistor", "deterministic", [r_top_ref, r_bot_ref]
+                    )
 
                     voltage_dividers.append(divider)
 
@@ -628,8 +651,16 @@ def detect_rc_filters(ctx: AnalysisContext, voltage_dividers: list[dict],
 
                 rc_entry = {
                     "type": filter_type,
-                    "resistor": {"ref": res["reference"], "value": ctx.comp_lookup[res["reference"]]["value"], "ohms": r_val},
-                    "capacitor": {"ref": cap_ref, "value": ctx.comp_lookup[cap_ref]["value"], "farads": c_val},
+                    "resistor": {
+                        "ref": res["reference"],
+                        "value": ctx.comp_lookup[res["reference"]]["value"],
+                        "ohms": r_val,
+                    },
+                    "capacitor": {
+                        "ref": cap_ref,
+                        "value": ctx.comp_lookup[cap_ref]["value"],
+                        "farads": c_val,
+                    },
                     "cutoff_hz": round(fc, 2),
                     "time_constant_s": tau,
                     "input_net": r_other if filter_type == "low-pass" else shared_net,
@@ -654,8 +685,12 @@ def detect_rc_filters(ctx: AnalysisContext, voltage_dividers: list[dict],
                 rc_entry["nets"] = []
                 rc_entry["pins"] = []
                 rc_entry["recommendation"] = ""
-                rc_entry["report_context"] = {"section": "Passive Filters", "impact": "", "standard_ref": ""}
-                rc_entry["provenance"] = make_provenance("rc_topology", "deterministic", [res["reference"], cap_ref])
+                rc_entry["report_context"] = {
+                    "section": "Passive Filters", "impact": "", "standard_ref": ""
+                }
+                rc_entry["provenance"] = make_provenance(
+                    "rc_topology", "deterministic", [res["reference"], cap_ref]
+                )
 
                 seen_rc_pairs.add(rc_pair)
                 results_rc.append(rc_entry)
@@ -769,8 +804,16 @@ def detect_lc_filters(ctx: AnalysisContext) -> list[dict]:
                 z0 = math.sqrt(l_val / c_val)  # characteristic impedance
 
                 lc_entry = {
-                    "inductor": {"ref": ind["reference"], "value": ctx.comp_lookup[ind["reference"]]["value"], "henries": l_val},
-                    "capacitor": {"ref": cap["reference"], "value": ctx.comp_lookup[cap["reference"]]["value"], "farads": c_val},
+                    "inductor": {
+                        "ref": ind["reference"],
+                        "value": ctx.comp_lookup[ind["reference"]]["value"],
+                        "henries": l_val,
+                    },
+                    "capacitor": {
+                        "ref": cap["reference"],
+                        "value": ctx.comp_lookup[cap["reference"]]["value"],
+                        "farads": c_val,
+                    },
                     "resonant_hz": round(f0, 2),
                     "impedance_ohms": round(z0, 2),
                     "shared_net": shared_net_lc,
@@ -789,11 +832,17 @@ def detect_lc_filters(ctx: AnalysisContext) -> list[dict]:
                 lc_entry["nets"] = []
                 lc_entry["pins"] = []
                 lc_entry["recommendation"] = ""
-                lc_entry["report_context"] = {"section": "Passive Filters", "impact": "", "standard_ref": ""}
-                lc_entry["provenance"] = make_provenance("lc_topology", "deterministic", [ind["reference"], cap["reference"]])
+                lc_entry["report_context"] = {
+                    "section": "Passive Filters", "impact": "", "standard_ref": ""
+                }
+                lc_entry["provenance"] = make_provenance(
+                    "lc_topology", "deterministic", [ind["reference"], cap["reference"]]
+                )
 
                 cap_other_net_for_group = (c_nets - {shared_net_lc}).pop()
-                _lc_groups.setdefault((ind["reference"], shared_net_lc, cap_other_net_for_group), []).append(lc_entry)
+                _lc_groups.setdefault(
+                    (ind["reference"], shared_net_lc, cap_other_net_for_group), []
+                ).append(lc_entry)
 
     # Merge parallel caps per inductor-net pair
     lc_filters: list[dict] = []
@@ -842,8 +891,13 @@ def detect_lc_filters(ctx: AnalysisContext) -> list[dict]:
             merged["nets"] = []
             merged["pins"] = []
             merged["recommendation"] = ""
-            merged["report_context"] = {"section": "Passive Filters", "impact": "", "standard_ref": ""}
-            merged["provenance"] = make_provenance("lc_topology", "deterministic", [entries[0]["inductor"]["ref"]] + cap_refs)
+            merged["report_context"] = {
+                "section": "Passive Filters", "impact": "", "standard_ref": ""
+            }
+            merged["provenance"] = make_provenance(
+                "lc_topology", "deterministic",
+                [entries[0]["inductor"]["ref"]] + cap_refs,
+            )
             lc_filters.append(merged)
 
     # KH-119: Suppress overcounting — if one inductor pairs with caps on BOTH
@@ -910,7 +964,9 @@ def detect_crystal_circuits(ctx: AnalysisContext) -> list[dict]:
             if net_name not in ctx.nets:
                 continue
             for p in ctx.nets[net_name]["pins"]:
-                if p["component"] != xtal["reference"] and ctx.comp_lookup.get(p["component"], {}).get("type") == "capacitor":
+                if p["component"] != xtal["reference"] and ctx.comp_lookup.get(
+                    p["component"], {}
+                ).get("type") == "capacitor":
                     cap_ref = p["component"]
                     cap_val = ctx.parsed_values.get(cap_ref)
                     if cap_val:
@@ -939,28 +995,31 @@ def detect_crystal_circuits(ctx: AnalysisContext) -> list[dict]:
             c_stray = 3e-12  # typical stray capacitance estimate
             cl_eff = (c1 * c2) / (c1 + c2) + c_stray
             xtal_entry["effective_load_pF"] = round(cl_eff * 1e12, 2)
-            xtal_entry["note"] = f"CL_eff = ({load_caps[0]['value']} * {load_caps[1]['value']}) / ({load_caps[0]['value']} + {load_caps[1]['value']}) + ~3pF stray"
+            xtal_entry["note"] = (
+                f"CL_eff = ({load_caps[0]['value']} * {load_caps[1]['value']}) / "
+                f"({load_caps[0]['value']} + {load_caps[1]['value']}) + ~3pF stray"
+            )
 
         # Crystal load capacitance validation
-        target_load_pF = None
+        target_load_pf = None
         target_load_source = None
         xtal_value = xtal.get("value", "")
         # Try parsing from value string: "16MHz/18pF", "8MHz 20pF"
         load_match = re.search(r'(\d+\.?\d*)\s*pF', xtal_value, re.IGNORECASE)
         if load_match:
-            target_load_pF = float(load_match.group(1))
+            target_load_pf = float(load_match.group(1))
             target_load_source = "parsed_from_value"
         # Frequency-based defaults — use granular lookup table
-        if target_load_pF is None:
+        if target_load_pf is None:
             freq = xtal_entry.get("frequency")
             if freq:
-                target_load_pF = _crystal_default_cl(freq)
-                if target_load_pF is not None:
+                target_load_pf = _crystal_default_cl(freq)
+                if target_load_pf is not None:
                     target_load_source = "frequency_default"
-        xtal_entry["target_load_pF"] = target_load_pF
+        xtal_entry["target_load_pF"] = target_load_pf
         xtal_entry["target_load_source"] = target_load_source
-        if target_load_pF and "effective_load_pF" in xtal_entry:
-            error_pct = (xtal_entry["effective_load_pF"] - target_load_pF) / target_load_pF * 100
+        if target_load_pf and "effective_load_pF" in xtal_entry:
+            error_pct = (xtal_entry["effective_load_pF"] - target_load_pf) / target_load_pf * 100
             xtal_entry["load_cap_error_pct"] = round(error_pct, 1)
             if target_load_source == "frequency_default":
                 # Target is a statistical default, not from the actual crystal
@@ -1028,7 +1087,6 @@ def detect_crystal_circuits(ctx: AnalysisContext) -> list[dict]:
         ref = comp["reference"]
         # Find output net (clock output pin)
         out_net = None
-        vcc_net = None
         for pin in comp.get("pins", []):
             net_name, _ = ctx.pin_net.get((ref, pin["number"]), (None, None))
             if not net_name:
@@ -1036,8 +1094,6 @@ def detect_crystal_circuits(ctx: AnalysisContext) -> list[dict]:
             pname = pin.get("name", "").upper()
             if pname in ("OUT", "OUTPUT", "CLK", "CLKOUT"):
                 out_net = net_name
-            elif ctx.is_power_net(net_name) and not ctx.is_ground(net_name):
-                vcc_net = net_name
         # If no named output pin, check for non-power non-ground pins
         if not out_net:
             for pin in comp.get("pins", []):
@@ -1202,7 +1258,8 @@ def detect_decoupling(ctx: AnalysisContext) -> list[dict]:
                     c_n1, c_n2 = ctx.get_two_pin_nets(p["component"])
                     other = c_n2 if c_n1 == rail_name else c_n1
                     if ctx.is_ground(other):
-                        self_resonant = 1.0 / (2.0 * math.pi * math.sqrt(1e-9 * cap_val))  # ~1nH ESL estimate
+                        # ~1nH ESL estimate
+                        self_resonant = 1.0 / (2.0 * math.pi * math.sqrt(1e-9 * cap_val))
                         rail_caps.append({
                             "ref": p["component"],
                             "value": comp["value"],
@@ -1230,7 +1287,10 @@ def detect_decoupling(ctx: AnalysisContext) -> list[dict]:
                 "pins": [],
                 "recommendation": "",
                 "report_context": {"section": "Decoupling", "impact": "", "standard_ref": ""},
-                "provenance": make_provenance("decoup_cap_near_ic", "deterministic", [c["ref"] for c in rail_caps]),
+                "provenance": make_provenance(
+                    "decoup_cap_near_ic", "deterministic",
+                    [c["ref"] for c in rail_caps],
+                ),
             })
     return decoupling_analysis
 
@@ -1244,12 +1304,12 @@ def detect_current_sense(ctx: AnalysisContext) -> list[dict]:
         and 0 < ctx.parsed_values[c["reference"]] <= 0.5
     ]
 
-    _SENSE_PIN_PREFIXES = frozenset({
+    _sense_pin_prefixes = frozenset({
         "CS", "CSP", "CSN", "ISNS", "ISENSE", "IMON", "IOUT",
         "SEN", "SENSE", "VSENSE", "VSEN", "VS", "INP", "INN",
         "IS", "IAVG", "ISET",
     })
-    _SENSE_IC_KEYWORDS = frozenset({
+    _sense_ic_keywords = frozenset({
         "ina", "acs7", "ad8210", "ad8217", "ad8218", "max9938",
         "max4080", "max4081", "max471", "ltc6101", "ltc6102",
         "ltc6103", "ltc4151", "ina226", "ina233", "ina180",
@@ -1258,7 +1318,7 @@ def detect_current_sense(ctx: AnalysisContext) -> list[dict]:
         "pam2401", "zxct", "acs71", "acs72", "asc",
     })
     # KH-081/KH-113: IC families that are never current sense amplifiers
-    _SENSE_IC_EXCLUDE = frozenset({
+    _sense_ic_exclude = frozenset({
         # Ethernet PHY / RJ45 / MagJack
         "w5500", "w5100", "w5200", "ksz", "dp83", "lan87", "lan91",
         "hr911", "rj45", "magjack", "enc28j", "8p8c", "hr601", "arjm",
@@ -1341,9 +1401,9 @@ def detect_current_sense(ctx: AnalysisContext) -> list[dict]:
                 # Check if part is a known sense IC
                 val_lower = (ic_comp.get("value", "") + " " + ic_comp.get("lib_id", "")).lower()
                 # KH-081/KH-113: Skip excluded IC families
-                if any(kw in val_lower for kw in _SENSE_IC_EXCLUDE):
+                if any(kw in val_lower for kw in _sense_ic_exclude):
                     continue
-                if any(kw in val_lower for kw in _SENSE_IC_KEYWORDS):
+                if any(kw in val_lower for kw in _sense_ic_keywords):
                     sense_ics_set.add(cref)
                     continue
                 # Check if the IC's pin on this net has a sense-related name
@@ -1353,7 +1413,7 @@ def detect_current_sense(ctx: AnalysisContext) -> list[dict]:
                     for p in ctx.nets[nn]["pins"]:
                         if p["component"] == cref:
                             pn = p.get("pin_name", "").upper().rstrip("0123456789+-")
-                            if pn in _SENSE_PIN_PREFIXES:
+                            if pn in _sense_pin_prefixes:
                                 sense_ics_set.add(cref)
             sense_ics = sense_ics_set
         else:
@@ -1367,7 +1427,11 @@ def detect_current_sense(ctx: AnalysisContext) -> list[dict]:
                         continue
                     for p in ctx.nets[nn]["pins"]:
                         r_comp = ctx.comp_lookup.get(p["component"])
-                        if r_comp and r_comp["type"] == "resistor" and p["component"] != shunt["reference"]:
+                        if (
+                            r_comp
+                            and r_comp["type"] == "resistor"
+                            and p["component"] != shunt["reference"]
+                        ):
                             r_other = ctx.get_two_pin_nets(p["component"])
                             if r_other[0] and r_other[1]:
                                 hop_net = r_other[1] if r_other[0] == nn else r_other[0]
@@ -1379,7 +1443,11 @@ def detect_current_sense(ctx: AnalysisContext) -> list[dict]:
                         continue
                     for p in ctx.nets[nn]["pins"]:
                         r_comp = ctx.comp_lookup.get(p["component"])
-                        if r_comp and r_comp["type"] == "resistor" and p["component"] != shunt["reference"]:
+                        if (
+                            r_comp
+                            and r_comp["type"] == "resistor"
+                            and p["component"] != shunt["reference"]
+                        ):
                             r_other = ctx.get_two_pin_nets(p["component"])
                             if r_other[0] and r_other[1]:
                                 hop_net = r_other[1] if r_other[0] == nn else r_other[0]
@@ -1418,12 +1486,17 @@ def detect_current_sense(ctx: AnalysisContext) -> list[dict]:
                 "evidence_source": "topology",
                 "summary": f"Current sense {shunt['reference']}",
                 "description": "Current sense shunt with amplifier IC detected",
-                "provenance": make_provenance("cs_ic_differential", "deterministic", [shunt["reference"], ic_ref]),
+                "provenance": make_provenance(
+                    "cs_ic_differential", "deterministic",
+                    [shunt["reference"], ic_ref],
+                ),
                 "components": [shunt["reference"], ic_ref],
                 "nets": [],
                 "pins": [],
                 "recommendation": "",
-                "report_context": {"section": "Current Measurement", "impact": "", "standard_ref": ""},
+                "report_context": {
+                    "section": "Current Measurement", "impact": "", "standard_ref": ""
+                },
             })
     # Second pass: detect shunts with IC-integrated current sense amplifiers.
     # These ICs have sense pins (CSA, SEN, SNS, ISENSE, IMON, CSP, CSN, SH)
@@ -1456,7 +1529,7 @@ def detect_current_sense(ctx: AnalysisContext) -> list[dict]:
                     continue
                 # KH-081/KH-113: Skip excluded IC families
                 _val_lower2 = (ic_comp.get("value", "") + " " + ic_comp.get("lib_id", "")).lower()
-                if any(kw in _val_lower2 for kw in _SENSE_IC_EXCLUDE):
+                if any(kw in _val_lower2 for kw in _sense_ic_exclude):
                     continue
                 pn = p.get("pin_name", "").upper().rstrip("0123456789").rstrip("_")
                 if pn in _integrated_csa_pins:
@@ -1473,8 +1546,12 @@ def detect_current_sense(ctx: AnalysisContext) -> list[dict]:
                         },
                         "high_net": s_n1,
                         "low_net": s_n2,
-                        "max_current_50mV_A": round(0.05 / shunt_ohms, 3) if shunt_ohms > 0 else None,
-                        "max_current_100mV_A": round(0.1 / shunt_ohms, 3) if shunt_ohms > 0 else None,
+                        "max_current_50mV_A": (
+                            round(0.05 / shunt_ohms, 3) if shunt_ohms > 0 else None
+                        ),
+                        "max_current_100mV_A": (
+                            round(0.1 / shunt_ohms, 3) if shunt_ohms > 0 else None
+                        ),
                         "detector": "detect_current_sense",
                         "rule_id": "CS-DET",
                         "category": "current_measurement",
@@ -1487,8 +1564,14 @@ def detect_current_sense(ctx: AnalysisContext) -> list[dict]:
                         "nets": [],
                         "pins": [],
                         "recommendation": "",
-                        "report_context": {"section": "Current Measurement", "impact": "", "standard_ref": ""},
-                        "provenance": make_provenance("cs_integrated_pin", "heuristic", [shunt["reference"], p["component"]]),
+                        "report_context": {
+                            "section": "Current Measurement",
+                            "impact": "", "standard_ref": "",
+                        },
+                        "provenance": make_provenance(
+                            "cs_integrated_pin", "heuristic",
+                            [shunt["reference"], p["component"]],
+                        ),
                     })
                     matched_shunts.add(shunt["reference"])
                     break
@@ -1560,14 +1643,15 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
         # Look for regulator pin patterns
         fb_pin = None
         sw_pin = None
-        en_pin = None
+        _en_pin = None
         vin_pin = None
         vout_pin = None
         boot_pin = None
 
         for pname, (net, pnum) in ic_pins.items():
             # Use startswith for pins that may have numeric suffixes (FB1, SW2, etc.)
-            pn_base = pname.rstrip("0123456789").rstrip("_")  # Strip trailing digits and underscores (FB_1→FB)
+            # Strip trailing digits and underscores (FB_1→FB)
+            pn_base = pname.rstrip("0123456789").rstrip("_")
             # Split composite pin names like "FB/VOUT" into parts
             pn_parts = {p.strip() for p in pname.split("/")} | {pn_base}
             if pn_parts & {"FB", "VFB", "ADJ", "VADJ"}:
@@ -1581,7 +1665,7 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
                     sw_pin = (pname, net)
             elif pname in ("EN", "ENABLE", "ON", "~{SHDN}", "SHDN", "~{EN}") or \
                  (pn_base == "EN" and len(pname) <= 4):
-                en_pin = (pname, net)
+                _en_pin = (pname, net)  # EN pin position reserved; not consumed yet
             elif pn_parts & {"VIN", "VI", "IN", "PVIN", "AVIN", "INPUT"}:
                 vin_pin = (pname, net)
             elif pn_parts & {"VOUT", "VO", "OUT", "OUTPUT"}:
@@ -1666,7 +1750,10 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
         if any(k in lib_val_lower for k in _power_mux_exclude):
             continue
         # KH-219: Exclude components with load/power switch descriptions
-        if any(k in desc_lower for k in ("load switch", "power switch", "power distribution switch")):
+        if any(
+            k in desc_lower
+            for k in ("load switch", "power switch", "power distribution switch")
+        ):
             continue
 
         # Exclude op-amps, instrumentation amps, and ADCs with FB-like pins
@@ -1693,7 +1780,9 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
             if sw_pin and not has_reg_keyword:
                 # SW pin but check if inductor is connected
                 sw_net_name = sw_pin[1]
-                sw_has_inductor = bool(ctx.nq and ctx.nq.inductors_on_net(sw_net_name, exclude_ref=ref))
+                sw_has_inductor = bool(
+                    ctx.nq and ctx.nq.inductors_on_net(sw_net_name, exclude_ref=ref)
+                )
                 if not sw_has_inductor and ctx.nq:
                     # Try 1-hop through connectors/hierarchical pins
                     for other_net in ctx.nq.trace_through(sw_net_name, ref):
@@ -1798,7 +1887,11 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
             reg_info["output_rail"] = None
 
         # KH-087: Trace output rail through inductor (retry after sanitization)
-        if reg_info.get("topology") == "switching" and not reg_info.get("output_rail") and reg_info.get("inductor"):
+        if (
+            reg_info.get("topology") == "switching"
+            and not reg_info.get("output_rail")
+            and reg_info.get("inductor")
+        ):
             ind_ref = reg_info["inductor"]
             ind_n1, ind_n2 = ctx.get_two_pin_nets(ind_ref)
             sw_net_2 = sw_pin[1] if sw_pin else None
@@ -1854,13 +1947,25 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
                             reg_info["estimated_vout"] = round(v_out, 3)
                             reg_info["_estimated_vout_provenance"] = {
                                 "source": "divider_plus_" + reg_info.get("vref_source", "lookup"),
-                                "confidence": "deterministic" if reg_info.get("vref_source") == "datasheet" else "heuristic",
+                                "confidence": (
+                                    "deterministic"
+                                    if reg_info.get("vref_source") == "datasheet"
+                                    else "heuristic"
+                                ),
                             }
                             reg_info["assumed_vref"] = known_vref
                             reg_info["vref_source"] = "lookup"
                             reg_info["feedback_divider"] = {
-                                "r_top": {"ref": vd["r_top"]["ref"], "ohms": vd["r_top"]["ohms"], "value": vd["r_top"]["value"]},
-                                "r_bottom": {"ref": vd["r_bottom"]["ref"], "ohms": vd["r_bottom"]["ohms"], "value": vd["r_bottom"]["value"]},
+                                "r_top": {
+                                    "ref": vd["r_top"]["ref"],
+                                    "ohms": vd["r_top"]["ohms"],
+                                    "value": vd["r_top"]["value"],
+                                },
+                                "r_bottom": {
+                                    "ref": vd["r_bottom"]["ref"],
+                                    "ohms": vd["r_bottom"]["ohms"],
+                                    "value": vd["r_bottom"]["value"],
+                                },
                                 "ratio": ratio,
                             }
                     else:
@@ -1870,14 +1975,29 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
                             if 0.5 < v_out < 60:
                                 reg_info["estimated_vout"] = round(v_out, 3)
                                 reg_info["_estimated_vout_provenance"] = {
-                                    "source": "divider_plus_" + reg_info.get("vref_source", "lookup"),
-                                    "confidence": "deterministic" if reg_info.get("vref_source") == "datasheet" else "heuristic",
+                                    "source": (
+                                        "divider_plus_"
+                                        + reg_info.get("vref_source", "lookup")
+                                    ),
+                                    "confidence": (
+                                    "deterministic"
+                                    if reg_info.get("vref_source") == "datasheet"
+                                    else "heuristic"
+                                ),
                                 }
                                 reg_info["assumed_vref"] = vref
                                 reg_info["vref_source"] = "heuristic"
                                 reg_info["feedback_divider"] = {
-                                    "r_top": {"ref": vd["r_top"]["ref"], "ohms": vd["r_top"]["ohms"], "value": vd["r_top"]["value"]},
-                                    "r_bottom": {"ref": vd["r_bottom"]["ref"], "ohms": vd["r_bottom"]["ohms"], "value": vd["r_bottom"]["value"]},
+                                    "r_top": {
+                                        "ref": vd["r_top"]["ref"],
+                                        "ohms": vd["r_top"]["ohms"],
+                                        "value": vd["r_top"]["value"],
+                                    },
+                                    "r_bottom": {
+                                        "ref": vd["r_bottom"]["ref"],
+                                        "ohms": vd["r_bottom"]["ohms"],
+                                        "value": vd["r_bottom"]["value"],
+                                    },
                                     "ratio": ratio,
                                 }
                                 break
@@ -1897,7 +2017,11 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
             freq_source = "lookup_table" if sw_f else None
             if sw_f is None:
                 # Try lib_id part name (after colon)
-                lib_part = ic.get("lib_id", "").split(":")[-1] if ":" in ic.get("lib_id", "") else ""
+                lib_part = (
+                    ic.get("lib_id", "").split(":")[-1]
+                    if ":" in ic.get("lib_id", "")
+                    else ""
+                )
                 if lib_part:
                     sw_f = lookup_switching_freq(lib_part)
                     if sw_f:
@@ -1921,7 +2045,10 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
             if has_reg_keyword:
                 is_regulator = True
 
-        if is_regulator and any(k in reg_info for k in ("topology", "input_rail", "output_rail", "estimated_vout")):
+        if is_regulator and any(
+            k in reg_info
+            for k in ("topology", "input_rail", "output_rail", "estimated_vout")
+        ):
             _reg_topo = reg_info.get("topology", "unknown")
             reg_info["detector"] = "detect_power_regulators"
             reg_info["rule_id"] = "PR-DET"
@@ -1935,7 +2062,9 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
             reg_info["nets"] = []
             reg_info["pins"] = []
             reg_info["recommendation"] = ""
-            reg_info["report_context"] = {"section": "Power Management", "impact": "", "standard_ref": ""}
+            reg_info["report_context"] = {
+                "section": "Power Management", "impact": "", "standard_ref": ""
+            }
             # Determine provenance evidence based on classification path
             if sw_pin and reg_info.get("inductor"):
                 _prov_evidence = "reg_sw_pin_inductor"
@@ -1970,8 +2099,16 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
                 ratio = vd["ratio"]
                 # In FB-at-top, Vout = Vfb (the top of the divider IS the output)
                 reg["feedback_divider"] = {
-                    "r_top": {"ref": vd["r_top"]["ref"], "ohms": vd["r_top"]["ohms"], "value": vd["r_top"]["value"]},
-                    "r_bottom": {"ref": vd["r_bottom"]["ref"], "ohms": vd["r_bottom"]["ohms"], "value": vd["r_bottom"]["value"]},
+                    "r_top": {
+                        "ref": vd["r_top"]["ref"],
+                        "ohms": vd["r_top"]["ohms"],
+                        "value": vd["r_top"]["value"],
+                    },
+                    "r_bottom": {
+                        "ref": vd["r_bottom"]["ref"],
+                        "ohms": vd["r_bottom"]["ohms"],
+                        "value": vd["r_bottom"]["value"],
+                    },
                     "ratio": ratio,
                     "topology": "fb_at_top",
                 }
@@ -2066,7 +2203,8 @@ def detect_power_regulators(ctx: AnalysisContext, voltage_dividers: list[dict]) 
                 c_val = ctx.parsed_values.get(cref)
                 if not c_val or c_val <= 0:
                     continue
-                # Check what else this cap connects to (output rail = feed-forward, GND = compensation)
+                # Check what else this cap connects to (output rail = feed-forward,
+                # GND = compensation)
                 n1, n2 = ctx.get_two_pin_nets(cref)
                 other_net = n2 if n1 == fb_net else n1
                 comp_caps.append({
@@ -2225,7 +2363,9 @@ def detect_integrated_ldos(ctx: AnalysisContext, power_regulators: list[dict]) -
                         "nets": [],
                         "pins": [],
                         "recommendation": "",
-                        "report_context": {"section": "Power Management", "impact": "", "standard_ref": ""},
+                        "report_context": {
+                            "section": "Power Management", "impact": "", "standard_ref": ""
+                        },
                         "provenance": make_provenance("ildo_vreg_pin", "heuristic", [ref]),
                     })
                     existing_refs.add(ref)
@@ -2250,9 +2390,9 @@ def detect_protection_devices(ctx: AnalysisContext) -> list[dict]:
         desc = comp.get("description", "").lower()
 
         is_tvs = comp["type"] == "diode" and any(k in val or k in lib for k in tvs_keywords)
-        is_schottky = comp["type"] == "diode" and any(k in lib or k in desc for k in schottky_keywords)
-        is_non_diode_protection = comp["type"] in ("varistor", "surge_arrester")
-
+        is_schottky = comp["type"] == "diode" and any(
+            k in lib or k in desc for k in schottky_keywords
+        )
         if comp["type"] == "diode" and not is_tvs and not is_schottky:
             continue
 
@@ -2289,7 +2429,9 @@ def detect_protection_devices(ctx: AnalysisContext) -> list[dict]:
                     "pins": [],
                     "recommendation": "",
                     "report_context": {"section": "Protection", "impact": "", "standard_ref": ""},
-                    "provenance": make_provenance("prot_esd_array", "deterministic", [comp["reference"]]),
+                    "provenance": make_provenance(
+                        "prot_esd_array", "deterministic", [comp["reference"]]
+                    ),
                 })
             continue
 
@@ -2353,7 +2495,10 @@ def detect_protection_devices(ctx: AnalysisContext) -> list[dict]:
             # all pin_net entries (Eagle imports use P$1/P$2/P$3 pin names)
             d_n1, d_n2 = ctx.get_two_pin_nets(comp["reference"])
             if not d_n1 or not d_n2:
-                comp_nets = {net for net, _ in ctx.ref_pins.get(comp["reference"], {}).values() if net}
+                comp_nets = {
+                    net for net, _ in ctx.ref_pins.get(comp["reference"], {}).values()
+                    if net
+                }
                 comp_nets = [n for n in comp_nets
                              if not ctx.is_ground(n) or len(comp_nets) <= 2]
                 if len(comp_nets) >= 2:
@@ -2381,7 +2526,9 @@ def detect_protection_devices(ctx: AnalysisContext) -> list[dict]:
                 "pins": [],
                 "recommendation": "",
                 "report_context": {"section": "Protection", "impact": "", "standard_ref": ""},
-                "provenance": make_provenance("prot_varistor", "deterministic", [comp["reference"]]),
+                "provenance": make_provenance(
+                    "prot_varistor", "deterministic", [comp["reference"]]
+                ),
             })
 
     # PTC fuses / polyfuses used as overcurrent protection
@@ -2466,7 +2613,9 @@ def detect_protection_devices(ctx: AnalysisContext) -> list[dict]:
                 "pins": [],
                 "recommendation": "",
                 "report_context": {"section": "Protection", "impact": "", "standard_ref": ""},
-                "provenance": make_provenance("prot_ic_based", "deterministic", [comp["reference"]]),
+                "provenance": make_provenance(
+                    "prot_ic_based", "deterministic", [comp["reference"]]
+                ),
             })
 
     return protection_devices
@@ -2492,7 +2641,13 @@ def detect_opamp_circuits(ctx: AnalysisContext) -> list[dict]:
         match_sources = [val, lib_part]
         if not (any(k in lib for k in opamp_lib_keywords) or
                 any(s.startswith(k) for k in opamp_value_keywords for s in match_sources) or
-                any(k in desc for k in ("opamp", "op-amp", "op amp", "operational amplifier", "instrumentation"))):
+                any(
+                    k in desc
+                    for k in (
+                        "opamp", "op-amp", "op amp",
+                        "operational amplifier", "instrumentation",
+                    )
+                )):
             continue
 
         # KH-214: Exclude power/current monitors (INA2xx, INA8xx) that match
@@ -2668,7 +2823,11 @@ def detect_opamp_circuits(ctx: AnalysisContext) -> list[dict]:
                 if comp and comp["type"] == "resistor" and p["component"] in ctx.parsed_values:
                     r_n1, r_n2 = ctx.get_two_pin_nets(p["component"])
                     other = r_n2 if r_n1 == neg_net else r_n1
-                    if other != out_net and not ctx.is_power_net(other) and not ctx.is_ground(other):
+                    if (
+                        other != out_net
+                        and not ctx.is_power_net(other)
+                        and not ctx.is_ground(other)
+                    ):
                         ri_ref = p["component"]
                         ri_val = ctx.parsed_values[p["component"]]
                         break
@@ -2681,7 +2840,11 @@ def detect_opamp_circuits(ctx: AnalysisContext) -> list[dict]:
             gain = 1.0
         elif rf_ref and ri_ref and ri_val and rf_val:
             if pos_net and pos_net != neg_net:
-                pos_has_signal = pos_net and not ctx.is_power_net(pos_net) and not ctx.is_ground(pos_net)
+                pos_has_signal = (
+                    pos_net
+                    and not ctx.is_power_net(pos_net)
+                    and not ctx.is_ground(pos_net)
+                )
                 neg_has_signal = ri_ref is not None
                 if pos_has_signal and not neg_has_signal:
                     config = "non_inverting"
@@ -2770,7 +2933,10 @@ def detect_opamp_circuits(ctx: AnalysisContext) -> list[dict]:
                     continue
                 cap_val = neighbor.get("parsed_value") or parse_value(neighbor.get("value", ""))
                 if cap_val and cap_val > 100e-12:
-                    formatted = f"{cap_val*1e9:.0f}nF" if cap_val >= 1e-9 else f"{cap_val*1e12:.0f}pF"
+                    formatted = (
+                        f"{cap_val*1e9:.0f}nF" if cap_val >= 1e-9
+                        else f"{cap_val*1e12:.0f}pF"
+                    )
                     warnings.append(f"Capacitive load {neighbor['reference']} ({formatted}) on "
                                     f"output — verify opamp stability with this load")
 
@@ -2815,9 +2981,13 @@ def detect_opamp_circuits(ctx: AnalysisContext) -> list[dict]:
         lib = ic.get("lib_id", "").lower()
         val = ic.get("value", "").lower()
         expected_units = None
-        if "quad" in lib or "quad" in val or any(q in val for q in ("lm324", "tl074", "tl084", "mcp6004", "opa4")):
+        if "quad" in lib or "quad" in val or any(
+            q in val for q in ("lm324", "tl074", "tl084", "mcp6004", "opa4")
+        ):
             expected_units = 4
-        elif "dual" in lib or "dual" in val or any(d in val for d in ("lm358", "tl072", "tl082", "ne5532", "mcp6002", "opa2")):
+        elif "dual" in lib or "dual" in val or any(
+            d in val for d in ("lm358", "tl072", "tl082", "ne5532", "mcp6002", "opa2")
+        ):
             expected_units = 2
         if expected_units is None:
             continue
@@ -2837,7 +3007,11 @@ def detect_opamp_circuits(ctx: AnalysisContext) -> list[dict]:
                 for oa in opamp_circuits:
                     if oa["reference"] == ref:
                         oa["unused_channels"] = unused
-                        oa["unused_channel_status"] = "inputs_floating" if inputs_floating else "inputs_terminated"
+                        oa["unused_channel_status"] = (
+                            "inputs_floating"
+                            if inputs_floating
+                            else "inputs_terminated"
+                        )
                         if inputs_floating:
                             oa.setdefault("warnings", []).append(
                                 f"Unused opamp channel(s) {unused} have floating inputs — "
@@ -2934,7 +3108,9 @@ def detect_bridge_circuits(ctx: AnalysisContext) -> tuple[list[dict], set, dict]
             hb["high_side_type"] = "PMOS" if ("pmos" in hi_lib or "pch" in hi_lib) else "NMOS"
             hb["low_side_type"] = "PMOS" if ("pmos" in lo_lib or "pch" in lo_lib) else "NMOS"
             # Add gate resistor values if available
-            for gate_key, gate_net in [("high_gate", hb["high_gate"]), ("low_gate", hb["low_gate"])]:
+            for gate_key, gate_net in [
+                ("high_gate", hb["high_gate"]), ("low_gate", hb["low_gate"]),
+            ]:
                 if gate_net in ctx.nets:
                     for p in ctx.nets[gate_net]["pins"]:
                         comp = ctx.comp_lookup.get(p["component"])
@@ -2944,15 +3120,25 @@ def detect_bridge_circuits(ctx: AnalysisContext) -> tuple[list[dict], set, dict]
                                 hb[gate_key + "_resistor"] = {"ref": p["component"], "ohms": r_val}
                                 break
 
-        _bridge_refs = [hb["high_side"] for hb in half_bridges] + [hb["low_side"] for hb in half_bridges]
+        _bridge_refs = (
+            [hb["high_side"] for hb in half_bridges]
+            + [hb["low_side"] for hb in half_bridges]
+        )
         _bridge_driver_ref = next(iter(driver_ics), None)
         _bridge_summary_ref = _bridge_driver_ref or (_bridge_refs[0] if _bridge_refs else "")
         bridge_circuits.append({
             "topology": topology,
             "half_bridges": half_bridges,
             "driver_ics": list(driver_ics),
-            "driver_values": {ref: ctx.comp_lookup[ref]["value"] for ref in driver_ics if ref in ctx.comp_lookup},
-            "fet_values": {hb["high_side"]: fet_pins[hb["high_side"]]["value"] for hb in half_bridges},
+            "driver_values": {
+                ref: ctx.comp_lookup[ref]["value"]
+                for ref in driver_ics
+                if ref in ctx.comp_lookup
+            },
+            "fet_values": {
+                hb["high_side"]: fet_pins[hb["high_side"]]["value"]
+                for hb in half_bridges
+            },
             "detector": "detect_bridge_circuits",
             "rule_id": "BR-DET",
             "category": "power_switching",
@@ -2972,7 +3158,9 @@ def detect_bridge_circuits(ctx: AnalysisContext) -> tuple[list[dict], set, dict]
     return bridge_circuits, matched, fet_pins
 
 
-def detect_transistor_circuits(ctx: AnalysisContext, matched_fets: set, fet_pins: dict) -> list[dict]:
+def detect_transistor_circuits(
+    ctx: AnalysisContext, matched_fets: set, fet_pins: dict
+) -> list[dict]:
     """Detect transistor circuit configurations (MOSFETs and BJTs)."""
     transistor_circuits: list[dict] = []
     transistors = [c for c in ctx.components if c["type"] == "transistor"]
@@ -3178,12 +3366,21 @@ def detect_transistor_circuits(ctx: AnalysisContext, matched_fets: set, fet_pins
             "gate_net": gate_net,
             "drain_net": drain_net,
             "source_net": source_net,
-            "drain_is_power": ctx.is_power_net(drain_net) or (is_pchannel and ctx.is_power_net(source_net)),
+            "drain_is_power": (
+                ctx.is_power_net(drain_net)
+                or (is_pchannel and ctx.is_power_net(source_net))
+            ),
             "source_is_ground": ctx.is_ground(source_net),
             "source_is_power": ctx.is_power_net(source_net),
             "load_type": load_type,
-            "gate_resistors": [{"reference": r["reference"], "value": r["value"]} for r in gate_resistors],
-            "gate_driver_ics": [{"reference": ic["reference"], "value": ic["value"]} for ic in gate_ics],
+            "gate_resistors": [
+                {"reference": r["reference"], "value": r["value"]}
+                for r in gate_resistors
+            ],
+            "gate_driver_ics": [
+                {"reference": ic["reference"], "value": ic["value"]}
+                for ic in gate_ics
+            ],
             "gate_pulldown": gate_pulldown,
             "has_flyback_diode": has_flyback,
             "flyback_diode": flyback_ref,
@@ -3202,7 +3399,9 @@ def detect_transistor_circuits(ctx: AnalysisContext, matched_fets: set, fet_pins
             "nets": [],
             "pins": [],
             "recommendation": "",
-            "report_context": {"section": "Discrete Semiconductors", "impact": "", "standard_ref": ""},
+            "report_context": {
+                "section": "Discrete Semiconductors", "impact": "", "standard_ref": ""
+            },
             "provenance": make_provenance("transistor_mosfet", "deterministic", [ref]),
         }
         if topology:
@@ -3260,8 +3459,14 @@ def detect_transistor_circuits(ctx: AnalysisContext, matched_fets: set, fet_pins
             "collector_is_power": ctx.is_power_net(collector_net),
             "emitter_is_ground": ctx.is_ground(emitter_net),
             "load_type": load_type,
-            "base_resistors": [{"reference": r["reference"], "value": r["value"]} for r in base_resistors],
-            "base_driver_ics": [{"reference": ic["reference"], "value": ic["value"]} for ic in base_ics],
+            "base_resistors": [
+                {"reference": r["reference"], "value": r["value"]}
+                for r in base_resistors
+            ],
+            "base_driver_ics": [
+                {"reference": ic["reference"], "value": ic["value"]}
+                for ic in base_ics
+            ],
             "base_pulldown": base_pulldown,
             "emitter_resistor": emitter_resistor,
             "detector": "detect_transistor_circuits",
@@ -3276,7 +3481,9 @@ def detect_transistor_circuits(ctx: AnalysisContext, matched_fets: set, fet_pins
             "nets": [],
             "pins": [],
             "recommendation": "",
-            "report_context": {"section": "Discrete Semiconductors", "impact": "", "standard_ref": ""},
+            "report_context": {
+                "section": "Discrete Semiconductors", "impact": "", "standard_ref": ""
+            },
             "provenance": make_provenance("transistor_bjt", "deterministic", [ref]),
         }
         transistor_circuits.append(circuit)
@@ -3402,13 +3609,20 @@ def detect_led_drivers(ctx: AnalysisContext, transistor_circuits: list[dict]) ->
                     tc["confidence"] = "deterministic"
                     tc["evidence_source"] = "topology"
                     tc["summary"] = f"LED driver {tc['reference']}"
-                    tc["description"] = f"Transistor {tc['reference']} driving LED {oc['reference']}"
+                    tc["description"] = (
+                        f"Transistor {tc['reference']} driving LED {oc['reference']}"
+                    )
                     tc["components"] = [tc["reference"], oc["reference"], dc["reference"]]
                     tc["nets"] = []
                     tc["pins"] = []
                     tc["recommendation"] = ""
-                    tc["report_context"] = {"section": "LED Control", "impact": "", "standard_ref": ""}
-                    tc["provenance"] = make_provenance("led_driver_transistor", "deterministic", [tc["reference"], oc["reference"], dc["reference"]])
+                    tc["report_context"] = {
+                        "section": "LED Control", "impact": "", "standard_ref": ""
+                    }
+                    tc["provenance"] = make_provenance(
+                        "led_driver_transistor", "deterministic",
+                        [tc["reference"], oc["reference"], dc["reference"]],
+                    )
                     break
             if "led_driver" in tc:
                 break
@@ -3457,8 +3671,12 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
                 "nets": [],
                 "pins": [],
                 "recommendation": "",
-                "report_context": {"section": "Design Observations", "impact": "", "standard_ref": ""},
-                "provenance": make_provenance("obs_topology", "heuristic", [ref]),
+                "report_context": {
+                    "section": "Design Observations", "impact": "", "standard_ref": ""
+                },
+                "provenance": make_provenance(
+                    "obs_topology", "heuristic", [ref]
+                ),
             })
 
     # 2. Regulator capacitor status
@@ -3488,8 +3706,12 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
                 "nets": [],
                 "pins": [],
                 "recommendation": "",
-                "report_context": {"section": "Design Observations", "impact": "", "standard_ref": ""},
-                "provenance": make_provenance("obs_topology", "heuristic", [reg["ref"]]),
+                "report_context": {
+                    "section": "Design Observations", "impact": "", "standard_ref": ""
+                },
+                "provenance": make_provenance(
+                    "obs_topology", "heuristic", [reg["ref"]]
+                ),
             })
 
     # 3. Single-pin signal nets
@@ -3530,11 +3752,18 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
             "summary": f"Single-pin nets ({len(single_pin_nets)} nets)",
             "description": "Signal nets connected to only one pin",
             "components": [n["component"] for n in single_pin_nets],
-            "nets": [],
+            # "nets" is intentionally set twice in this dict; the empty entry
+            # below is the effective value (removing either changes the report).
+            "nets": [],  # noqa: F601 -- duplicate key, see note above
             "pins": [],
             "recommendation": "",
-            "report_context": {"section": "Design Observations", "impact": "", "standard_ref": ""},
-            "provenance": make_provenance("obs_topology", "heuristic", [n["component"] for n in single_pin_nets]),
+            "report_context": {
+                "section": "Design Observations", "impact": "", "standard_ref": ""
+            },
+            "provenance": make_provenance(
+                "obs_topology", "heuristic",
+                [n["component"] for n in single_pin_nets],
+            ),
         })
 
     # 4. I2C bus pull-up status
@@ -3591,15 +3820,23 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
                 "nets": [],
                 "pins": [],
                 "recommendation": "",
-                "report_context": {"section": "Design Observations", "impact": "", "standard_ref": ""},
-                "provenance": make_provenance("obs_topology", "heuristic", ic_refs),
+                "report_context": {
+                    "section": "Design Observations", "impact": "", "standard_ref": ""
+                },
+                "provenance": make_provenance(
+                    "obs_topology", "heuristic", ic_refs
+                ),
             })
 
     # 5. Reset pin configuration
     for ic in unique_ics:
         ref = ic["reference"]
         for pnum, (net, _) in ctx.ref_pins.get(ref, {}).items():
-            if not net or net.startswith("__unnamed_") or (net in ctx.nets and ctx.nets[net].get("no_connect")):
+            if (
+                not net
+                or net.startswith("__unnamed_")
+                or (net in ctx.nets and ctx.nets[net].get("no_connect"))
+            ):
                 continue
             pin_name = ""
             if net in ctx.nets:
@@ -3607,7 +3844,10 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
                     if p["component"] == ref and p["pin_number"] == pnum:
                         pin_name = p.get("pin_name", "").upper()
                         break
-            if pin_name not in ("NRST", "~{RESET}", "RESET", "~{RST}", "RST", "~{NRST}", "MCLR", "~{MCLR}"):
+            if pin_name not in (
+                "NRST", "~{RESET}", "RESET", "~{RST}",
+                "RST", "~{NRST}", "MCLR", "~{MCLR}",
+            ):
                 continue
             has_resistor = False
             has_capacitor = False
@@ -3642,8 +3882,12 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
                 "nets": [],
                 "pins": [],
                 "recommendation": "",
-                "report_context": {"section": "Design Observations", "impact": "", "standard_ref": ""},
-                "provenance": make_provenance("obs_topology", "heuristic", [ref]),
+                "report_context": {
+                    "section": "Design Observations", "impact": "", "standard_ref": ""
+                },
+                "provenance": make_provenance(
+                    "obs_topology", "heuristic", [ref]
+                ),
             })
 
     # 6. Regulator feedback voltage estimation
@@ -3683,8 +3927,12 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
             obs["nets"] = []
             obs["pins"] = []
             obs["recommendation"] = ""
-            obs["report_context"] = {"section": "Design Observations", "impact": "", "standard_ref": ""}
-            obs["provenance"] = make_provenance("obs_topology", "heuristic", [reg["ref"]])
+            obs["report_context"] = {
+                "section": "Design Observations", "impact": "", "standard_ref": ""
+            }
+            obs["provenance"] = make_provenance(
+                "obs_topology", "heuristic", [reg["ref"]]
+            )
             design_observations.append(obs)
 
     # 7. Switching regulator bootstrap status
@@ -3709,8 +3957,12 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
                 "nets": [],
                 "pins": [],
                 "recommendation": "",
-                "report_context": {"section": "Design Observations", "impact": "", "standard_ref": ""},
-                "provenance": make_provenance("obs_topology", "heuristic", [reg["ref"]]),
+                "report_context": {
+                    "section": "Design Observations", "impact": "", "standard_ref": ""
+                },
+                "provenance": make_provenance(
+                    "obs_topology", "heuristic", [reg["ref"]]
+                ),
             })
 
     # 8. USB data line protection status
@@ -3745,8 +3997,12 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
                 "nets": [],
                 "pins": [],
                 "recommendation": "",
-                "report_context": {"section": "Design Observations", "impact": "", "standard_ref": ""},
-                "provenance": make_provenance("obs_topology", "heuristic", _usb_devices),
+                "report_context": {
+                    "section": "Design Observations", "impact": "", "standard_ref": ""
+                },
+                "provenance": make_provenance(
+                    "obs_topology", "heuristic", _usb_devices
+                ),
             })
 
     # 9. Crystal load capacitance
@@ -3770,8 +4026,12 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
                 "nets": [],
                 "pins": [],
                 "recommendation": "",
-                "report_context": {"section": "Design Observations", "impact": "", "standard_ref": ""},
-                "provenance": make_provenance("obs_topology", "heuristic", [xtal["reference"]]),
+                "report_context": {
+                    "section": "Design Observations", "impact": "", "standard_ref": ""
+                },
+                "provenance": make_provenance(
+                    "obs_topology", "heuristic", [xtal["reference"]]
+                ),
             })
 
     # 10. Decoupling frequency coverage per rail
@@ -3800,7 +4060,9 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
             "nets": [],
             "pins": [],
             "recommendation": "",
-            "report_context": {"section": "Design Observations", "impact": "", "standard_ref": ""},
+            "report_context": {
+                "section": "Design Observations", "impact": "", "standard_ref": ""
+            },
             "provenance": make_provenance("obs_topology", "heuristic", [c["ref"] for c in caps]),
         })
 
@@ -4062,7 +4324,10 @@ def audit_rail_sources(ctx: AnalysisContext,
                                "dependent on bridged jumper."),
                     "standard_ref": "",
                 },
-                "provenance": make_provenance("rs_rail_audit", "deterministic", [j for _, j in bridged_sources]),
+                "provenance": make_provenance(
+                    "rs_rail_audit", "deterministic",
+                    [j for _, j in bridged_sources],
+                ),
             })
             continue
 
@@ -4099,7 +4364,10 @@ def audit_rail_sources(ctx: AnalysisContext,
                                "user closes the solder jumper."),
                     "standard_ref": "",
                 },
-                "provenance": make_provenance("rs_rail_audit", "deterministic", [j for _, j in open_sources]),
+                "provenance": make_provenance(
+                    "rs_rail_audit", "deterministic",
+                    [j for _, j in open_sources],
+                ),
             })
             continue
 
@@ -4299,7 +4567,7 @@ def audit_power_pin_dc_paths(ctx: AnalysisContext,
                 nets_with_connector.add(net_name_c)
                 break
 
-    MAX_HOPS = 2
+    max_hops = 2
     # Track (ref, pin) pairs already checked to avoid duplicate findings.
     seen: set[tuple[str, str]] = set()
 
@@ -4339,7 +4607,7 @@ def audit_power_pin_dc_paths(ctx: AnalysisContext,
             # That distinguishes the AC-coupling bug from missing-PWR_FLAG
             # which RS-001 already covers.
             saw_capacitor_on_path: bool = False
-            for _hop in range(MAX_HOPS):
+            for _hop in range(max_hops):
                 if reached_rail:
                     break
                 next_frontier: set[str] = set()
@@ -4390,7 +4658,7 @@ def audit_power_pin_dc_paths(ctx: AnalysisContext,
                 "summary": (f"IC power pin {pin_label} has no DC path to a "
                             f"power rail (net {net_name!r})"),
                 "description": (f"Pin {pin_label} is type=power_in on net "
-                                f"{net_name!r}. Graph walk (≤{MAX_HOPS} "
+                                f"{net_name!r}. Graph walk (≤{max_hops} "
                                 f"hops, rejecting capacitor edges, "
                                 f"accepting resistors≤1Ω, inductors, "
                                 f"ferrite beads, bridged solder jumpers) "
