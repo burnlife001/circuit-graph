@@ -15,9 +15,9 @@ Usage:
 import argparse
 import configparser
 import enum
+import signal
 import sys
 import time
-import signal
 from pathlib import Path
 
 try:

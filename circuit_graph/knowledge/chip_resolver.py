@@ -35,7 +35,6 @@ import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
-
 # ---------------------------------------------------------------------------
 # KiCad symbol name cleaning
 # ---------------------------------------------------------------------------

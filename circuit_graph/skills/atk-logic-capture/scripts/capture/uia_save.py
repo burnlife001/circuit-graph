@@ -7,8 +7,9 @@ import os
 import sys
 import time
 import traceback
-import uiautomation as auto
 from pathlib import Path
+
+import uiautomation as auto
 
 # Support running from any directory — add parent (scripts/) to path
 _parent_dir = Path(__file__).resolve().parent.parent
@@ -113,18 +114,18 @@ def paste_and_save(picker, save_btn, filename):
                         vp.SetValue(filename)
                         log(f"  ValuePattern.SetValue OK: {filename}")
                     except:
-                        log(f"  ValuePattern failed, using SendKeys")
+                        log("  ValuePattern failed, using SendKeys")
                         e.SendKeys('{Ctrl}A{Delete}')
                         time.sleep(0.05)
                         e.SendKeys(filename)
                         time.sleep(0.05)
-                    log(f"  ComboBox filled")
+                    log("  ComboBox filled")
                     break
             except Exception as ex:
                 log(f"  error on child: {ex}")
 
         if not combo_found:
-            log(f"  WARNING: no ComboBox/Edit found, clicking Save anyway")
+            log("  WARNING: no ComboBox/Edit found, clicking Save anyway")
             # Try to paste via clipboard as fallback
             try:
                 import subprocess
@@ -174,7 +175,7 @@ if __name__ == '__main__':
         log(f"=== uia_save.py started, filename={filename} ===")
         dlg, btn = find_save_picker(timeout=15.0)
         if dlg and btn:
-            log(f"Picker found, saving...")
+            log("Picker found, saving...")
             ok = paste_and_save(dlg, btn, filename)
             log(f"Result: {'OK' if ok else 'FAIL'}")
             sys.exit(0 if ok else 1)

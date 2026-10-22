@@ -10,18 +10,17 @@ returns a list of rich finding dicts via finding_schema.make_finding().
 
 from __future__ import annotations
 
-import re
-
 from kicad_types import AnalysisContext
-from kicad_utils import parse_value, parse_voltage_from_net_name
+from kicad_utils import parse_voltage_from_net_name
 
 try:
-    import os as _os, sys as _sys
+    import os as _os
+    import sys as _sys
     _ds_scripts = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                 '..', '..', 'datasheets', 'scripts')
     if _os.path.isdir(_ds_scripts):
         _sys.path.insert(0, _os.path.abspath(_ds_scripts))
-    from datasheet_features import get_regulator_features, get_mcu_features
+    from datasheet_features import get_mcu_features, get_regulator_features
     _HAS_DS = True
 except ImportError:
     _HAS_DS = False
@@ -29,12 +28,12 @@ except ImportError:
     def get_mcu_features(mpn, **kw): return None
 
 from detector_helpers import (
-    get_components_by_type, get_unique_ics, index_two_pin_components,
+    get_components_by_type,
+    get_unique_ics,
+    index_two_pin_components,
     match_ic_keywords,
 )
-from signal_detectors import _get_net_components
 from finding_schema import make_finding, make_provenance
-
 
 # ---------------------------------------------------------------------------
 # Shared pull-up/pull-down detection helpers

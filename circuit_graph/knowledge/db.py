@@ -40,7 +40,6 @@ import json
 import os
 import re
 import sqlite3
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Iterator, NamedTuple, Optional

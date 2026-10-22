@@ -9,7 +9,6 @@ import math
 import os
 import re
 
-
 # Coordinate matching tolerance (mm) — used across net building and connectivity analysis
 COORD_EPSILON = 0.01
 
@@ -1747,7 +1746,8 @@ def load_kicad_dru(file_path: str) -> list[dict] | None:
     Conditions are kept as raw strings — not evaluated.
     Returns None if no ``.kicad_dru`` found.
     """
-    from sexp_parser import parse as _sexp_parse, find_all, find_first, get_value
+    from sexp_parser import find_all, find_first, get_value
+    from sexp_parser import parse as _sexp_parse
 
     parent = os.path.dirname(os.path.abspath(file_path))
     dru_path = None
@@ -1821,7 +1821,8 @@ def load_lib_tables(file_path: str) -> dict:
     Returns ``{'symbol_libs': [...], 'footprint_libs': [...]}``.
     Each lib entry is ``{'name': str, 'type': str, 'uri': str, 'descr': str}``.
     """
-    from sexp_parser import parse_file as _sexp_parse_file, find_all, get_value
+    from sexp_parser import find_all, get_value
+    from sexp_parser import parse_file as _sexp_parse_file
 
     parent = os.path.dirname(os.path.abspath(file_path))
     result: dict = {'symbol_libs': [], 'footprint_libs': []}

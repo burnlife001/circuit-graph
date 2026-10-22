@@ -23,7 +23,12 @@ netlist_signalmap.py — 从 DXP/Altium 网表(.NET)提取 MCU 各引脚的真�
   5. 引脚未出现在任何网络                      -> 留空(悬空/NC), 依据列注 JSON 芯片功能
   6. 仍无法判定                                -> 保留 NetXxx_n, 依据列列出该网络全部连接点
 """
-import sys, os, re, json, glob, argparse
+import argparse
+import glob
+import json
+import os
+import re
+import sys
 
 POWER_RAILS = {"GND", "PGND", "CGND", "AGND", "DGND", "VBAT", "VBAK",
                "VDD", "VDDA", "VSS", "VSSA"}

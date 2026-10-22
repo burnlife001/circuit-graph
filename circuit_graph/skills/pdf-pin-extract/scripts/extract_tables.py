@@ -24,7 +24,6 @@ Usage:
 """
 
 import argparse
-import json
 import re
 import sys
 from datetime import datetime
@@ -35,8 +34,12 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 from align_output import (  # noqa: E402
-    build_doc, render_json_text, render_md,
-    parse_pkg_map, write_lf, DEFAULT_LEGEND,
+    DEFAULT_LEGEND,
+    build_doc,
+    parse_pkg_map,
+    render_json_text,
+    render_md,
+    write_lf,
 )
 
 # Default pkg-map for MindMotion MM32 series (matches the canonical
@@ -370,7 +373,6 @@ def extract_pin_assignment(pdf_path, pin_pages, flavor):
 def extract_multiplexing(pdf_path, mux_pages, port_names, mux_col_names, flavor):
     """Extract and clean Pin Multiplexing tables, one per port."""
     import camelot
-    import pandas as pd
 
     page_range = f"{mux_pages[0]}-{mux_pages[-1]}"
     print(f"Extracting Pin Multiplexing tables (pages {page_range})...", file=sys.stderr)

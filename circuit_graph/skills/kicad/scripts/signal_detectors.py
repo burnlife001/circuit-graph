@@ -8,22 +8,29 @@ Some detectors also take prior results for cross-references.
 import math
 import re
 
+from detector_helpers import get_components_by_type, get_unique_ics, index_two_pin_components
+from finding_schema import make_provenance
+from kicad_types import AnalysisContext
 from kicad_utils import (
     _LOAD_TYPE_KEYWORDS,
     classify_jumper_default_state,
-    format_frequency as _format_frequency,
     is_ground_name,
     is_power_net_name,
-    lookup_regulator_vref as _lookup_regulator_vref,
     lookup_switching_freq,
-    match_known_switching as _match_known_switching,
     parse_value,
+)
+from kicad_utils import (
+    format_frequency as _format_frequency,
+)
+from kicad_utils import (
+    lookup_regulator_vref as _lookup_regulator_vref,
+)
+from kicad_utils import (
+    match_known_switching as _match_known_switching,
+)
+from kicad_utils import (
     parse_voltage_from_net_name as _parse_voltage_from_net_name,
 )
-from kicad_types import AnalysisContext
-from finding_schema import make_provenance
-from detector_helpers import index_two_pin_components, get_components_by_type, get_unique_ics
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -3721,7 +3728,7 @@ def detect_design_observations(ctx: AnalysisContext, results: dict) -> list[dict
                             break
         if is_usb:
             _usb_devices = [p["component"] for p in ctx.nets[net_name]["pins"]
-                            if not ctx.comp_lookup.get(p["component"], {}).get("type") in (None,)]
+                            if ctx.comp_lookup.get(p["component"], {}).get("type") not in (None,)]
             design_observations.append({
                 "category": "usb_data",
                 "net": net_name,

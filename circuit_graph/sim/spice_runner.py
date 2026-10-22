@@ -14,9 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from circuit_graph.sim._win32_dialog import NgspiceDialogSuppressor
 from circuit_graph.sim.convergence import ConvergenceConfig
 from circuit_graph.sim.spice_result import AnalysisResult, SpiceResult
-from circuit_graph.sim._win32_dialog import NgspiceDialogSuppressor
 
 if TYPE_CHECKING:
     from circuit_graph.sim.spice_deck import SimulationDeck
@@ -43,7 +43,6 @@ class SpiceRunnerConfig:
 
 # Sentinel import guard — ConvergenceConfig is used here but defined in convergence.py.
 # This is fine for Phase 1 since both modules are in the same package.
-from circuit_graph.sim.convergence import ConvergenceConfig  # noqa: E402
 
 
 class SpiceRunner:

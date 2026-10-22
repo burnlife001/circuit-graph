@@ -34,11 +34,15 @@ _this_dir = Path(__file__).resolve().parent
 _scripts_dir = _this_dir.parent
 sys.path.insert(0, str(_scripts_dir))
 
+import session_state
 from _config import (
-    APPDATA_ATK, SCRIPTS_DIR, ATK_BG_EXE, get_data_dir, get_gui_dir,
+    APPDATA_ATK,
+    ATK_BG_EXE,
+    SCRIPTS_DIR,
+    get_data_dir,
+    get_gui_dir,
 )
 from config_sync import sync_set_ini
-import session_state
 
 CLI_SCRIPT = SCRIPTS_DIR / "atk_cli.py"
 WAVE_SCRIPT = SCRIPTS_DIR / "analyze" / "atk_classify.py"
@@ -94,7 +98,7 @@ def _ensure_save_file_shortcut():
             missing.append(f"{k}={actual!r} (expected {expected!r})")
     if missing:
         return False, (
-            f"set.ini shortcuts: " + ", ".join(missing)
+            "set.ini shortcuts: " + ", ".join(missing)
             + f". set.ini at {set_ini} must have these for atk_bg key flow."
         )
     return True, "set.ini shortcuts: startCollecting=F1, stopCollecting=F2, saveFile=F12"
@@ -190,7 +194,7 @@ def _start_gui_and_wait():
     while time.time() < deadline:
         if session_state.gui_running() > 0:
             time.sleep(1.0)  # Qt focus settle
-            return True, f"GUI auto-started, window visible", False
+            return True, "GUI auto-started, window visible", False
         time.sleep(0.5)
     return False, "GUI start requested but no window appeared within 15 s", False
 

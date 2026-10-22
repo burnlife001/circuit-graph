@@ -24,6 +24,73 @@ from pathlib import Path
 
 # Add scripts dir to path for sexp_parser and kicad_utils
 sys.path.insert(0, str(Path(__file__).parent))
+from domain_detectors import (
+    audit_connector_ground_distribution,
+    audit_esd_protection,
+    audit_led_circuits,
+    detect_adc_circuits,
+    detect_addressable_leds,
+    detect_audio_circuits,
+    detect_battery_chargers,
+    detect_bms_systems,
+    detect_buzzer_speakers,
+    detect_clock_distribution,
+    detect_debug_interfaces,
+    detect_display_interfaces,
+    detect_energy_harvesting,
+    detect_ethernet_interfaces,
+    detect_hdmi_dvi_interfaces,
+    detect_headphone_jack,
+    detect_i2c_address_conflicts,
+    detect_isolation_barriers,
+    detect_key_matrices,
+    detect_led_driver_ics,
+    detect_level_shifters,
+    detect_lvds_interfaces,
+    detect_memory_interfaces,
+    detect_motor_drivers,
+    detect_power_path,
+    detect_pwm_led_dimming,
+    detect_reset_supervisors,
+    detect_rf_chains,
+    detect_rf_matching,
+    detect_rtc_circuits,
+    detect_sensor_interfaces,
+    detect_thermocouple_rtd,
+    detect_transformer_feedback,
+    detect_wireless_modules,
+    suggest_certifications,
+    validate_power_sequencing,
+)
+from finding_schema import compute_trust_summary, sort_findings
+from kicad_types import AnalysisContext
+from kicad_utils import (
+    _MIL_MM,
+    _OUTPUT_DRIVE_KEYWORDS,
+    COORD_EPSILON,
+    classify_component,
+    classify_connector,
+    classify_ic_function,
+    extract_pro_text_variables,
+    load_kicad_pro,
+    load_lib_tables,
+    parse_value,
+)
+from kicad_utils import (
+    format_frequency as _format_frequency,
+)
+from kicad_utils import (
+    is_ground_name as _is_ground_name,
+)
+from kicad_utils import (
+    is_power_net_name as _is_power_net_name,
+)
+from kicad_utils import (
+    parse_voltage_from_net_name as _parse_voltage_from_net_name,
+)
+from kicad_utils import (
+    snap_to_mil_grid as _snap_mil,
+)
 from sexp_parser import (
     find_all,
     find_deep,
@@ -35,25 +102,8 @@ from sexp_parser import (
     has_flag,
     parse_file,
 )
-from kicad_utils import (
-    COORD_EPSILON,
-    _MIL_MM,
-    _OUTPUT_DRIVE_KEYWORDS,
-    classify_component,
-    classify_connector,
-    classify_ic_function,
-    extract_pro_text_variables,
-    format_frequency as _format_frequency,
-    load_lib_tables,
-    is_ground_name as _is_ground_name,
-    is_power_net_name as _is_power_net_name,
-    load_kicad_pro,
-    parse_value,
-    parse_voltage_from_net_name as _parse_voltage_from_net_name,
-    snap_to_mil_grid as _snap_mil,
-)
-from kicad_types import AnalysisContext
 from signal_detectors import (
+    _merge_series_dividers,
     audit_power_pin_dc_paths,
     audit_rail_sources,
     detect_bridge_circuits,
@@ -73,59 +123,20 @@ from signal_detectors import (
     detect_transistor_circuits,
     detect_voltage_dividers,
     postfilter_vd_and_dedup,
-    _merge_series_dividers,
-)
-from domain_detectors import (
-    audit_connector_ground_distribution,
-    audit_esd_protection,
-    audit_led_circuits,
-    detect_adc_circuits,
-    detect_addressable_leds,
-    detect_audio_circuits,
-    detect_battery_chargers,
-    detect_bms_systems,
-    detect_buzzer_speakers,
-    detect_clock_distribution,
-    detect_debug_interfaces,
-    detect_display_interfaces,
-    detect_ethernet_interfaces,
-    detect_hdmi_dvi_interfaces,
-    detect_isolation_barriers,
-    detect_key_matrices,
-    detect_lvds_interfaces,
-    detect_led_driver_ics,
-    detect_level_shifters,
-    detect_memory_interfaces,
-    detect_motor_drivers,
-    detect_power_path,
-    detect_reset_supervisors,
-    detect_rf_chains,
-    detect_rf_matching,
-    detect_rtc_circuits,
-    detect_sensor_interfaces,
-    detect_thermocouple_rtd,
-    suggest_certifications,
-    validate_power_sequencing,
-    detect_wireless_modules,
-    detect_transformer_feedback,
-    detect_i2c_address_conflicts,
-    detect_energy_harvesting,
-    detect_pwm_led_dimming,
-    detect_headphone_jack,
 )
 from validation_detectors import (
-    validate_pullups,
-    validate_voltage_levels,
-    validate_i2c_bus,
-    validate_spi_bus,
     validate_can_bus,
-    validate_usb_bus,
-    validate_power_sequencing as validate_power_seq_deps,
-    validate_led_resistors,
     validate_feedback_stability,
+    validate_i2c_bus,
+    validate_led_resistors,
+    validate_pullups,
+    validate_spi_bus,
+    validate_usb_bus,
+    validate_voltage_levels,
 )
-from finding_schema import compute_trust_summary, sort_findings
-
+from validation_detectors import (
+    validate_power_sequencing as validate_power_seq_deps,
+)
 
 # ---------------------------------------------------------------------------
 # Case-insensitive distributor / MPN property helpers
@@ -823,8 +834,12 @@ def analyze_signal_paths(ctx: AnalysisContext) -> dict:
         key and a 'ref' key, and adds derived fields from the component's footprint
         and value string.
         """
-        from kicad_utils import (extract_cap_package, estimate_cap_esr,
-                                 classify_dielectric, parse_rated_voltage)
+        from kicad_utils import (
+            classify_dielectric,
+            estimate_cap_esr,
+            extract_cap_package,
+            parse_rated_voltage,
+        )
 
         def _enrich(obj):
             if isinstance(obj, dict):
@@ -9204,7 +9219,7 @@ def main():
     # Load project config (for project settings — suppressions applied to
     # EMC/thermal findings, not schematic warnings which lack rule_ids)
     try:
-        from project_config import load_config_from_path, load_config
+        from project_config import load_config, load_config_from_path
         if args.config:
             config = load_config_from_path(args.config)
         else:
@@ -9287,7 +9302,8 @@ def main():
     # Datasheet verification — cross-check extracted datasheet data against schematic
     try:
         # Import datasheet_verify from the datasheets skill
-        import os as _os, sys as _sys
+        import os as _os
+        import sys as _sys
         _ds_scripts = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                     '..', '..', 'datasheets', 'scripts')
         if _os.path.isdir(_ds_scripts):
@@ -9342,10 +9358,15 @@ def main():
 
     if args.analysis_dir:
         import tempfile
-        from analysis_cache import (ensure_analysis_dir, hash_source_file,
-                                     should_create_new_run, create_run,
-                                     overwrite_current, CANONICAL_OUTPUTS,
-                                     resolve_analysis_dir)
+
+        from analysis_cache import (
+            CANONICAL_OUTPUTS,
+            create_run,
+            hash_source_file,
+            overwrite_current,
+            resolve_analysis_dir,
+            should_create_new_run,
+        )
 
         project_dir = str(Path(args.schematic).parent)
         analysis_dir = resolve_analysis_dir(args.analysis_dir)
@@ -9362,7 +9383,12 @@ def main():
 
         # Ensure the target directory exists with manifest
         os.makedirs(analysis_dir, exist_ok=True)
-        from analysis_cache import MANIFEST_FILENAME, save_manifest, _empty_manifest, GITIGNORE_CONTENT
+        from analysis_cache import (
+            GITIGNORE_CONTENT,
+            MANIFEST_FILENAME,
+            _empty_manifest,
+            save_manifest,
+        )
         manifest_path = os.path.join(analysis_dir, MANIFEST_FILENAME)
         if not os.path.isfile(manifest_path):
             manifest = _empty_manifest()
@@ -9395,7 +9421,7 @@ def main():
                 print(f"Analysis cached: {os.path.join(analysis_dir, run_id, 'schematic.json')}", file=sys.stderr)
             else:
                 overwrite_current(analysis_dir, tmp_dir, source_hashes=source_hashes)
-                print(f"Analysis cache updated (current run)", file=sys.stderr)
+                print("Analysis cache updated (current run)", file=sys.stderr)
 
     elif args.output:
         Path(args.output).write_text(output)

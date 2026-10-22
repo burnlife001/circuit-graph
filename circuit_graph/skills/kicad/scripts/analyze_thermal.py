@@ -24,7 +24,6 @@ import re
 import sys
 import time
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -945,7 +944,7 @@ def main():
 
     # Load project config
     try:
-        from project_config import load_config_from_path, load_config, apply_suppressions
+        from project_config import apply_suppressions, load_config, load_config_from_path
         if args.config:
             config = load_config_from_path(args.config)
         else:
@@ -1082,7 +1081,8 @@ def main():
         # ever run — shouldn't happen since schematic/pcb precede thermal,
         # but be defensive).
         import tempfile
-        from analysis_cache import overwrite_current, CANONICAL_OUTPUTS, get_current_run
+
+        from analysis_cache import CANONICAL_OUTPUTS, get_current_run, overwrite_current
         analysis_dir = args.analysis_dir
         if not os.path.isabs(analysis_dir):
             analysis_dir = os.path.abspath(analysis_dir)

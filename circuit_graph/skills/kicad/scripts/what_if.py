@@ -29,8 +29,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "..", "spice", "scripts"))
 
-from kicad_utils import parse_value
 from finding_schema import group_findings_legacy, is_old_schema
+from kicad_utils import parse_value
 
 
 @dataclass

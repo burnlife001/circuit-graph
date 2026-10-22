@@ -49,7 +49,6 @@ __all__ = ["ComponentDatabase", "ComponentRecord", "KnowledgeBase"]
 
 import json as _json
 
-
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent / "vendor_db.json"
 
 

@@ -24,25 +24,26 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
 
-from _config import (
-    APPDATA_ATK, CONFIG_INI, SCRIPTS_DIR, get_data_dir, get_gui_dir, ATK_BG_EXE,
-)
-from config_sync import sync_set_ini, get_set_ini_params
 import session_state
-
+from _config import (
+    APPDATA_ATK,
+    ATK_BG_EXE,
+    SCRIPTS_DIR,
+    get_data_dir,
+    get_gui_dir,
+)
 from capture_reader import CaptureReader, parse_time
+from config_sync import get_set_ini_params, sync_set_ini
 
 # Native protocol decoders live in analyze/ (one file per protocol)
 sys.path.insert(0, str(Path(__file__).parent / "analyze"))
-from atk_uart import UartDecoder
 from atk_i2c import I2CDecoder
 from atk_spi import SpiDecoder
-
+from atk_uart import UartDecoder
 
 # ---------------------------------------------------------------------------
 # Native decoder registry (uart / i2c / spi from analyze/)
@@ -311,7 +312,6 @@ def _cleanup_unsaved_markers():
     cleanly.  Since _restart_gui() is only invoked for config sync (not to
     recover user data), deleting these markers is safe.
     """
-    import shutil
     memory_dir = APPDATA_ATK / "temp" / "memory"
     lock_file = APPDATA_ATK / "temp" / "lock"
     if memory_dir.exists():
@@ -343,7 +343,7 @@ def _restart_gui():
     _cleanup_unsaved_markers()
 
     # ── Step 1: graceful close first, force-kill only as last resort ──
-    print(f"  [sync] gracefully closing ATK-Logic.exe...")
+    print("  [sync] gracefully closing ATK-Logic.exe...")
     try:
         sp.run(["taskkill", "/im", "ATK-Logic.exe"],
                capture_output=True, timeout=10)
@@ -368,7 +368,7 @@ def _restart_gui():
         still_alive = True
 
     if still_alive:
-        print(f"  [sync] still running after 3s, force killing...")
+        print("  [sync] still running after 3s, force killing...")
         try:
             sp.run(["taskkill", "/f", "/im", "ATK-Logic.exe"],
                    capture_output=True, timeout=10)
@@ -390,15 +390,15 @@ def _restart_gui():
     # Qt needs a moment to instantiate its main window after the process
     # starts.  Polling for MainWindowTitle != '' is the readiness signal
     # before any atk_bg hotkey delivery.
-    print(f"  [sync] waiting for GUI window...")
+    print("  [sync] waiting for GUI window...")
     deadline = time.time() + 15
     while time.time() < deadline:
         if session_state.gui_running() > 0:
-            print(f"  [sync] GUI window visible")
+            print("  [sync] GUI window visible")
             time.sleep(1.0)  # settle for Qt focus
             return
         time.sleep(0.5)
-    print(f"  [warn] GUI window not visible within 15s, proceeding anyway")
+    print("  [warn] GUI window not visible within 15s, proceeding anyway")
 
 
 def read_path_ini():
@@ -579,7 +579,7 @@ def cmd_capture(args):
                 hint = False
             print(f"  [pre] set.ini: ch={ch_list}, {display_hz/1e6:.0f}MHz, {display_threshold}V {freshness}")
             if hint:
-                print(f"  [pre] Pass --ch/--sample-rate-hz/--threshold to enforce known values if in doubt")
+                print("  [pre] Pass --ch/--sample-rate-hz/--threshold to enforce known values if in doubt")
 
     # ── Step 4: post-restart preflight re-check ──
     # A new GUI process invalidates the preflight_ok stored against the old
@@ -648,7 +648,7 @@ def cmd_capture(args):
         if mt > pre_mtime:
             pre_mtime = mt
 
-    print(f"=== ATK-Logic Capture ===")
+    print("=== ATK-Logic Capture ===")
     print(f"  Sample rate: {display_hz / 1e6:.0f} MHz")
     print(f"  Duration:    {duration_s:.1f}s")
     print(f"  Channels:    {ch_list}")
@@ -664,7 +664,7 @@ def cmd_capture(args):
         _err(f"atk_bg.exe not found at {ATK_BG_EXE}. Build it: pwsh {ATK_BG_EXE.parent}/build.ps1")
         sys.exit(1)
 
-    print(f"  [capture] sending F1 (start)...")
+    print("  [capture] sending F1 (start)...")
     r = sp.run([str(ATK_BG_EXE), "key", "F1"], capture_output=True, timeout=10)
     if r.returncode != 0:
         _err(f"atk_bg key F1 failed: {r.stderr.decode('utf-8', 'replace').strip()}")
@@ -673,17 +673,17 @@ def cmd_capture(args):
     print(f"  [capture] waiting {duration_s:.1f}s...", flush=True)
     time.sleep(duration_s)
 
-    print(f"  [capture] sending F2 (stop)...")
+    print("  [capture] sending F2 (stop)...")
     r = sp.run([str(ATK_BG_EXE), "key", "F2"], capture_output=True, timeout=10)
     if r.returncode != 0:
         _err(f"atk_bg key F2 failed: {r.stderr.decode('utf-8', 'replace').strip()}")
         sys.exit(1)
 
     # GUI needs a moment to finish processing data + render post-capture state
-    print(f"  [capture] waiting 1s for GUI to settle before save trigger...")
+    print("  [capture] waiting 1s for GUI to settle before save trigger...")
     time.sleep(1.0)
 
-    print(f"  [save] sending F12 (save)...")
+    print("  [save] sending F12 (save)...")
     r = sp.run([str(ATK_BG_EXE), "key", "F12"], capture_output=True, timeout=10)
     if r.returncode != 0:
         _err(f"atk_bg key F12 failed: {r.stderr.decode('utf-8', 'replace').strip()}")
@@ -693,7 +693,7 @@ def cmd_capture(args):
     #   False (first save in this session) → atk_bg fills Save-As picker
     #   True  (subsequent saves) → GUI does direct save, we mtime-scan
     if not is_ctrl_s_pressed:
-        print(f"  [save] first save — filling Save-As picker via atk_bg save...")
+        print("  [save] first save — filling Save-As picker via atk_bg save...")
         r = sp.run([str(ATK_BG_EXE), "save", str(Path(output)), "--timeout", "2"],
                    capture_output=True, timeout=15)
         # atk_bg save may report saved=false (file landed at GUI's choice path)
@@ -709,7 +709,7 @@ def cmd_capture(args):
             # Mark first-save done so subsequent saves skip the picker.
             if gui_pid > 0:
                 session_state.write_state(gui_pid, gui_start, is_ctrl_s_pressed=True)
-            print(f"Capture complete!")
+            print("Capture complete!")
             print(f"  File:    {output}")
             print(f"  Size:    {size_kb:.0f} KB")
             return
@@ -725,7 +725,7 @@ def cmd_capture(args):
         if newest:
             if gui_pid > 0:
                 session_state.write_state(gui_pid, gui_start, is_ctrl_s_pressed=True)
-            print(f"Capture complete!")
+            print("Capture complete!")
             print(f"  File:    {newest}")
             print(f"  Size:    {newest.stat().st_size / 1024:.0f} KB")
             return
@@ -749,7 +749,7 @@ def cmd_capture(args):
                 break
             time.sleep(0.05)
         if newest:
-            print(f"Capture complete!")
+            print("Capture complete!")
             print(f"  File:    {newest}")
             print(f"  Size:    {newest.stat().st_size / 1024:.0f} KB")
         else:

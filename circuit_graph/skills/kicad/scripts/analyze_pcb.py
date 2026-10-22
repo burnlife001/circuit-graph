@@ -24,6 +24,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import re
 
+from finding_schema import compute_trust_summary, sort_findings
+from kicad_utils import (
+    extract_pro_design_rules,
+    extract_pro_net_classes,
+    extract_pro_text_variables,
+    is_ground_name,
+    is_power_net_name,
+    load_kicad_dru,
+    load_kicad_pro,
+    load_lib_tables,
+)
+from pcb_connectivity import build_connectivity_graph
 from sexp_parser import (
     find_all,
     find_first,
@@ -32,13 +44,6 @@ from sexp_parser import (
     get_value,
     parse_file,
 )
-from kicad_utils import (is_ground_name, is_power_net_name,
-                         load_kicad_pro, extract_pro_net_classes,
-                         extract_pro_design_rules, extract_pro_text_variables,
-                         load_kicad_dru, load_lib_tables)
-from pcb_connectivity import build_connectivity_graph
-from finding_schema import compute_trust_summary, sort_findings
-
 
 # ---------------------------------------------------------------------------
 # Geometry helpers
@@ -1734,7 +1739,7 @@ def analyze_return_path_continuity(tracks, net_names, zones, zone_fills,
 
     cp = CopperPresence(zone_fills, tracks.get('segments', []), footprints)
 
-    from kicad_utils import is_power_net_name, is_ground_name
+    from kicad_utils import is_ground_name, is_power_net_name
 
     findings = []
     # Only check signal nets (not power/ground — they ARE the reference)
@@ -6513,7 +6518,7 @@ def main():
     # Load project config (for project settings — suppressions applied to
     # EMC/thermal findings, not PCB warnings which lack rule_ids)
     try:
-        from project_config import load_config_from_path, load_config
+        from project_config import load_config, load_config_from_path
         if args.config:
             config = load_config_from_path(args.config)
         else:
@@ -6608,10 +6613,15 @@ def main():
 
     if args.analysis_dir:
         import tempfile
-        from analysis_cache import (ensure_analysis_dir, hash_source_file,
-                                     should_create_new_run, create_run,
-                                     overwrite_current, CANONICAL_OUTPUTS,
-                                     resolve_analysis_dir)
+
+        from analysis_cache import (
+            CANONICAL_OUTPUTS,
+            create_run,
+            hash_source_file,
+            overwrite_current,
+            resolve_analysis_dir,
+            should_create_new_run,
+        )
 
         project_dir = str(Path(args.pcb).parent)
         analysis_dir = resolve_analysis_dir(args.analysis_dir)
@@ -6628,7 +6638,12 @@ def main():
 
         # Ensure the target directory exists with manifest
         os.makedirs(analysis_dir, exist_ok=True)
-        from analysis_cache import MANIFEST_FILENAME, save_manifest, _empty_manifest, GITIGNORE_CONTENT
+        from analysis_cache import (
+            GITIGNORE_CONTENT,
+            MANIFEST_FILENAME,
+            _empty_manifest,
+            save_manifest,
+        )
         manifest_path = os.path.join(analysis_dir, MANIFEST_FILENAME)
         if not os.path.isfile(manifest_path):
             manifest = _empty_manifest()
@@ -6655,7 +6670,7 @@ def main():
                 print(f"Analysis cached: {os.path.join(analysis_dir, run_id, 'pcb.json')}", file=sys.stderr)
             else:
                 overwrite_current(analysis_dir, tmp_dir, source_hashes=source_hashes)
-                print(f"Analysis cache updated (current run)", file=sys.stderr)
+                print("Analysis cache updated (current run)", file=sys.stderr)
 
     elif args.output:
         Path(args.output).write_text(output)

@@ -27,7 +27,12 @@ netlist_signalmap.py — 从 DXP/Altium 网表(.NET)提取 MCU 各引脚的真�
   5. 引脚未出现在任何网络                      -> 标记为 NC(悬空/未连接), 无需确认
   6. 其余无法判定                              -> 保留 NetXxx_n 并标注必须拓扑推断
 """
-import sys, os, re, json, glob, argparse
+import argparse
+import glob
+import json
+import os
+import re
+import sys
 
 
 def norm(s):

@@ -23,9 +23,8 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from finding_schema import make_finding, compute_trust_summary
+from finding_schema import compute_trust_summary, make_finding
 from kicad_utils import build_net_id_map as _build_net_id_map
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -983,7 +982,8 @@ def main():
         # cross_analysis.json co-locates with schematic.json + pcb.json
         # instead of landing at the analysis-dir root.
         import tempfile
-        from analysis_cache import overwrite_current, CANONICAL_OUTPUTS, get_current_run
+
+        from analysis_cache import CANONICAL_OUTPUTS, get_current_run, overwrite_current
         analysis_dir = args.analysis_dir
         if not os.path.isabs(analysis_dir):
             analysis_dir = os.path.abspath(analysis_dir)

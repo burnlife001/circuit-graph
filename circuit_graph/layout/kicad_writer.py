@@ -25,7 +25,6 @@ def apply_layout(sch, result: PageLayoutResult) -> None:
 
 
 def _apply_unit(sch, unit) -> None:
-    import kicad_sch_api as ksa
 
     # Move components.
     comp_by_id = {c.reference: c for c in sch.components}

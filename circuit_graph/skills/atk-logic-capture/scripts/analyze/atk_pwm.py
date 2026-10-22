@@ -40,7 +40,6 @@ if str(_parent_dir) not in sys.path:
 
 from capture_reader import CaptureReader, EdgeEvent, parse_time
 
-
 # 0 = auto-detect from edge duration distribution.
 # The auto-detector finds the largest gap between short (bounce) and long
 # (real PWM) edge durations, then places the threshold at the gap midpoint.

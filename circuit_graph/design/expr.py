@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import ast
 import operator
-from typing import Any
 
 _SI_SUFFIXES = {
     "p": 1e-12,

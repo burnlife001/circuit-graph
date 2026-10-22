@@ -599,7 +599,7 @@ def main():
         print(f"{'='*70}\n")
         sys.exit(1)
     else:
-        print(f"  VERDICT: PASS — all checks clean")
+        print("  VERDICT: PASS — all checks clean")
         print(f"{'='*70}\n")
         sys.exit(0)
 

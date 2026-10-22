@@ -18,12 +18,12 @@ pdf_table_reader.py — 从任意 PDF 中识别并提取所有表格(优化芯�
   - 若使用旧版 camelot-py 0.x,需要 Java JRE + Ghostscript
   - 推荐用 ~/__work/BaseTools/camelot/.venv 里的解释器
 """
-import sys
-import os
-import re
 import argparse
 import datetime
+import os
+import re
 import subprocess
+import sys
 from pathlib import Path
 
 

@@ -33,9 +33,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-
 
 # ---------------------------------------------------------------------------
 # Temperature presets
@@ -679,7 +678,7 @@ def audit_bom(analysis_json: dict, project_dir: str | None = None,
                     break
             # Search for alternatives if requested
             if suggest_alternatives:
-                print(f"  Searching for alternatives...", file=sys.stderr)
+                print("  Searching for alternatives...", file=sys.stderr)
                 alts = find_alternatives(mpn, sources, delay)
                 if alts:
                     finding["alternatives"] = alts

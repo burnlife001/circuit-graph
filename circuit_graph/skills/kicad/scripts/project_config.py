@@ -24,7 +24,6 @@ import re
 from fnmatch import fnmatch
 from typing import Any, Dict, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # JSONC loader (JSON with // and /* */ comments, trailing commas)
 # ---------------------------------------------------------------------------

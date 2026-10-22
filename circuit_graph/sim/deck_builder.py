@@ -56,7 +56,7 @@ class DeckBuilder:
             "* LM321 Non-Inverting Amplifier (hardcoded PoC)",
             f"Rf out in_n {rf}",
             f"Rg in_n 0 {rg}",
-            f"Rload out 0 10k",
+            "Rload out 0 10k",
             f"VDC vcc 0 DC {vcc}",
         ])
 

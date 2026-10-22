@@ -26,7 +26,6 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-
 _POWER_KEYWORDS_GERBER = {"vcc", "vdd", "gnd", "agnd", "dgnd", "gndref",
                           "vss", "avdd", "dvdd", "vbat", "vbus", "vin"}
 
@@ -1617,7 +1616,8 @@ def main():
         # Route into the current run folder via the manifest. Use the
         # canonical filename (gerber.json) so the manifest tracks it.
         import tempfile
-        from analysis_cache import overwrite_current, CANONICAL_OUTPUTS, get_current_run
+
+        from analysis_cache import CANONICAL_OUTPUTS, get_current_run, overwrite_current
         analysis_dir = args.analysis_dir
         if not os.path.isabs(analysis_dir):
             analysis_dir = os.path.abspath(analysis_dir)

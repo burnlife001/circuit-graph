@@ -21,14 +21,12 @@ import json
 import os
 import sys
 
-
 # ---------------------------------------------------------------------------
 # Signal analysis identity & value registry
 # ---------------------------------------------------------------------------
 # Maps detection type -> (identity_fields, value_fields)
 # identity_fields: dotpath fields that uniquely identify a detection
 # value_fields: numeric/string fields to compare for changes
-
 from detection_schema import SCHEMAS as _SCHEMAS
 from finding_schema import group_findings_legacy
 
@@ -1021,7 +1019,7 @@ def _extract_trends(analysis_dir, output_type, n_runs):
 
     Returns {det_type: {identity: {field: [(run_id, value), ...]}}}
     """
-    from analysis_cache import list_runs, CANONICAL_OUTPUTS
+    from analysis_cache import CANONICAL_OUTPUTS, list_runs
 
     runs = list_runs(analysis_dir, limit=n_runs)
     if len(runs) < 2:
@@ -1125,7 +1123,7 @@ def main():
     # Resolve runs from analysis cache if --analysis-dir is provided
     if args.analysis_dir:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from analysis_cache import list_runs, CANONICAL_OUTPUTS
+        from analysis_cache import CANONICAL_OUTPUTS, list_runs
 
         analysis_dir = args.analysis_dir
         if not os.path.isdir(analysis_dir):

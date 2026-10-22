@@ -26,7 +26,6 @@ from pathlib import Path
 
 from _config import APPDATA_ATK
 
-
 # ── set.ini INI parsing ─────────────────────────────────────────────────────
 
 def _ini_section(text: str, section: str) -> dict[str, str]:
@@ -296,7 +295,7 @@ def sync_set_ini(
     # Compare
     diff = params_differ(desired, actual)
     if not diff:
-        print(f"  [sync] already in sync, no changes needed")
+        print("  [sync] already in sync, no changes needed")
         return {
             "synced": True, "backup": None, "changes": [],
             "desired": desired, "actual": actual,

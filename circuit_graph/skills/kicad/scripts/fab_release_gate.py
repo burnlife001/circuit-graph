@@ -21,7 +21,6 @@ import sys
 import time
 from typing import Any, Dict, List, Optional
 
-
 GATE_VERSION = "1.0"
 
 

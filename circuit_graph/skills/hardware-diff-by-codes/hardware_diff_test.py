@@ -8,9 +8,8 @@ classifies pin differences, and emits a Markdown report.
 
 import re
 import sys
-import os
-from pathlib import Path
 from collections import defaultdict
+from pathlib import Path
 
 RESET = {
     'CRL': 0x44444444,

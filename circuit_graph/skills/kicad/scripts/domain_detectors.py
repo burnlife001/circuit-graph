@@ -14,11 +14,14 @@ from __future__ import annotations
 import re
 from collections import Counter
 
+from detector_helpers import (
+    get_unique_ics,
+    match_ic_keywords,
+)
+from finding_schema import make_finding, make_provenance
 from kicad_types import AnalysisContext
 from kicad_utils import lookup_regulator_vref, parse_value, parse_voltage_from_net_name
 from signal_detectors import _get_net_components
-from detector_helpers import get_components_by_type, index_two_pin_components, match_ic_keywords, get_unique_ics
-from finding_schema import make_finding, make_provenance
 
 
 def detect_buzzer_speakers(ctx: AnalysisContext, transistor_circuits: list[dict]) -> list[dict]:
