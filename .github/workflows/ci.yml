@@ -24,10 +24,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
-      # Repo-wide ruff has ~950 pre-existing style findings; gate only on
-      # undefined names (the bug class that bites at runtime).
-      - name: Ruff (undefined names)
-        run: uv run ruff check --select F821,F823 circuit_graph
+      - name: Ruff
+        run: uv run ruff check circuit_graph
 
       - name: Pytest
         run: uv run pytest -q
