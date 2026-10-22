@@ -24,7 +24,7 @@ DEFAULT_TIMEOUT_SECONDS = 10.0
 MAX_MATCHES_PER_TEMPLATE = 1000
 # Templates producing more groups than this are treated as floods: matches are
 # downgraded to candidates (visible via warnings) instead of becoming blocks.
-FLOOD_GROUP_THRESHOLD = 10
+FLOOD_GROUP_THRESHOLD = 7
 
 
 @dataclass

@@ -20,6 +20,8 @@
     },
     {
       "id": "C_shunt", "type": "Capacitor", "required": true,
+      "strict_value": true,
+      "value_pattern": "^(?!.*(1\\s*n[Ff]|100\\s*n[Ff]))",
       "pins": [
         {"number": "1", "net": "vout"},
         {"number": "2", "net": "gnd"}

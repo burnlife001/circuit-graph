@@ -235,8 +235,10 @@ def test_strict_mode_missing_edge_semantic_rejected():
 
 def _rc_low_pass_ir():
     r = make_component("R10", DeviceKind.RESISTOR, [("1", "VIN"), ("2", "VOUT")], raw_value="1K")
+    # 1 µF shunt: rc-low-pass now hard-excludes 1nF/100nF decoupling caps
+    # (strict_value), so this fixture must use a non-decoupling value.
     c = make_component("C10", DeviceKind.CAPACITOR, [("1", "VOUT"), ("2", "GND")],
-                       raw_value="100nF")
+                       raw_value="1uF")
     vin = make_net("N_VIN", "VIN", NetType.SIGNAL)
     vout = make_net("N_VOUT", "VOUT", NetType.SIGNAL)
     gnd = make_net("N_GND", "GND", NetType.GND)
