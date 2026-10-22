@@ -210,7 +210,9 @@ def kb_extract_pins(
     else:
         page_list = search_pin_pages(target_pdf)
         if not page_list:
-            click.echo(json.dumps({"error": "no pin-table pages detected; use --pages to specify manually"}))
+            click.echo(json.dumps(
+                {"error": "no pin-table pages detected; use --pages to specify manually"}
+            ))
             sys.exit(1)
 
     pin_map = extract_pin_table(target_pdf, page_list)

@@ -236,15 +236,25 @@ def init_orchestrator(
         elif kb_db.is_file() and not force:
             kb_report = {"status": "skipped", "reason": "KB already exists; pass --force to re-run"}
         else:
-            kb_report = json.loads(delegate([sys.executable, "-m", "circuit_graph.cli", "kb", "init"], cwd=target))
+            kb_report = json.loads(
+                delegate([sys.executable, "-m", "circuit_graph.cli", "kb", "init"], cwd=target)
+            )
             sub_statuses.append(kb_report["status"])
 
         if skip_skill:
             skill_report = {"status": "skipped"}
         elif skills_dir.is_dir() and not force:
-            skill_report = {"status": "skipped", "reason": "skills already installed; pass --force to re-run"}
+            skill_report = {
+                "status": "skipped",
+                "reason": "skills already installed; pass --force to re-run",
+            }
         else:
-            skill_report = json.loads(delegate([sys.executable, "-m", "circuit_graph.cli", "initskill", str(target)], cwd=target))
+            skill_report = json.loads(
+                delegate(
+                    [sys.executable, "-m", "circuit_graph.cli", "initskill", str(target)],
+                    cwd=target,
+                )
+            )
             sub_statuses.append(skill_report["status"])
 
     if dry_run:

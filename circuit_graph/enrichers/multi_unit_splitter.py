@@ -64,7 +64,9 @@ class MultiUnitSplitter:
             if comp.device_kind != DeviceKind.IC or comp.part_number not in db:
                 new_components.append(comp)
                 # keep original connections for non-split components
-                new_connections.extend(c for c in ir.connections if c.pin_id.startswith(f"{comp.id}."))
+                new_connections.extend(
+                    c for c in ir.connections if c.pin_id.startswith(f"{comp.id}.")
+                )
                 continue
 
             # split this IC into units

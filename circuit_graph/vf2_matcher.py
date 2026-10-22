@@ -197,7 +197,7 @@ def _match_signal_semantics(
     return True
 
 
-class _DeadlineExceeded(Exception):
+class _DeadlineExceededError(Exception):
     """Raised inside semantic_feasibility to abort the VF2 iterator."""
 
 
@@ -232,7 +232,7 @@ class _SemanticGraphMatcher(GraphMatcher):
 
     def semantic_feasibility(self, G1_node: str, G2_node: str) -> bool:  # noqa: N803
         if time.perf_counter() > self._deadline:
-            raise _DeadlineExceeded()
+            raise _DeadlineExceededError()
         if not super().semantic_feasibility(G1_node, G2_node):
             return False
         # G1 = circuit graph, G2 = primitive graph (NetworkX convention).
@@ -396,7 +396,7 @@ class Vf2TopologyMatcher:
 
         # To honour the timeout we iterate manually instead of calling
         # subgraph_isomorphisms_iter() in a tight loop. The deadline is also
-        # enforced inside semantic_feasibility via _DeadlineExceeded so the
+        # enforced inside semantic_feasibility via _DeadlineExceededError so the
         # generator aborts even when no mapping is being yielded.
         try:
             for mapping in gm.subgraph_isomorphisms_iter():
@@ -412,7 +412,7 @@ class Vf2TopologyMatcher:
                     if score_fn is not None:
                         match = self._score_match(match, score_fn)
                     matches.append(match)
-        except _DeadlineExceeded:
+        except _DeadlineExceededError:
             return MatchResult(
                 matches=[],
                 aborted=True,

@@ -90,7 +90,13 @@ def _resolve_parameters(parameters: dict[str, str], inputs: dict[str, float]) ->
         progress = False
         for key, expr in list(pending.items()):
             names = expr_names(expr)
-            if any(name in pending or any(k.startswith(f"{name}.") for k in pending) for name in names) or expr in pending:
+            if (
+                any(
+                    name in pending or any(k.startswith(f"{name}.") for k in pending)
+                    for name in names
+                )
+                or expr in pending
+            ):
                 continue
             try:
                 value = evaluate(expr, bound)

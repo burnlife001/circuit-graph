@@ -98,7 +98,10 @@ def _pin_from_symbol_cache(entry: Any, pin_num: str) -> tuple[float, float]:
         if symbol_def is None:
             raise RuntimeError(f"cannot resolve symbol definition for {entry!r}")
     else:
-        raise TypeError(f"symbol cache entry must expose pins or get_symbol_definition; got {type(entry).__name__}")
+        raise TypeError(
+            f"symbol cache entry must expose pins or get_symbol_definition; "
+            f"got {type(entry).__name__}"
+        )
 
     pin = symbol_def.get_pin(pin_num)
     if pin is None:

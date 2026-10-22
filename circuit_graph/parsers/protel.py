@@ -276,9 +276,13 @@ class ProtelNetParser:
                         if comp_id in component_map:
                             component_map[comp_id].pin_numbers.add(entry["pin_num"])
                             if entry["pin_name"]:
-                                component_map[comp_id].pin_names[entry["pin_num"]] = entry["pin_name"]
+                                component_map[comp_id].pin_names[entry["pin_num"]] = entry[
+                                    "pin_name"
+                                ]
                             if entry["pin_type"]:
-                                component_map[comp_id].pin_types[entry["pin_num"]] = entry["pin_type"]
+                                component_map[comp_id].pin_types[entry["pin_num"]] = entry[
+                                    "pin_type"
+                                ]
             i += 1
 
         components: list[Component] = []
@@ -418,7 +422,13 @@ class ProtelNetParser:
             if value:
                 return value
         # Fall back to PARTTYPE inside draft itself if no metadata match.
-        return draft.raw_value if device_kind in {DeviceKind.IC, DeviceKind.MOSFET, DeviceKind.DIODE, DeviceKind.CONNECTOR} else None
+        return (
+            draft.raw_value
+            if device_kind in {
+                DeviceKind.IC, DeviceKind.MOSFET, DeviceKind.DIODE, DeviceKind.CONNECTOR
+            }
+            else None
+        )
 
     @staticmethod
     def _is_blank_component_v2(draft: _ComponentDraftV2) -> bool:

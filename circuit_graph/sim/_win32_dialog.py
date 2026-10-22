@@ -60,12 +60,12 @@ def _dismiss_all_dialogs(user32, dismissed: set[int]) -> None:
             found_hwnds.append(hwnd)
         return True  # Continue enumeration
 
-    ENUM_PROC = ctypes.WINFUNCTYPE(
+    enum_proc = ctypes.WINFUNCTYPE(
         ctypes.wintypes.BOOL,
         ctypes.wintypes.HWND,
         ctypes.wintypes.LPARAM,
     )
-    user32.EnumWindows(ENUM_PROC(_enum_callback), 0)
+    user32.EnumWindows(enum_proc(_enum_callback), 0)
 
     for hwnd in found_hwnds:
         if hwnd in dismissed:
@@ -95,12 +95,12 @@ def _click_button(user32, hwnd: int) -> None:
             return False  # Stop — found the button
         return True  # Continue enumeration
 
-    ENUM_CHILD_PROC = ctypes.WINFUNCTYPE(
+    enum_child_proc = ctypes.WINFUNCTYPE(
         ctypes.wintypes.BOOL,
         ctypes.wintypes.HWND,
         ctypes.wintypes.LPARAM,
     )
-    user32.EnumChildWindows(hwnd, ENUM_CHILD_PROC(_enum_callback), 0)
+    user32.EnumChildWindows(hwnd, enum_child_proc(_enum_callback), 0)
 
     for btn_hwnd in found_buttons:
         user32.SendMessageW(btn_hwnd, BM_CLICK, 0, 0)

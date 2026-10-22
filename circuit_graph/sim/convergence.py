@@ -69,7 +69,8 @@ class ConvergenceConfig:
             f".OPTIONS {' '.join(f'{k}={v}' for k, v in options.items())}",
         )
 
-        # Merge with existing options (originals first, converge opts last — Ngspice last-write-wins)
+        # Merge with existing options (originals first, converge opts last —
+        # Ngspice last-write-wins)
         merged_options = deck.options + option_lines
 
         return type(deck)(

@@ -207,7 +207,7 @@ def layout_check(
                 file=sys.stderr,
             )
 
-        violations = checker.evaluate()
+        checker.evaluate()
 
         if verbose:
             s = checker.summary

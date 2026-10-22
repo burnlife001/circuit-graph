@@ -92,14 +92,9 @@ def _place_lm321_ccs(ir: CircuitIR, config: LayoutConfig) -> dict[str, Placement
     so that symbols snap to the 2.54 mm grid and pin tips align vertically.
     """
     grid = config.grid.size_mm
-    char = config.grid.char_unit_mm
 
-    # Fixed columns.
-    control_x = 50.8  # RREF1/RREF2/LM321/RB
+    # Fixed power column.
     power_x = 101.6   # RL/Q1/RS and power symbols
-
-    # Vertical spacing: one character height between adjacent rows.
-    step = char * 2  # 2.54 mm
 
     # Control group, top to bottom.
     # RREF1 and RREF2 do not exist in the IR (they are SPICE VREF/ameters).

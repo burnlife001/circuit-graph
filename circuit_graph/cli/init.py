@@ -217,9 +217,12 @@ def init_cmd(target: Path, force: bool, dry_run: bool) -> None:
 @click.option("--skip-config", is_flag=True, help="Don't write .cg.toml.")
 @click.option("--skip-kb",     is_flag=True, help="Don't call `cg kb init`.")
 @click.option("--skip-skill",  is_flag=True, help="Don't call `cg initskill`.")
-@click.option("-y", "--yes",   is_flag=True, help="Auto-accept proposed config; skip interactive confirm.")
-@click.option("--force",       is_flag=True, help="Overwrite existing .cg.toml; re-run kb/skill sub-commands.")
-@click.option("--dry-run",     is_flag=True, help="Print full plan (detection, config diff, sub-cmd invocations); no writes.")
+@click.option("-y", "--yes",   is_flag=True,
+              help="Auto-accept proposed config; skip interactive confirm.")
+@click.option("--force",       is_flag=True,
+              help="Overwrite existing .cg.toml; re-run kb/skill sub-commands.")
+@click.option("--dry-run",     is_flag=True,
+              help="Print full plan (detection, config diff, sub-cmd invocations); no writes.")
 def init_orchestrator_cmd(target: Path, skip_config: bool, skip_kb: bool, skip_skill: bool,
                           yes: bool, force: bool, dry_run: bool) -> None:
     """Bootstrap a project for circuit-graph.

@@ -135,12 +135,12 @@ def search_pin_pages(pdf_path: Path) -> list[int]:
         return []
 
     # Table-header keywords that distinguish table pages from pinout diagrams.
-    _TABLE_HEADER_KW = json.dumps([
+    _table_header_kw = json.dumps([
         "main function", "multiplex function", "additional function",
         "i/o level", "pin function", "pin assignment",
     ])
     # Narrow pin-assignment keywords (excludes TOC matches like "pin description").
-    _PIN_KW = json.dumps([
+    _pin_kw = json.dumps([
         "pin assignment", "pin definition", "pin description",
         "引脚定义", "管脚分配", "引脚分配",
     ])
@@ -209,7 +209,7 @@ def search_pin_pages(pdf_path: Path) -> list[int]:
             script_path = f.name
         try:
             result = subprocess.run(
-                [str(py_exe), script_path, str(pdf_path), _PIN_KW, _TABLE_HEADER_KW],
+                [str(py_exe), script_path, str(pdf_path), _pin_kw, _table_header_kw],
                 capture_output=True, text=True, encoding="utf-8", timeout=30,
             )
         finally:

@@ -40,7 +40,6 @@ def build_signal_graph(ir: CircuitIR, config: LayoutConfig) -> nx.DiGraph:
     # Map net names → net ids for IO config lookups (io.inputs/outouts use names).
     net_name_to_id: dict[str, str] = {n.name: n.id for n in ir.nets}
     io_input_net_ids = {net_name_to_id[n] for n in config.io.inputs if n in net_name_to_id}
-    io_output_net_ids = {net_name_to_id[n] for n in config.io.outputs if n in net_name_to_id}
 
     # Components that have a pin on an IO input net are "input-driven" —
     # they receive signal from outside and forward it downstream.
