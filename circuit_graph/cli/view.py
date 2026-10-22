@@ -12,6 +12,11 @@ from circuit_graph.cli.app import _parse_and_enrich, main
 from circuit_graph.ir import CircuitIR
 
 
+# Maximum warnings embedded in the view JSON before folding to a
+# "(+N more)" marker — flood diagnostics must not dominate scoped views.
+_MAX_WARNINGS_IN_VIEW = 5
+
+
 @main.command()
 @click.argument("designator")
 @click.argument("file", type=click.Path(exists=True, path_type=Path))
@@ -44,6 +49,13 @@ from circuit_graph.ir import CircuitIR
     help="Per-template topology match timeout in seconds (default: recognizer built-in).",
 )
 @click.option(
+    "--max-members",
+    type=int,
+    default=20,
+    show_default=True,
+    help="Fold nets with more than N members to ego members + (+M more).",
+)
+@click.option(
     "--cache-dir",
     type=click.Path(path_type=Path),
     default=None,
@@ -60,6 +72,7 @@ def view(
     with_blocks: bool,
     with_all: bool,
     topology_timeout: float | None,
+    max_members: int,
     cache_dir: Path | None,
     no_cache: bool,
 ) -> None:
@@ -90,7 +103,7 @@ def view(
     db = ComponentDatabase.default()
     from circuit_graph.generators.cg_graph import view_component
 
-    result = view_component(ir, designator, hops=hops, db=db)
+    result = view_component(ir, designator, hops=hops, db=db, max_members=max_members)
     if result is None:
         payload = {"error": _not_found_message(ir, designator), "warnings": warnings}
         sys.stdout.buffer.write(
@@ -99,7 +112,11 @@ def view(
         sys.stdout.buffer.write(b"\n")
         sys.exit(1)
 
-    result["warnings"] = warnings
+    result["warnings"] = warnings[:_MAX_WARNINGS_IN_VIEW]
+    if len(warnings) > _MAX_WARNINGS_IN_VIEW:
+        result["warnings"].append(
+            f"(+{len(warnings) - _MAX_WARNINGS_IN_VIEW} more warnings)"
+        )
 
     if with_power:
         ctx = _build_power_context(ir, designator)
@@ -414,16 +431,23 @@ def _build_symmetry_context(
 def _build_blocks_context(ir: CircuitIR, view_result: dict[str, object]) -> list[dict[str, object]]:
     """Return functional blocks that touch the ego subgraph in ``view_result``.
 
-    A block is included when at least one of its components appears in the
-    view's component set, so the focal component's block membership plus any
-    blocks spilling into the neighbourhood are both surfaced.  The list is
-    empty (not absent) when nothing was recognised — callers always get the
-    key when ``--with-blocks`` is passed.
+    A block is included when it contains the focal component or at least one
+    fully-detailed ego component (stub entries from folded rails/multi-hop
+    traversal do not count), so blocks dragged in only via a shared GND do
+    not clutter the output.  The list is empty (not absent) when nothing was
+    recognised — callers always get the key when ``--with-blocks`` is passed.
     """
-    ego_components = set(view_result.get("components", {}))
+    focal = str(view_result.get("focal", ""))
+    components = view_result.get("components", {})
+    detailed = {
+        cid
+        for cid, entry in dict(components).items()
+        if isinstance(entry, dict) and "pins" in entry
+    }
     blocks: list[dict[str, object]] = []
     for block in ir.blocks:
-        if not ego_components.intersection(block.component_ids):
+        block_comps = set(block.component_ids)
+        if focal not in block_comps and not block_comps & detailed:
             continue
         blocks.append(
             {

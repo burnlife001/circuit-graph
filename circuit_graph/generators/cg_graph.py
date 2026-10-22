@@ -11,6 +11,7 @@ without name-based heuristics.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -70,6 +71,7 @@ def view_component(
     designator: str,
     hops: int = 2,
     db: ComponentDatabase | None = None,
+    max_members: int = 20,
 ) -> dict[str, Any] | None:
     """Return a scoped ego-subgraph for ``designator`` using the v2.1 model.
 
@@ -78,6 +80,13 @@ def view_component(
     still listed in the ``nets`` block with full membership and degree, they
     are simply not used as next-hop seeds.  Representation is identical to the
     whole-board format (single component definition + single net definition).
+
+    Size guard: on high-degree nets (more than ``max_members`` components)
+    only ego members are listed, the rest folds to a trailing ``"(+N more)"``
+    entry; components reached beyond the focal's direct neighbourhood are
+    emitted as ``{"id": ...}`` stubs instead of full entries.  This keeps
+    ``view`` output bounded on boards where a 26-pin IC touches rails with
+    dozens of mounted components.
 
     When *db* is provided, every non-passive component with a part_number is
     enriched with ``kb_description``, ``kb_category``, ``kb_subcategory`` and
@@ -110,22 +119,50 @@ def view_component(
         if not frontier:
             break
 
-    # Every net touched by any reached component is listed in full (including rails).
-    touched_net_ids: set[str] = set()
-    for cid in reached:
-        touched_net_ids.update(comp_nets.get(cid, ()))
+    # Full-detail entries go to the focal itself and to components on the
+    # focal's own low-degree nets; neighbours reached only through high-degree
+    # rails (e.g. everything hanging off GND) and multi-hop components become
+    # ``{"id": ...}`` stubs.
+    full_detail: set[str] = {designator}
+    for net_id in comp_nets.get(designator, ()):
+        if len(net_members.get(net_id, [])) <= max_members:
+            full_detail.update(net_members.get(net_id, ()))
+
+    # A net is view-relevant when it carries the focal or connects at least
+    # two fully-detailed components; a big IC's private nets (only it sits on
+    # them) stay out of the scoped view, so its entry does not expand all of
+    # its pins.
+    touched_net_ids: set[str] = {
+        net_id
+        for cid in full_detail
+        for net_id in comp_nets.get(cid, ())
+        if designator in net_members.get(net_id, ())
+        or len(set(net_members.get(net_id, ())) & full_detail) >= 2
+    }
 
     components: dict[str, dict[str, Any]] = {}
     for cid in sorted(reached):
         comp = comp_map[cid]
-        components[cid] = _component_entry(comp, net_map, pin_to_net, db=db)
+        if cid in full_detail:
+            components[cid] = _component_entry(
+                comp, net_map, pin_to_net, db=db, only_nets=touched_net_ids
+            )
+        else:
+            components[cid] = {"id": cid}
 
     nets: dict[str, dict[str, Any]] = {}
     for net_id in sorted(touched_net_ids):
         net = net_map.get(net_id)
         if net is None:
             continue
-        nets[net.name] = _net_entry(net, net_members.get(net_id, []))
+        members = net_members.get(net_id, [])
+        if len(members) > max_members:
+            visible = [m for m in members if m in full_detail]
+            entry = _net_entry(net, [*visible, f"(+{len(members) - len(visible)} more)"])
+            entry["degree"] = len(members)  # true fanout, not the folded list
+        else:
+            entry = _net_entry(net, members)
+        nets[net.name] = entry
 
     return {
         "format": "cg-graph",
@@ -229,6 +266,7 @@ def _component_entry(
     net_map: dict[str, Net],
     pin_to_net: dict[str, str],
     db: ComponentDatabase | None = None,
+    only_nets: set[str] | None = None,
 ) -> dict[str, Any]:
     """Build a self-contained cg-graph component entry (no neighbour inlining).
 
@@ -237,6 +275,10 @@ def _component_entry(
     ``kb_subcategory`` and ``kb_channel_type`` from the knowledge base so that
     MOSFET channel type, IC function and other structured metadata are surfaced
     to consumers without a separate DB lookup.
+
+    When *only_nets* is given (scoped views), only pins on those nets are
+    listed — a 48-pin MCU contributing two PWM signals no longer expands all
+    of its pins into the ego subgraph.
     """
     entry: dict[str, Any] = {"id": comp.id}
 
@@ -248,9 +290,10 @@ def _component_entry(
         value_text = _format_component_value(comp)
         if value_text:
             entry["value"] = value_text
-        numeric = _numeric_value_field(comp)
-        if numeric is not None:
-            entry[numeric["key"]] = numeric["value"]
+        if only_nets is None:  # scoped views stay lean: "value" already carries it
+            numeric = _numeric_value_field(comp)
+            if numeric is not None:
+                entry[numeric["key"]] = numeric["value"]
     elif comp.raw_value:
         entry["part_number"] = comp.raw_value
         # ─ KB enrichment ──────────────────────────────────────────
@@ -273,6 +316,8 @@ def _component_entry(
     for pin in comp.pins:
         net_id = pin_to_net.get(pin.id)
         if net_id is None:
+            continue
+        if only_nets is not None and net_id not in only_nets:
             continue
         net = net_map.get(net_id)
         if net is None:
@@ -396,15 +441,27 @@ def _strip_trailing_zeros(value: float) -> str:
 
 
 def _numeric_value_field(comp: Component) -> dict[str, Any] | None:
-    """Return {"key": "ohms"/"farads"/"henries", "value": float} or None."""
+    """Return {"key": "ohms"/"farads"/"henries", "value": float} or None.
+
+    The value is rounded to 6 significant digits so JSON output does not
+    carry float-repr noise like ``9.999999999999999e-05``.
+    """
     val = comp.value
     if isinstance(val, ResistanceValue):
-        return {"key": "ohms", "value": _to_ohms(val)}
+        return {"key": "ohms", "value": _sig6(_to_ohms(val))}
     if isinstance(val, CapacitanceValue):
-        return {"key": "farads", "value": _to_farads(val)}
+        return {"key": "farads", "value": _sig6(_to_farads(val))}
     if isinstance(val, InductanceValue):
-        return {"key": "henries", "value": _to_henries(val)}
+        return {"key": "henries", "value": _sig6(_to_henries(val))}
     return None
+
+
+def _sig6(value: float) -> float:
+    """Round to 6 significant digits, keeping the result a plain float."""
+    if value == 0:
+        return 0.0
+    digits = 6 - int(math.floor(math.log10(abs(value)))) - 1
+    return round(value, max(digits, 0))
 
 
 def _to_ohms(val: ResistanceValue) -> float:
