@@ -1,6 +1,6 @@
 # Primitives 索引
 
-> 由 [`scripts/build_primitive_index.py`](./scripts/build_primitive_index.py) 自动生成于 2026-10-17，共 25 个基元。请勿手改。
+> 由 [`scripts/build_primitive_index.py`](./scripts/build_primitive_index.py) 自动生成于 2026-10-22，共 25 个基元。请勿手改。
 
 | ID | 名称 | 用途 | 严格模式 | 文件 |
 |---|---|---|---|---|
