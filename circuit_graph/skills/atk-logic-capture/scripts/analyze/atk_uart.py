@@ -22,8 +22,8 @@ _parent_dir = Path(__file__).resolve().parent.parent
 if str(_parent_dir) not in sys.path:
     sys.path.insert(0, str(_parent_dir))
 
-from _proto_common import ProtoFrame, _EdgeHelper, normalize_options
-from capture_reader import CaptureReader
+from _proto_common import ProtoFrame, _EdgeHelper, normalize_options  # noqa: E402
+from capture_reader import CaptureReader  # noqa: E402
 
 
 class UartDecoder:

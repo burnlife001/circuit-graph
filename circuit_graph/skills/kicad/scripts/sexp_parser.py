@@ -73,7 +73,10 @@ def _tokenize(text: str) -> list[str]:
                     j += 1
             raw = text[i + 1 : j]
             # Unescape: \\→placeholder first, then known sequences, then restore
-            raw = raw.replace("\\\\", "\x00").replace('\\"', '"').replace("\\n", "\n").replace("\\r", "\r").replace("\x00", "\\")
+            raw = (
+                raw.replace("\\\\", "\x00").replace('\\"', '"').replace("\\n", "\n")
+                .replace("\\r", "\r").replace("\x00", "\\")
+            )
             tokens.append(_unescape_braces(raw))
             i = j + 1
         else:
@@ -109,7 +112,10 @@ def find_all(node: list, keyword: str) -> list[list]:
     """
     if not isinstance(node, list):
         return []
-    return [child for child in node if isinstance(child, list) and len(child) > 0 and child[0] == keyword]
+    return [
+        child for child in node
+        if isinstance(child, list) and len(child) > 0 and child[0] == keyword
+    ]
 
 
 def find_first(node: list, keyword: str) -> list | None:

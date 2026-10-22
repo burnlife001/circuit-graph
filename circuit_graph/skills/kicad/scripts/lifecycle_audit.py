@@ -297,7 +297,10 @@ def query_lifecycle_mouser(mpn: str) -> dict | None:
 def query_lifecycle_lcsc(mpn: str) -> dict | None:
     """Query LCSC for availability and temperature data."""
     try:
-        url = f"https://jlcsearch.tscircuit.com/api/search?q={urllib.parse.quote(mpn)}&limit=3&full=true"
+        url = (
+            f"https://jlcsearch.tscircuit.com/api/search?q={urllib.parse.quote(mpn)}"
+            "&limit=3&full=true"
+        )
         req = urllib.request.Request(url, headers={"User-Agent": "kicad-happy-lifecycle/1.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
@@ -398,7 +401,10 @@ def read_extraction_temperature(mpn: str, project_dir: str) -> dict | None:
                     idx = json.load(f)
                 for k, v in idx.get("extractions", {}).items():
                     if k.upper() == sanitized.upper():
-                        extract_path = Path(project_dir) / "datasheets" / "extracted" / v.get("file", "")
+                        extract_path = (
+                            Path(project_dir) / "datasheets" / "extracted"
+                            / v.get("file", "")
+                        )
                         break
             except (json.JSONDecodeError, OSError):
                 pass
@@ -564,7 +570,11 @@ def find_alternatives(mpn: str,
                             continue
                         # Only suggest active parts
                         prod_status = product.get("ProductStatus", {})
-                        status_str = prod_status.get("Status", "") if isinstance(prod_status, dict) else str(prod_status)
+                        status_str = (
+                            prod_status.get("Status", "")
+                            if isinstance(prod_status, dict)
+                            else str(prod_status)
+                        )
                         if _normalize_status(status_str) == "active":
                             seen_mpns.add(prod_mpn.upper())
                             alternatives.append({
@@ -584,8 +594,13 @@ def find_alternatives(mpn: str,
         if len(base_mpn) >= 4:
             try:
                 time.sleep(delay)
-                url = f"https://jlcsearch.tscircuit.com/api/search?q={urllib.parse.quote(base_mpn)}&limit=5&full=true"
-                req = urllib.request.Request(url, headers={"User-Agent": "kicad-happy-lifecycle/1.0"})
+                url = (
+                    "https://jlcsearch.tscircuit.com/api/search"
+                    f"?q={urllib.parse.quote(base_mpn)}&limit=5&full=true"
+                )
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": "kicad-happy-lifecycle/1.0"}
+                )
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     data = json.loads(resp.read())
                 for comp in data.get("components", []):
@@ -720,7 +735,11 @@ def audit_bom(analysis_json: dict, project_dir: str | None = None,
                 else f"Verify current availability before committing to {mpn}; "
                      f"consider locking to the active distributor or finding an "
                      f"alternate.")
-            finding['report_context'] = {'section': 'Lifecycle', 'impact': 'Supply chain risk', 'standard_ref': ''}
+            finding['report_context'] = {
+                'section': 'Lifecycle',
+                'impact': 'Supply chain risk',
+                'standard_ref': '',
+            }
         else:
             finding['detector'] = 'audit_bom'
             finding['rule_id'] = 'LC-ACT'
@@ -754,12 +773,23 @@ def audit_bom(analysis_json: dict, project_dir: str | None = None,
                     'confidence': 'deterministic',
                     'evidence_source': 'datasheet',
                     'summary': f'{mpn}: single source ({active_sources[0]})',
-                    'description': f'Component {mpn} ({len(refs)} ref(s)) is only available from {active_sources[0]} out of {total_queried} sources checked.',
+                    'description': (
+                        f'Component {mpn} ({len(refs)} ref(s)) is only available '
+                        f'from {active_sources[0]} out of {total_queried} '
+                        'sources checked.'
+                    ),
                     'components': sorted(refs),
                     'nets': [],
                     'pins': [],
-                    'recommendation': 'Consider qualifying an alternative source for supply chain resilience.',
-                    'report_context': {'section': 'Lifecycle', 'impact': 'Supply chain fragility', 'standard_ref': ''},
+                    'recommendation': (
+                        'Consider qualifying an alternative source for supply '
+                        'chain resilience.'
+                    ),
+                    'report_context': {
+                        'section': 'Lifecycle',
+                        'impact': 'Supply chain fragility',
+                        'standard_ref': '',
+                    },
                 })
 
         # LC-006: Long lead time
@@ -795,12 +825,19 @@ def audit_bom(analysis_json: dict, project_dir: str | None = None,
                 'confidence': 'deterministic',
                 'evidence_source': 'datasheet',
                 'summary': f'{mpn}: {max_lead_weeks} week lead time',
-                'description': f'Component {mpn} has {max_lead_weeks} week lead time (from {lead_source}).',
+                'description': (
+                    f'Component {mpn} has {max_lead_weeks} week lead time '
+                    f'(from {lead_source}).'
+                ),
                 'components': sorted(refs),
                 'nets': [],
                 'pins': [],
                 'recommendation': f'Pre-order or stock {mpn} — long lead time risk.',
-                'report_context': {'section': 'Lifecycle', 'impact': 'Procurement delay risk', 'standard_ref': ''},
+                'report_context': {
+                    'section': 'Lifecycle',
+                    'impact': 'Procurement delay risk',
+                    'standard_ref': '',
+                },
             })
 
         # Temperature
@@ -838,13 +875,25 @@ def audit_bom(analysis_json: dict, project_dir: str | None = None,
                     "rule_id": "LT-001",
                     "category": "temperature",
                     "confidence": "deterministic",
-                    "evidence_source": "api_lookup" if temp.get("source") else "heuristic_rule",
-                    "summary": f"{mpn}: rated {comp_grade} ({comp_min}C to {comp_max}C), design needs {design_min}C to {design_max}C",
+                    "evidence_source": (
+                        "api_lookup" if temp.get("source") else "heuristic_rule"
+                    ),
+                    "summary": (
+                        f"{mpn}: rated {comp_grade} ({comp_min}C to {comp_max}C), "
+                        f"design needs {design_min}C to {design_max}C"
+                    ),
                     "components": sorted(refs),
                     "nets": [],
                     "pins": [],
-                    "recommendation": f"Select component rated for full {design_min}C to {design_max}C range.",
-                    "report_context": {"section": "Temperature", "impact": "Operating range violation", "standard_ref": ""},
+                    "recommendation": (
+                        f"Select component rated for full {design_min}C to "
+                        f"{design_max}C range."
+                    ),
+                    "report_context": {
+                        "section": "Temperature",
+                        "impact": "Operating range violation",
+                        "standard_ref": "",
+                    },
                 })
             else:
                 temp_ok += 1
@@ -860,7 +909,9 @@ def audit_bom(analysis_json: dict, project_dir: str | None = None,
         "components_checked": total,
         "components_with_mpn": total,
         "components_without_mpn": skipped,
-        "sources_available": list({src for f in lifecycle_findings for src in f.get("sources", {})}),
+        "sources_available": list(
+            {src for f in lifecycle_findings for src in f.get("sources", {})}
+        ),
         "findings": lifecycle_findings,
         "lifecycle_summary": status_counts,
     }
@@ -893,7 +944,8 @@ def audit_bom(analysis_json: dict, project_dir: str | None = None,
         }
         if temp_fail:
             observations.append(
-                f"{temp_fail} component(s) don't meet {_classify_temp_grade(design_min, design_max)} "
+                f"{temp_fail} component(s) don't meet "
+                f"{_classify_temp_grade(design_min, design_max)} "
                 f"temperature range ({design_min} to {design_max}°C)"
             )
 

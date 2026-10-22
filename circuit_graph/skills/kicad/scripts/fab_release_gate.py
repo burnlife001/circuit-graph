@@ -170,7 +170,6 @@ def check_consistency(sch: Dict, pcb: Dict) -> List[Dict]:
     # Component count comparison
     # Schematic count: total minus power symbols, test points, mounting holes, DNP
     sch_total = sch_stats.get("total_components", 0)
-    types = sch_stats.get("component_types", {})
     # These are already excluded from total_components in the schematic analyzer
     # (power_symbol, power_flag, flag are filtered out). DNP parts are counted
     # separately but included in total.
@@ -236,13 +235,13 @@ def check_gerbers(gerber_data: Optional[Dict]) -> List[Dict]:
     # Layer completeness
     completeness = gerber_data.get("completeness", {})
     missing = completeness.get("missing_layers", [])
-    critical_missing = [l for l in missing
-                        if any(k in l.upper() for k in
+    critical_missing = [layer for layer in missing
+                        if any(k in layer.upper() for k in
                                ("F.CU", "B.CU", "EDGE", "F.MASK", "B.MASK",
                                 "FRONT_COPPER", "BACK_COPPER", "BOARD_OUTLINE",
                                 "FRONT_SOLDERMASK", "BACK_SOLDERMASK"))]
-    silk_missing = [l for l in missing
-                    if any(k in l.upper() for k in ("SILK", "LEGEND"))]
+    silk_missing = [layer for layer in missing
+                    if any(k in layer.upper() for k in ("SILK", "LEGEND"))]
 
     if not missing:
         checks.append(_check("gerbers", "layer_completeness", "pass",

@@ -147,7 +147,6 @@ def get_component(graph: dict, designator: str) -> dict | None:
 # modes
 # --------------------------------------------------------------------------
 def show_components(graph: dict, designators: list[str], as_json: bool) -> None:
-    comps = graph.get("components", {})
     rows = []
     for d in designators:
         c = get_component(graph, d)
@@ -276,7 +275,9 @@ def show_stats(graph: dict) -> None:
 
 # --------------------------------------------------------------------------
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--graph", help="path to a cg-graph JSON export")
     ap.add_argument("--netlist", help="Protel .NET / KiCad .net to export (cached)")
     ap.add_argument("--comp", nargs="+", help="component designators")

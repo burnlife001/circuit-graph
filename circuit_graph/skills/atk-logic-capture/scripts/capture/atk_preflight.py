@@ -34,15 +34,15 @@ _this_dir = Path(__file__).resolve().parent
 _scripts_dir = _this_dir.parent
 sys.path.insert(0, str(_scripts_dir))
 
-import session_state
-from _config import (
+import session_state  # noqa: E402
+from _config import (  # noqa: E402
     APPDATA_ATK,
     ATK_BG_EXE,
     SCRIPTS_DIR,
     get_data_dir,
     get_gui_dir,
 )
-from config_sync import sync_set_ini
+from config_sync import sync_set_ini  # noqa: E402
 
 CLI_SCRIPT = SCRIPTS_DIR / "atk_cli.py"
 WAVE_SCRIPT = SCRIPTS_DIR / "analyze" / "atk_classify.py"
@@ -208,7 +208,10 @@ def _write_state_if_changed(*, gui_pid, gui_start, preflight_ok):
 
 def main():
     parser = argparse.ArgumentParser(description="ATK-Logic pre-flight check")
-    parser.add_argument("--output", "-o", help="Planned output .atkdl filename only (validates DATA_DIR)")
+    parser.add_argument(
+        "--output", "-o",
+        help="Planned output .atkdl filename only (validates DATA_DIR)",
+    )
     parser.add_argument("--fix", action="store_true",
                         help="Auto-start GUI and wait for window if not running")
     parser.add_argument("--json", action="store_true",
@@ -229,7 +232,11 @@ def main():
     # ── Sync capture params to set.ini BEFORE launching the GUI (when --fix).
     # Doing it here means the GUI comes up with the right config; cmd_capture
     # doesn't need a second restart for the same params.
-    if args.fix and (args.ch is not None or args.sample_rate_hz is not None or args.threshold is not None):
+    if args.fix and (
+        args.ch is not None
+        or args.sample_rate_hz is not None
+        or args.threshold is not None
+    ):
         ch_list = None
         if args.ch is not None:
             ch_list = [int(x.strip()) for x in args.ch.split(",") if x.strip()]

@@ -14,7 +14,8 @@ Usage:
   python extract_tables.py DS_MM32F0140_EN.pdf --search
 
   # Manual overrides
-  python extract_tables.py DS_MM32F0140_EN.pdf --pin-pages 32-35 --mux-pages 36-39 --ports PA,PB,PC,PD
+  python extract_tables.py DS_MM32F0140_EN.pdf --pin-pages 32-35 \
+      --mux-pages 36-39 --ports PA,PB,PC,PD
 
   # Per-package Markdown (sorted by pin number) + aligned MD reference
   python extract_tables.py DS_MM32F0140_EN.pdf --chip-name MM32F0140 --package LQFP48 --aligned-md
@@ -140,9 +141,9 @@ def search_pages(pdf_path):
     # extend keyword hits across table continuation pages.
     pin_name_pages = set()
 
-    PIN_NAME_RE = re.compile(r"\bP[A-H]\d+\b")
+    pin_name_re = re.compile(r"\bP[A-H]\d+\b")
     # Table-header keywords that distinguish table pages from diagram pages
-    TABLE_HEADER_KW = ["main function", "multiplex function", "additional function",
+    table_header_kw = ["main function", "multiplex function", "additional function",
                        "i/o level"]
 
     for i in range(total):
@@ -155,7 +156,7 @@ def search_pages(pdf_path):
             mux_hits.add(i + 1)
         # Only count pages with BOTH pin names AND table-column headers
         # (avoids pinout diagram pages that have pin names but no table structure)
-        if PIN_NAME_RE.search(text) and any(kw in text_lower for kw in TABLE_HEADER_KW):
+        if pin_name_re.search(text) and any(kw in text_lower for kw in table_header_kw):
             pin_name_pages.add(i + 1)
 
     print(f"Total pages: {total}")
@@ -172,10 +173,6 @@ def search_pages(pdf_path):
         next_text = pdf[pin_pages[-1]].get_textpage().get_text_range().lower()
         if any(kw in next_text for kw in ["i/o", "vdd", "vss", "i = input", "tc:"]):
             pin_pages.append(pin_pages[-1] + 1)
-    mux_keyword_pages = mux_hits | {
-        p for p in pin_name_pages
-        if p not in (set(pin_pages) if pin_pages else set())
-    }
     # But be smarter: mux tables have AF0..AFn headers AND pin names.
     af_pages = set()
     for i in range(total):
@@ -184,7 +181,7 @@ def search_pages(pdf_path):
             af_pages.add(i + 1)
     af_pin_pages = {
         p for p in af_pages
-        if PIN_NAME_RE.search(pdf[p - 1].get_textpage().get_text_range())
+        if pin_name_re.search(pdf[p - 1].get_textpage().get_text_range())
     }
     if af_pin_pages:
         mux_pages = _largest_contiguous(af_pin_pages)
@@ -332,13 +329,19 @@ def extract_pin_assignment(pdf_path, pin_pages, flavor):
     print(f"  Found {len(tables)} fragments", file=sys.stderr)
 
     if not tables:
-        print("  WARNING: No tables found. Try --flavor stream or widen page range.", file=sys.stderr)
+        print(
+            "  WARNING: No tables found. Try --flavor stream or widen page range.",
+            file=sys.stderr,
+        )
         return pd.DataFrame()
 
     # Keep only fragments that look like pin-assignment tables.
     pin_tables = [t for t in tables if _looks_like_pin_assignment(t.df)]
     if not pin_tables:
-        print("  WARNING: No pin-assignment tables matched heuristic. Using all fragments.", file=sys.stderr)
+        print(
+            "  WARNING: No pin-assignment tables matched heuristic. Using all fragments.",
+            file=sys.stderr,
+        )
         pin_tables = tables
 
     # Derive header from the first matched table.
@@ -383,7 +386,10 @@ def extract_multiplexing(pdf_path, mux_pages, port_names, mux_col_names, flavor)
     # Keep only fragments that look like AF mux tables.
     mux_tables = [t for t in tables if _looks_like_mux_table(t.df)]
     if not mux_tables:
-        print("  WARNING: No AF mux tables matched heuristic. Using all fragments.", file=sys.stderr)
+        print(
+            "  WARNING: No AF mux tables matched heuristic. Using all fragments.",
+            file=sys.stderr,
+        )
         mux_tables = tables
 
     if len(mux_tables) < len(port_names):
@@ -446,7 +452,8 @@ def _col_starting(row, prefix):
 
 
 def clean_package_name(name):
-    """Normalize package column names, e.g. 'TSSOP 20' -> 'TSSOP20', 'SOP8 - type 0' -> 'SOP8-type0'."""
+    """Normalize package column names, e.g. 'TSSOP 20' -> 'TSSOP20',
+    'SOP8 - type 0' -> 'SOP8-type0'."""
     name = normalize(name)
     # Unify dash-like characters
     for ch in ["–", "—", "−", "‐", "‑", "—", "―"]:
@@ -507,8 +514,12 @@ def build_json(pin_df, mux, chip_name, pdf_basename, max_af):
             "type": _col_starting(row, "type"),
             "io_level": _col_starting(row, "i/o level"),
             "main_function": main_function,
-            "multiplex_functions": [f.strip() for f in mux_str.split("/") if f.strip()] if mux_str else [],
-            "additional_functions": [f.strip() for f in add_str.split("/") if f.strip()] if add_str else [],
+            "multiplex_functions": (
+                [f.strip() for f in mux_str.split("/") if f.strip()] if mux_str else []
+            ),
+            "additional_functions": (
+                [f.strip() for f in add_str.split("/") if f.strip()] if add_str else []
+            ),
             "packages": pkg_nums,
             "alternate_functions": mux_lookup.get(base_name, {}),
         })
@@ -594,8 +605,11 @@ def main():
                         help="Port names, comma-separated (e.g. 'PA,PB,PC,PD')")
     parser.add_argument("--mux-cols", type=int, default=None,
                         help="Number of columns in mux table (e.g. 9 for AF0-AF8)")
-    parser.add_argument("-o", "--output", type=str, default=None,
-                        help="Output JSON file path (default: <chip-name>_Pin_Assignment_and_Multiplexing.json)")
+    parser.add_argument(
+        "-o", "--output", type=str, default=None,
+        help="Output JSON file path "
+             "(default: <chip-name>_Pin_Assignment_and_Multiplexing.json)",
+    )
     parser.add_argument("--chip-name", type=str, default=None,
                         help="Chip model name for the document title")
     parser.add_argument("--flavor", type=str, default="lattice",

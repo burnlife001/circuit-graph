@@ -38,7 +38,7 @@ _parent_dir = Path(__file__).resolve().parent.parent
 if str(_parent_dir) not in sys.path:
     sys.path.insert(0, str(_parent_dir))
 
-from capture_reader import CaptureReader, EdgeEvent, parse_time
+from capture_reader import CaptureReader, EdgeEvent, parse_time  # noqa: E402
 
 # 0 = auto-detect from edge duration distribution.
 # The auto-detector finds the largest gap between short (bounce) and long
@@ -238,20 +238,20 @@ def _pair_pwm_cycles(edges: list, glitch_ns: int = _GLITCH_NS) -> list[dict]:
     while i < len(clean) - 1:
         e1, e2 = clean[i], clean[i + 1]
         if e1.level == 1 and e2.level == 0:
-            h, l = e1.dur_ns, e2.dur_ns
+            h, lo = e1.dur_ns, e2.dur_ns
         elif e1.level == 0 and e2.level == 1:
-            l, h = e1.dur_ns, e2.dur_ns
+            lo, h = e1.dur_ns, e2.dur_ns
         else:
             # Same level consecutive — should not happen after good filtering
             i += 1
             continue
 
-        period = h + l
+        period = h + lo
         duty = h / period * 100 if period > 0 else 0
         cycles.append({
             "t_ns": e1.t_ns,
             "high_ns": h,
-            "low_ns": l,
+            "low_ns": lo,
             "period_ns": period,
             "duty_pct": round(duty, 2),
         })
@@ -467,7 +467,11 @@ def format_result(ch: int, pwm: dict, capture_duration_ns: int,
     cluster_ns = pwm.get("cluster_max_ns", 0)
     cluster_mode = pwm.get("cluster_mode", "?")
     period_ns_est = pwm.get("period_ns", 0)
-    period_ref = f" (period/{period_ns_est // cluster_ns if cluster_ns and period_ns_est else '?'})" if cluster_mode == "auto" else ""
+    if cluster_mode == "auto":
+        ratio = period_ns_est // cluster_ns if cluster_ns and period_ns_est else "?"
+        period_ref = f" (period/{ratio})"
+    else:
+        period_ref = ""
     cluster_s = f"cluster < {_format_ns(cluster_ns)} ({cluster_mode}){period_ref}"
     lines.append(f"| Debounce:  {cluster_s}{' ' * (51 - len(cluster_s))} |")
     lines.append(f"| Carrier:   {pwm['carrier_hz']:.2f} Hz"

@@ -209,7 +209,11 @@ def main():
             if cls(d) in ("R", "L") and len(comp_pins.get(d, ())) == 2:
                 other = next(x for x in comp_pins[d] if x != p)
                 adj = node2net.get((d, other))
-                if adj and not adj.startswith("Net") and norm(adj) not in {norm(x) for x in POWER_RAILS}:
+                if (
+                    adj
+                    and not adj.startswith("Net")
+                    and norm(adj) not in {norm(x) for x in POWER_RAILS}
+                ):
                     out.append((adj, d))
         return out
 
@@ -219,7 +223,9 @@ def main():
         chipfn = ci.get("name", "")
         net = pin2net.get(pin)
         if net is None:
-            board, src = "", ("NC(芯片未引出)" if chipfn == "NC" else f"悬空/未连接(芯片功能 {chipfn})")
+            board, src = "", (
+                "NC(芯片未引出)" if chipfn == "NC" else f"悬空/未连接(芯片功能 {chipfn})"
+            )
         elif not net.startswith("Net"):
             board, src = net, "网表网络标签"
         else:
@@ -257,8 +263,10 @@ def main():
     text = "\n".join(buf) + "\n"
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
-    sys.stderr.write(f"[ok] MCU={desig} chip={j.get('chip_name')} package={package} 待确认={n_warn}\n"
-                     f"[ok] 输出 -> {out}\n")
+    sys.stderr.write(
+        f"[ok] MCU={desig} chip={j.get('chip_name')} package={package} 待确认={n_warn}\n"
+        f"[ok] 输出 -> {out}\n"
+    )
     print(text)
 
 

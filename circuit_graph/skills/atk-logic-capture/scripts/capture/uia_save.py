@@ -16,7 +16,7 @@ _parent_dir = Path(__file__).resolve().parent.parent
 if str(_parent_dir) not in sys.path:
     sys.path.insert(0, str(_parent_dir))
 
-from _config import get_log_dir
+from _config import get_log_dir  # noqa: E402
 
 LOG_PATH = str(get_log_dir() / "uia_save_debug.log")
 
@@ -31,7 +31,7 @@ def log(msg):
         ms = int((ts % 1) * 1000)
         with open(LOG_PATH, "a") as f:
             f.write(f"[{time.strftime('%H:%M:%S')}.{ms:03d}] +{ts - T0:5.2f}s {msg}\n")
-    except:
+    except Exception:
         pass
 
 
@@ -50,10 +50,10 @@ def _find_children(ctrl, cls_filter=None, name_contains=None, ctrl_type=None, ma
                    (name_contains is None or any(nc in name for nc in name_contains)) and \
                    (ctrl_type is None or ctrl_type in ctype):
                     results.append(c)
-            except:
+            except Exception:
                 pass
             results.extend(_find_children(c, cls_filter, name_contains, ctrl_type, max_depth - 1))
-    except:
+    except Exception:
         pass
     return results
 
@@ -113,7 +113,7 @@ def paste_and_save(picker, save_btn, filename):
                         vp = e.GetValuePattern()
                         vp.SetValue(filename)
                         log(f"  ValuePattern.SetValue OK: {filename}")
-                    except:
+                    except Exception:
                         log("  ValuePattern failed, using SendKeys")
                         e.SendKeys('{Ctrl}A{Delete}')
                         time.sleep(0.05)
@@ -133,7 +133,7 @@ def paste_and_save(picker, save_btn, filename):
                 time.sleep(0.05)
                 picker.SendKeys('{Ctrl}V')
                 time.sleep(0.05)
-            except:
+            except Exception:
                 pass
 
         # Click Save
@@ -159,7 +159,7 @@ def paste_and_save(picker, save_btn, filename):
                     dlg.SendKeys('{Enter}')
                     time.sleep(0.05)
                     break
-            except:
+            except Exception:
                 continue
 
         log("paste_and_save: done")

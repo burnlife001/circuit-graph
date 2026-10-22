@@ -236,8 +236,6 @@ def cmd_list_decoders(args):
 
 def cmd_decode(args):
     reader = CaptureReader(args.file)
-    info = reader.get_info()
-    multiply_ns = 1_000_000_000 // info.sample_rate_hz if info.sample_rate_hz else 50
 
     start_ns = parse_time(args.start)
     end_ns = parse_time(args.end) if args.end else None
@@ -402,12 +400,12 @@ def _restart_gui():
 
 
 def read_path_ini():
-    """Read trgDir from config.ini DATA_DIR. Returns Path object."""
+    """Read trg_dir from config.ini DATA_DIR. Returns Path object."""
     return get_data_dir()
 
 
-def sync_save_path(trgDir):
-    """Ensure set.ini savePath matches trgDir. Kills/restarts GUI if mismatch.
+def sync_save_path(trg_dir):
+    """Ensure set.ini savePath matches trg_dir. Kills/restarts GUI if mismatch.
     Returns True if GUI was restarted."""
     set_ini = APPDATA_ATK / "set.ini"
     if not set_ini.exists():
@@ -415,40 +413,40 @@ def sync_save_path(trgDir):
         return False
 
     text = set_ini.read_text(encoding="utf-8")
-    trgDir_s = str(trgDir).replace("\\", "/")
+    trg_dir_s = str(trg_dir).replace("\\", "/")
 
     # Parse savePath= value
-    atkDir = None
+    atk_dir = None
     for line in text.splitlines():
         line_s = line.strip()
         if line_s.startswith("savePath") and "=" in line_s:
             val = line_s.split("=", 1)[1].strip()
             if val:
-                atkDir = val.replace("\\", "/")
+                atk_dir = val.replace("\\", "/")
             break
 
-    if atkDir is None:
-        print(f"  [warn] savePath not found in set.ini, will set to {trgDir_s}")
-    elif atkDir == trgDir_s:
-        print(f"  [sync] savePath already correct: {trgDir_s}")
+    if atk_dir is None:
+        print(f"  [warn] savePath not found in set.ini, will set to {trg_dir_s}")
+    elif atk_dir == trg_dir_s:
+        print(f"  [sync] savePath already correct: {trg_dir_s}")
         return False
 
     # Mismatch or missing — modify set.ini then restart GUI
-    print(f"  [sync] savePath mismatch: set.ini={atkDir} vs trgDir={trgDir_s}")
+    print(f"  [sync] savePath mismatch: set.ini={atk_dir} vs trg_dir={trg_dir_s}")
 
-    if atkDir is not None:
+    if atk_dir is not None:
         # Try forward-slash variant first, then backslash
-        new_text = text.replace(f"savePath={atkDir}", f"savePath={trgDir_s}")
-        atkDir_bs = atkDir.replace("/", "\\")
-        if atkDir_bs != atkDir:
-            n2 = text.replace(f"savePath={atkDir_bs}", f"savePath={trgDir_s}")
+        new_text = text.replace(f"savePath={atk_dir}", f"savePath={trg_dir_s}")
+        atk_dir_bs = atk_dir.replace("/", "\\")
+        if atk_dir_bs != atk_dir:
+            n2 = text.replace(f"savePath={atk_dir_bs}", f"savePath={trg_dir_s}")
             if n2 != text:
                 new_text = n2
     else:
-        new_text = text.rstrip("\n") + f"\nsavePath={trgDir_s}\n"
+        new_text = text.rstrip("\n") + f"\nsavePath={trg_dir_s}\n"
 
     set_ini.write_text(new_text, encoding="utf-8")
-    print(f"  [sync] set.ini updated: savePath={trgDir_s}")
+    print(f"  [sync] set.ini updated: savePath={trg_dir_s}")
 
     _restart_gui()
     return True
@@ -464,9 +462,9 @@ def cmd_capture(args):
     """
     import subprocess as sp
 
-    # ── Step 1: locate trgDir + GUI process ──
-    trgDir = read_path_ini()
-    print(f"  [pre] trgDir from config.ini: {trgDir}")
+    # ── Step 1: locate trg_dir + GUI process ──
+    trg_dir = read_path_ini()
+    print(f"  [pre] trg_dir from config.ini: {trg_dir}")
 
     gui_pid = session_state.gui_running()
     if gui_pid <= 0:
@@ -527,14 +525,18 @@ def cmd_capture(args):
     gui_restarted = False
 
     if do_sync:
-        ch_list_for_sync = [int(x.strip()) for x in args.ch.split(",") if x.strip()] if explicit_ch else None
+        ch_list_for_sync = (
+            [int(x.strip()) for x in args.ch.split(",") if x.strip()]
+            if explicit_ch
+            else None
+        )
         sync_result = sync_set_ini(
             channels=ch_list_for_sync,
             set_hz=args.sample_rate_hz,
             threshold=args.threshold,
         )
         needs_restart = len(sync_result["changes"]) > 0
-        save_restarted = sync_save_path(trgDir)
+        save_restarted = sync_save_path(trg_dir)
         if needs_restart and not save_restarted:
             _restart_gui()
         gui_restarted = needs_restart or save_restarted
@@ -548,7 +550,9 @@ def cmd_capture(args):
         actual = get_set_ini_params()
         ch_list = ch_list_for_sync if explicit_ch else actual.get("channels", [0, 1, 2, 3])
         display_hz = args.sample_rate_hz if explicit_hz else actual.get("setHz", 20_000_000)
-        display_threshold = args.threshold if explicit_threshold else actual.get("thresholdLevel", 1.5)
+        display_threshold = (
+            args.threshold if explicit_threshold else actual.get("thresholdLevel", 1.5)
+        )
     else:
         actual = get_set_ini_params()
         ch_list = actual.get("channels", [0, 1, 2, 3])
@@ -556,7 +560,10 @@ def cmd_capture(args):
         display_threshold = actual.get("thresholdLevel", 1.5)
 
         if pf_sync_done:
-            print(f"  [pre] set.ini: ch={ch_list}, {display_hz/1e6:.0f}MHz, {display_threshold}V (synced by preflight)")
+            print(
+                f"  [pre] set.ini: ch={ch_list}, {display_hz/1e6:.0f}MHz, "
+                f"{display_threshold}V (synced by preflight)"
+            )
         else:
             set_ini_path = APPDATA_ATK / "set.ini"
             set_ini_mtime = set_ini_path.stat().st_mtime if set_ini_path.exists() else 0
@@ -577,9 +584,15 @@ def cmd_capture(args):
             else:
                 freshness = "(GUI not detected)"
                 hint = False
-            print(f"  [pre] set.ini: ch={ch_list}, {display_hz/1e6:.0f}MHz, {display_threshold}V {freshness}")
+            print(
+                f"  [pre] set.ini: ch={ch_list}, {display_hz/1e6:.0f}MHz, "
+                f"{display_threshold}V {freshness}"
+            )
             if hint:
-                print("  [pre] Pass --ch/--sample-rate-hz/--threshold to enforce known values if in doubt")
+                print(
+                    "  [pre] Pass --ch/--sample-rate-hz/--threshold "
+                    "to enforce known values if in doubt"
+                )
 
     # ── Step 4: post-restart preflight re-check ──
     # A new GUI process invalidates the preflight_ok stored against the old
@@ -635,15 +648,15 @@ def cmd_capture(args):
 
     if args.output is None:
         ts = time.strftime("%Y%m%d_%H%M%S")
-        output = str(trgDir / f"capture-{ts}.atkdl")
+        output = str(trg_dir / f"capture-{ts}.atkdl")
     else:
-        output = str(trgDir / Path(args.output).name)
+        output = str(trg_dir / Path(args.output).name)
 
     Path(output).parent.mkdir(parents=True, exist_ok=True)
 
     # Pre-capture newest .atkdl mtime (for direct-save detection).
     pre_mtime = 0.0
-    for f in trgDir.glob("*.atkdl"):
+    for f in trg_dir.glob("*.atkdl"):
         mt = f.stat().st_mtime
         if mt > pre_mtime:
             pre_mtime = mt
@@ -657,7 +670,10 @@ def cmd_capture(args):
     print(f"  RLE:         {'on' if args.rle else 'off'}")
 
     is_ctrl_s_pressed = state["is_ctrl_s_pressed"]
-    print(f"  [pre] is_ctrl_s_pressed = {is_ctrl_s_pressed}  (first save opens picker, subsequent are direct)")
+    print(
+        f"  [pre] is_ctrl_s_pressed = {is_ctrl_s_pressed}  "
+        "(first save opens picker, subsequent are direct)"
+    )
 
     # ── Drive GUI: F1 → wait → F2 → wait → F12 ──
     if not ATK_BG_EXE.exists():
@@ -717,7 +733,7 @@ def cmd_capture(args):
         # Fallback: scan for any new file (GUI may have ignored our filename).
         newest = None
         newest_time = pre_mtime
-        for f in trgDir.glob("*.atkdl"):
+        for f in trg_dir.glob("*.atkdl"):
             mt = f.stat().st_mtime
             if mt > newest_time:
                 newest_time = mt
@@ -730,7 +746,10 @@ def cmd_capture(args):
             print(f"  Size:    {newest.stat().st_size / 1024:.0f} KB")
             return
 
-        print(f"Error: no .atkdl file found at {output} or newer than mtime {pre_mtime} in {trgDir}")
+        print(
+            f"Error: no .atkdl file found at {output} or newer than mtime "
+            f"{pre_mtime} in {trg_dir}"
+        )
         sys.exit(1)
 
     else:
@@ -740,7 +759,7 @@ def cmd_capture(args):
         newest = None
         newest_time = pre_mtime
         while time.time() < deadline:
-            for f in trgDir.glob("*.atkdl"):
+            for f in trg_dir.glob("*.atkdl"):
                 mt = f.stat().st_mtime
                 if mt > newest_time:
                     newest_time = mt
@@ -753,7 +772,7 @@ def cmd_capture(args):
             print(f"  File:    {newest}")
             print(f"  Size:    {newest.stat().st_size / 1024:.0f} KB")
         else:
-            print(f"Capture complete (no new .atkdl found in {trgDir})")
+            print(f"Capture complete (no new .atkdl found in {trg_dir})")
 
 
 # ---------------------------------------------------------------------------
@@ -851,19 +870,25 @@ def main():
     p = sub.add_parser("capture", help="Start/stop USB capture from logic analyzer device")
     p.add_argument("capture_action", choices=("start", "stop"), help="Start or stop capture")
     p.add_argument("--ch", type=str, default=None,
-                   help="Comma-separated channel IDs. Default: use GUI current. Pass to force-sync channels.")
+                   help="Comma-separated channel IDs. Default: use GUI current. "
+                        "Pass to force-sync channels.")
     p.add_argument("--duration", default="3s", help="Capture duration (ns/us/ms/s, default 3s)")
     p.add_argument("--sample-rate-hz", dest="sample_rate_hz", type=int, default=None,
                    help="Sample rate in Hz. Default: use GUI current. Pass to force-sync rate.")
     p.add_argument("--threshold", type=float, default=None,
-                   help="Logic threshold voltage. Default: use GUI current. Pass to force-sync threshold.")
+                   help="Logic threshold voltage. Default: use GUI current. "
+                        "Pass to force-sync threshold.")
     p.add_argument("--sync", "-S", action="store_true", default=False,
                    help="Sync capture params + savePath to GUI before capture (may restart GUI)")
     p.add_argument("--rle", action="store_true", default=False,
                    help="Enable FPGA RLE compression (default off, matching GUI)")
     p.add_argument("--no-rle", action="store_false", dest="rle",
                    help="Disable FPGA RLE compression")
-    p.add_argument("--output", "-o", default=None, help="Output .atkdl filename only (no path; always saved to DATA_DIR. default: capture_<timestamp>.atkdl)")
+    p.add_argument(
+        "--output", "-o", default=None,
+        help="Output .atkdl filename only (no path; always saved to DATA_DIR. "
+             "default: capture_<timestamp>.atkdl)",
+    )
     p.set_defaults(func=cmd_capture)
 
     # config

@@ -12,7 +12,8 @@ Checks:
 
 Usage:
   python verify_output.py MM32F0140_Pin_Assignment_and_Multiplexing.md
-  python verify_output.py MM32F0140_Pin_Assignment_and_Multiplexing.md --ports PA,PB,PC,PD --mux-cols 10
+  python verify_output.py MM32F0140_Pin_Assignment_and_Multiplexing.md \
+      --ports PA,PB,PC,PD --mux-cols 10
 """
 
 import argparse
@@ -47,13 +48,11 @@ def parse_md_tables(text):
     """
     lines = text.split("\n")
     tables = []
-    current_h1 = None
     current_h2 = None
     i = 0
     while i < len(lines):
         # Track H1/H2 headings
         if lines[i].startswith("# "):
-            current_h1 = lines[i][2:].strip()
             current_h2 = None
             i += 1
             continue
@@ -252,8 +251,6 @@ def check_pin_table(tables, content):
     if not name_cols:
         fails += 1
         msgs.append("[FAIL] No 'Name' column found in pin assignment table")
-    else:
-        name_idx = t["columns"].index(name_cols[0])
 
     # Check minimum reasonable row count (most MCUs have >10 pins)
     if row_count < 5:
@@ -371,15 +368,14 @@ def check_cross_validation(tables, content):
 
     # Collect pin names from assignment table
     # Format: usually "PA0" or "PA0/WKUP" — extract the base port+pin
-    PIN_RE = re.compile(r"\b(P[A-H]\d+)\b")
+    pin_re = re.compile(r"\b(P[A-H]\d+)\b")
     assign_pins = {}  # port -> set of pin numbers
     for row in pt["rows"]:
         raw = row[name_idx].strip()
-        for m in PIN_RE.finditer(raw):
+        for m in pin_re.finditer(raw):
             pname = m.group(1)
-            # port = first 2 chars (e.g. "PA"), pin = rest (e.g. "0")
+            # port = first 2 chars (e.g. "PA"); full "PA0"-style name kept as key
             port = pname[:2]
-            pin_num = pname[2:]
             if port not in assign_pins:
                 assign_pins[port] = set()
             assign_pins[port].add(pname)
@@ -398,7 +394,7 @@ def check_cross_validation(tables, content):
         mux_pins[port] = set()
         for row in t["rows"]:
             pin = row[0].strip()
-            m = PIN_RE.match(pin)
+            m = pin_re.match(pin)
             if m:
                 mux_pins[port].add(m.group(1))
 

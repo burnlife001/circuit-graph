@@ -189,7 +189,8 @@ GPIO_DEFINE_RE = re.compile(
 
 def scan_source_identifiers(source_root):
     """
-    扫描 source_root 下所有 .c/.h, 返回 dict[(port_letter, pin_number)] = [(name, rel_path, line), ...]
+    扫描 source_root 下所有 .c/.h, 返回 dict[(port_letter, pin_number)] =
+    [(name, rel_path, line), ...]
     目前主要捕获 `#define NAME GPIOx->REG.Pn` 形式的宏定义。
     过滤掉与引脚名本身完全相同的宏(如 PA9 = GPIOA->...P9),避免无信息冗余。
     """

@@ -91,7 +91,9 @@ def cross_verify(sch: dict, pcb: dict,
                 if isinstance(item, list):
                     for entry in item:
                         if isinstance(entry, dict) and "status" in entry:
-                            status_counts[entry["status"]] = status_counts.get(entry["status"], 0) + 1
+                            status_counts[entry["status"]] = (
+                                status_counts.get(entry["status"], 0) + 1
+                            )
 
     result["summary"] = {
         "total_checks": checks_run,
@@ -212,7 +214,7 @@ def check_diff_pair_routing(sch: dict, pcb: dict) -> list[dict]:
         net_lengths[nl["net"]] = nl
 
     # Protocol-specific length tolerances (mm)
-    _TOLERANCES = {
+    _tolerances = {
         "USB": 2.0,
         "Ethernet": 5.0,
         "HDMI": 1.0,
@@ -227,7 +229,7 @@ def check_diff_pair_routing(sch: dict, pcb: dict) -> list[dict]:
         pos_net = dp.get("positive", "")
         neg_net = dp.get("negative", "")
         protocol = dp.get("type", "differential")
-        tolerance = _TOLERANCES.get(protocol, 2.0)
+        tolerance = _tolerances.get(protocol, 2.0)
 
         pos_data = net_lengths.get(pos_net)
         neg_data = net_lengths.get(neg_net)

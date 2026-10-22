@@ -223,11 +223,19 @@ def build_audience_summary(findings: List[Dict[str, Any]]) -> Dict[str, Any]:
         if warning_count:
             parts.append(f'{warning_count} warning{"s" if warning_count != 1 else ""}')
         summary_str = ', '.join(parts)
-        cat_str = f'across {cat_count} categor{"ies" if cat_count != 1 else "y"}' if cat_count else ''
+        cat_str = (
+            f'across {cat_count} categor{"ies" if cat_count != 1 else "y"}'
+            if cat_count
+            else ''
+        )
         blocker_str = ''
         if blocked_stages:
             stage_names = ', '.join(s.replace('_', '-') for s in blocked_stages)
-            blocker_str = f' {stage_names.capitalize()} stage{"s" if len(blocked_stages) != 1 else ""} {"have" if len(blocked_stages) != 1 else "has"} blockers.'
+            plural = len(blocked_stages) != 1
+            blocker_str = (
+                f' {stage_names.capitalize()} stage{"s" if plural else ""} '
+                f'{"have" if plural else "has"} blockers.'
+            )
         one_liner = f'{summary_str}{" " + cat_str if cat_str else ""}.{blocker_str}'
 
     # ------------------------------------------------------------------
@@ -325,7 +333,9 @@ def _format_finding_reviewer(f: Dict[str, Any], idx: int) -> str:
 
 
 def _readiness_char(status: str) -> str:
-    return {'pass': 'PASS', 'needs_review': 'REVIEW', 'needs_work': 'WORK'}.get(status, status.upper())
+    return {'pass': 'PASS', 'needs_review': 'REVIEW', 'needs_work': 'WORK'}.get(
+        status, status.upper()
+    )
 
 
 def format_text(
@@ -369,7 +379,10 @@ def format_text(
             lines.append(f'  {s:<12} {_readiness_char(status)}')
 
         # Blocker list
-        blockers = [f for f in active_findings if _severity_bucket(f.get('severity', '')) == 'error']
+        blockers = [
+            f for f in active_findings
+            if _severity_bucket(f.get('severity', '')) == 'error'
+        ]
         if blockers:
             lines += ['', 'Blockers:']
             for f in blockers:
@@ -409,7 +422,10 @@ def format_text(
         total = len(visible)
         err_count = sum(1 for f in visible if _severity_bucket(f.get('severity', '')) == 'error')
         warn_count = total - err_count
-        lines.append(f'Total: {total} ({err_count} error{"s" if err_count != 1 else ""}, {warn_count} warning{"s" if warn_count != 1 else ""})')
+        lines.append(
+            f'Total: {total} ({err_count} error{"s" if err_count != 1 else ""}, '
+            f'{warn_count} warning{"s" if warn_count != 1 else ""})'
+        )
         return '\n'.join(lines)
 
     # ------------------------------------------------------------------
@@ -430,8 +446,14 @@ def format_text(
             idx += 1
         lines.append('')
 
-    err_count = sum(1 for f in active_findings if _severity_bucket(f.get('severity', '')) == 'error')
-    warn_count = sum(1 for f in active_findings if _severity_bucket(f.get('severity', '')) == 'warning')
+    err_count = sum(
+        1 for f in active_findings
+        if _severity_bucket(f.get('severity', '')) == 'error'
+    )
+    warn_count = sum(
+        1 for f in active_findings
+        if _severity_bucket(f.get('severity', '')) == 'warning'
+    )
     info_count = len(active_findings) - err_count - warn_count
     lines.append(
         f'Total: {len(active_findings)} ({err_count} error{"s" if err_count != 1 else ""}, '

@@ -243,7 +243,11 @@ def build_connectivity_graph(
 
     for seg_idx, seg in enumerate(segments):
         seg_net_id = seg.get('net', 0)
-        net_name = net_id_map.get(seg_net_id, '') if isinstance(seg_net_id, int) else str(seg_net_id)
+        net_name = (
+            net_id_map.get(seg_net_id, '')
+            if isinstance(seg_net_id, int)
+            else str(seg_net_id)
+        )
         if not net_name:
             continue
         layer = seg.get('layer', '')

@@ -455,8 +455,8 @@ def resolve_design_intent(config: Dict[str, Any],
     else:
         # Layer count
         layers = pcb.get('layers', [])
-        copper_layers = [l for l in layers
-                         if isinstance(l, dict) and 'Cu' in l.get('name', '')]
+        copper_layers = [layer for layer in layers
+                         if isinstance(layer, dict) and 'Cu' in layer.get('name', '')]
         if len(copper_layers) > 4:
             prod_confidence += 0.15
             signals.append(f'{len(copper_layers)}-layer board detected')

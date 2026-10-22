@@ -18,6 +18,7 @@ netlist_pin_infer.py — 为 netlist-signalmap 中"无法确定信号名"的 MCU
 """
 import argparse
 import os
+import re as _re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -43,9 +44,9 @@ def build_comp_pins(nets):
     return cp
 
 
-import re as _re
-
-_POWER = _re.compile(r"^(GND|PGND|AGND|DGND|[+-]?\d+V\d*|V(DD|SS|CC|BAT|BUS|IN|OUT|REF)\w*)$", _re.I)
+_POWER = _re.compile(
+    r"^(GND|PGND|AGND|DGND|[+-]?\d+V\d*|V(DD|SS|CC|BAT|BUS|IN|OUT|REF)\w*)$", _re.I
+)
 
 
 def is_power(net):

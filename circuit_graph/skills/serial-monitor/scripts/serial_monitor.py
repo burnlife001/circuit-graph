@@ -180,7 +180,10 @@ def read_loop(ser, *, fmt="ascii", log_file=None, timeout=None):
     last_data_ts = time.time()
     line_count = 0
 
-    print(f"[INFO] Connected to {ser.port} @ {ser.baudrate} baud ({ser.bytesize}{ser.parity[0]}{ser.stopbits})")
+    print(
+        f"[INFO] Connected to {ser.port} @ {ser.baudrate} baud "
+        f"({ser.bytesize}{ser.parity[0]}{ser.stopbits})"
+    )
     print("[INFO] Press Ctrl+C to stop.\n")
 
     fh = open(log_file, "w", encoding="utf-8") if log_file else None
@@ -263,7 +266,8 @@ Delete or edit that file to reset defaults.
                         help="Idle timeout in seconds before auto-disconnect")
     parser.add_argument("--hex", action="store_true", default=ini.get("hex", False),
                         help="Display as hex instead of ASCII")
-    parser.add_argument("--log", metavar="FILE", default="C:/Users/yg/AppData/Local/Temp/yg8_uart.txt",
+    parser.add_argument("--log", metavar="FILE",
+                        default="C:/Users/yg/AppData/Local/Temp/yg8_uart.txt",
                         help="Save output to file")
     parser.add_argument("--send", metavar="CMD", type=lambda s: CMDS[s.lower()],
                         choices=list(CMDS), help=f"Send command to MCU: {[c.value for c in CMDS]}")
@@ -282,7 +286,10 @@ Delete or edit that file to reset defaults.
     if not port:
         ch340, _ = find_ch340_ports()
         if len(ch340) == 0:
-            print("[ERROR] No CH340 port found. Use --list to view available ports, then --port to specify.")
+            print(
+                "[ERROR] No CH340 port found. Use --list to view available ports, "
+                "then --port to specify."
+            )
             sys.exit(1)
 
         # Try CH340 candidates in order; skip ones that are currently occupied.
@@ -329,7 +336,10 @@ Delete or edit that file to reset defaults.
         err = str(e)
         print(f"[ERROR] Cannot open {port}: {e}")
         if "PermissionError" in err or "Access is denied" in err:
-            print("[HINT] Port is in use by another application (e.g., ATK-Logic, PuTTY). Close it and retry.")
+            print(
+                "[HINT] Port is in use by another application (e.g., ATK-Logic, PuTTY). "
+                "Close it and retry."
+            )
         else:
             print("[HINT] Use --list to see available ports.")
         sys.exit(1)

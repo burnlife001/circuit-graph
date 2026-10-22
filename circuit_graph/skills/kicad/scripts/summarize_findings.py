@@ -149,7 +149,10 @@ def _print_table(rows: list[dict], top: int | None) -> None:
         heu = bc.get("heuristic", 0)
         ds = bc.get("datasheet-backed", 0)
         ex = r["examples"][0][:50] if r["examples"] else ""
-        print(f"{r['rule_id']:<14} {r['severity']:<9} {r['count']:>5}  {det:>4} {heu:>4} {ds:>3}  {ex}")
+        print(
+            f"{r['rule_id']:<14} {r['severity']:<9} {r['count']:>5}  "
+            f"{det:>4} {heu:>4} {ds:>3}  {ex}"
+        )
     if top and len(rows) > top:
         print(f"# …({len(rows) - top} more groups omitted — use --top 0 to show all)")
 
@@ -188,7 +191,10 @@ def _print_confidence_table(rows: list[dict]) -> None:
         return
     total = sum(r["count"] for r in rows)
     print(f"# {total} findings by confidence level")
-    print(f"{'confidence':<18} {'count':>5} {'pct':>5}  {'high':>4} {'warn':>4} {'info':>4}  top rules")
+    print(
+        f"{'confidence':<18} {'count':>5} {'pct':>5}  "
+        f"{'high':>4} {'warn':>4} {'info':>4}  top rules"
+    )
     print("-" * 90)
     for r in rows:
         pct = round(100 * r["count"] / total) if total else 0

@@ -408,14 +408,14 @@ def _run_tolerance(analysis: dict, changes: dict, spice: bool = False) -> list:
     signal = group_findings_legacy(analysis)
 
     # Resolve tolerances (use defaults for components without explicit tolerance)
-    _DEFAULT_TOL = {"C": 0.10, "VC": 0.10, "L": 0.20}  # everything else = 0.05
+    _default_tol = {"C": 0.10, "VC": 0.10, "L": 0.20}  # everything else = 0.05
 
     tol_info = {}  # ref -> (value, value_str, tolerance)
     for ref, c in changes.items():
         tol = c.tolerance
         if tol is None:
             prefix = ref.rstrip("0123456789")
-            tol = _DEFAULT_TOL.get(prefix, 0.05)
+            tol = _default_tol.get(prefix, 0.05)
         tol_info[ref] = (c.value, c.value_str, tol)
 
     changes_legacy = {ref: (c.value, c.value_str) for ref, c in changes.items()}
@@ -575,10 +575,10 @@ def _extract_parasitics(pcb_analysis: dict, det: dict, det_type: str) -> dict:
                 width_m = t.get("width_mm", 0) * 1e-3
                 if length_m > 0 and width_m > 0:
                     r = _RHO_CU * length_m / (width_m * _CU_THICKNESS_1OZ)
-                    l = (2e-7 * length_m * math.log(2 * length_m / width_m)
-                         if width_m > 0 and length_m > width_m else 0)
+                    ind = (2e-7 * length_m * math.log(2 * length_m / width_m)
+                           if width_m > 0 and length_m > width_m else 0)
                     total_r += r
-                    total_l += abs(l)
+                    total_l += abs(ind)
             if net_tracks:
                 net_name = net
 
@@ -717,13 +717,13 @@ def format_text(result: dict) -> str:
         # PCB parasitics
         for ref, p in sc.get("parasitics", {}).items():
             r = p.get("R_trace_ohms", 0)
-            l = p.get("L_trace_H", 0)
+            ind = p.get("L_trace_H", 0)
             net = p.get("net", "?")
             parts = []
             if r > 0:
                 parts.append(f"R_trace={_format_value(r, 'ohms')}")
-            if l > 0:
-                parts.append(f"L_trace={l*1e9:.1f}nH")
+            if ind > 0:
+                parts.append(f"L_trace={ind*1e9:.1f}nH")
             if parts:
                 lines.append(f"    (PCB parasitics on {net}: {', '.join(parts)})")
 
@@ -1032,7 +1032,6 @@ def _suggest_all_fixes(issues: list, pcb_analysis: dict = None) -> dict:
             cap_ref = issue.get("cap_ref", "?")
             package = issue.get("cap_package", "?")
             dielectric = issue.get("cap_dielectric", "?")
-            df = issue.get("derating_factor", 0)
 
             recs = []
             # Suggest larger package
@@ -1085,7 +1084,6 @@ def _format_fix(fix_result: dict) -> str:
         lines.append("")
         for s in fix.get("suggestions", []):
             ref = s["ref"]
-            current = s["current"]
             ideal = s["ideal"]
             vkey = s["field"]
             anchor = s.get("anchor_ref")

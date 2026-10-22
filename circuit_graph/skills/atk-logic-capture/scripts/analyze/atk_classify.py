@@ -28,7 +28,7 @@ _parent_dir = Path(__file__).resolve().parent.parent
 if str(_parent_dir) not in sys.path:
     sys.path.insert(0, str(_parent_dir))
 
-from capture_reader import CaptureReader, EdgeEvent, parse_time
+from capture_reader import CaptureReader, EdgeEvent, parse_time  # noqa: E402
 
 
 def _detect_bounce_pairs(edges: list, sample_rate_hz: int) -> dict | None:
@@ -84,12 +84,14 @@ def _detect_bounce_pairs(edges: list, sample_rate_hz: int) -> dict | None:
         return None  # FPGA sub-byte transition encoding, not contact bounce
 
     # Bounce confirmed: all edge transitions have consistent bounce total
-    pair_durations_ns = [p[1] for p in pairs]  # second glitch duration
     return {
         "pair_count": len(pairs),
         "avg_total_ns": sum(p[2] for p in pairs) / len(pairs),
         "avg_samples": round(avg_samples),
-        "note": f"{len(pairs)} bounce pairs, {avg_samples:.0f}samp/{pairs[0][2]:.0f}ns avg per transition",
+        "note": (
+            f"{len(pairs)} bounce pairs, {avg_samples:.0f}samp/"
+            f"{pairs[0][2]:.0f}ns avg per transition"
+        ),
     }
 
 
@@ -194,7 +196,10 @@ def _first_edge_anomaly(real_edges: list) -> dict | None:
             "first_dur_ns": first_dur,
             "steady_avg_ns": int(avg_rest),
             "ratio": round(ratio, 1),
-            "note": f"Startup transient: 1st pulse={first_dur/1e6:.1f}ms vs steady={avg_rest/1e6:.1f}ms ({pct_dev:.0f}% deviation)",
+            "note": (
+                f"Startup transient: 1st pulse={first_dur/1e6:.1f}ms vs "
+                f"steady={avg_rest/1e6:.1f}ms ({pct_dev:.0f}% deviation)"
+            ),
         }
 
     return None
@@ -280,7 +285,10 @@ def classify_signal(edges: list, sample_rate_hz: int) -> dict:
             "level": lvl,
             "edge_count": n,
             "glitch_count": n_glitch,
-            "note": f"Mostly {'HIGH' if lvl else 'LOW'}, {n_glitch} short glitch(es) <{glitch_ns}ns",
+            "note": (
+                f"Mostly {'HIGH' if lvl else 'LOW'}, {n_glitch} "
+                f"short glitch(es) <{glitch_ns}ns"
+            ),
         }
     if not real_edges or len(real_edges) < 3:
         real_edges = edges  # fallback: too few edges after filtering
@@ -414,7 +422,10 @@ def classify_signal(edges: list, sample_rate_hz: int) -> dict:
                 result["note"] = ", ".join(parts)
             elif full_freq < 0.5:
                 result["type"] = "slow_toggle"
-                result["note"] = f"Slow periodic toggle at {full_freq:.3f} Hz (T={full_period_ns/1e6:.1f}ms)"
+                result["note"] = (
+                    f"Slow periodic toggle at {full_freq:.3f} Hz "
+                    f"(T={full_period_ns/1e6:.1f}ms)"
+                )
             elif full_freq < 200:
                 result["type"] = "square_wave"
                 result["duty_pct"] = duty
@@ -468,16 +479,25 @@ def classify_signal(edges: list, sample_rate_hz: int) -> dict:
                                         if abs(p - median_pair) / median_pair <= 0.30]
                         if len(inlier_pairs) >= 3:
                             trim_avg = sum(inlier_pairs) / len(inlier_pairs)
-                            pair_var = sum((p - trim_avg) ** 2 for p in inlier_pairs) / len(inlier_pairs)
+                            pair_var = (
+                                sum((p - trim_avg) ** 2 for p in inlier_pairs)
+                                / len(inlier_pairs)
+                            )
                             pair_cv = (pair_var ** 0.5) / trim_avg * 100
                             pair_freq = 1e9 / trim_avg
                             avg_pair = trim_avg
                         else:
-                            pair_var = sum((p - avg_pair) ** 2 for p in paired_periods) / len(paired_periods)
+                            pair_var = (
+                                sum((p - avg_pair) ** 2 for p in paired_periods)
+                                / len(paired_periods)
+                            )
                             pair_cv = (pair_var ** 0.5) / avg_pair * 100
                             pair_freq = 1e9 / avg_pair
                     else:
-                        pair_var = sum((p - avg_pair) ** 2 for p in paired_periods) / len(paired_periods)
+                        pair_var = (
+                            sum((p - avg_pair) ** 2 for p in paired_periods)
+                            / len(paired_periods)
+                        )
                         pair_cv = (pair_var ** 0.5) / avg_pair * 100
                         pair_freq = 1e9 / avg_pair
                     # Stable carrier + frequency in PWM range → PWM
@@ -552,7 +572,11 @@ def format_result(ch: int, info: dict, fmt: str = "text") -> str:
     lines.append(f"| CH{ch:<5} {info.get('type', '?'):<56} |")
     if "note" in info:
         lines.append(f"| Note:    {info['note']:<54} |")
-    lines.append(f"| Edges:   {info['edge_count']:<5} (high={info.get('high_edges','?')}, low={info.get('low_edges','?')}){' ' * (39 - len(str(info.get('low_edges','?'))))} |")
+    lines.append(
+        f"| Edges:   {info['edge_count']:<5} "
+        f"(high={info.get('high_edges','?')}, low={info.get('low_edges','?')})"
+        f"{' ' * (39 - len(str(info.get('low_edges','?'))))} |"
+    )
 
     if "frequency_hz" in info:
         f = info["frequency_hz"]
@@ -618,7 +642,10 @@ def main():
         description="ATK-Logic universal waveform analyzer"
     )
     parser.add_argument("file", type=Path, help="Path to .atkdl capture file")
-    parser.add_argument("--ch", default=None, help="Comma-separated channel IDs (default: auto-scan)")
+    parser.add_argument(
+        "--ch", default=None,
+        help="Comma-separated channel IDs (default: auto-scan)",
+    )
     parser.add_argument("--start", default="0", help="Start time (ns/us/ms/s)")
     parser.add_argument("--end", default=None, help="End time")
     parser.add_argument("--max-events", type=int, default=5000)

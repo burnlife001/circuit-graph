@@ -64,12 +64,12 @@ def _recalc_divider_ratio(det: dict) -> None:
 
 def _recalc_lc_filter(det: dict) -> None:
     """LC filter: resonant_hz and impedance_ohms."""
-    l = det.get("inductor", {}).get("henries")
+    ind = det.get("inductor", {}).get("henries")
     c = det.get("capacitor", {}).get("farads")
-    if l and c and l > 0 and c > 0:
-        f0 = 1.0 / (_PI2 * math.sqrt(l * c))
+    if ind and c and ind > 0 and c > 0:
+        f0 = 1.0 / (_PI2 * math.sqrt(ind * c))
         det["resonant_hz"] = round(f0, 2)
-        det["impedance_ohms"] = round(math.sqrt(l / c), 2)
+        det["impedance_ohms"] = round(math.sqrt(ind / c), 2)
 
 
 def _recalc_crystal_load(det: dict) -> None:
@@ -176,21 +176,21 @@ def _inverse_rc_cutoff(det: dict, target_field: str, target_value: float) -> lis
 def _inverse_lc_resonant(det: dict, target_field: str, target_value: float) -> list:
     """Solve for L or C given target resonant_hz."""
     suggestions = []
-    l = det.get("inductor", {})
+    ind = det.get("inductor", {})
     c = det.get("capacitor", {})
-    lv = l.get("henries", 0)
+    lv = ind.get("henries", 0)
     cv = c.get("farads", 0)
     if lv > 0 and target_value > 0:
         ideal_c = 1.0 / ((_PI2 * target_value) ** 2 * lv)
         suggestions.append({
             "ref": c.get("ref", "C"), "field": "farads",
             "current": cv, "ideal": ideal_c,
-            "anchor_ref": l.get("ref", "L"), "anchor_value": lv,
+            "anchor_ref": ind.get("ref", "L"), "anchor_value": lv,
         })
     if cv > 0 and target_value > 0:
         ideal_l = 1.0 / ((_PI2 * target_value) ** 2 * cv)
         suggestions.append({
-            "ref": l.get("ref", "L"), "field": "henries",
+            "ref": ind.get("ref", "L"), "field": "henries",
             "current": lv, "ideal": ideal_l,
             "anchor_ref": c.get("ref", "C"), "anchor_value": cv,
         })
@@ -637,9 +637,9 @@ def compute_detection_id(det, det_type):
         return ""
 
     parts = [det_type]
-    for field in schema.identity_fields:
+    for id_field in schema.identity_fields:
         val = det
-        for key in field.split("."):
+        for key in id_field.split("."):
             if isinstance(val, dict) and key in val:
                 val = val[key]
             else:

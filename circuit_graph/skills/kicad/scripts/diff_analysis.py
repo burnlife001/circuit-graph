@@ -765,7 +765,11 @@ def classify_regressions(analyzer_type, diff_result):
                     "detail": f"New {issue_type.replace('_', ' ')}: {detail}",
                 })
         # Removed protection devices
-        for p in diff_result.get("signal_analysis", {}).get("protection_devices", {}).get("removed", []):
+        for p in (
+            diff_result.get("signal_analysis", {})
+            .get("protection_devices", {})
+            .get("removed", [])
+        ):
             ident = p.get("identity", p.get("reference", "?"))
             regressions.append({
                 "category": "protection",
@@ -789,7 +793,10 @@ def classify_regressions(analyzer_type, diff_result):
             regressions.append({
                 "category": "emc_risk",
                 "severity": "major",
-                "detail": f"EMC risk score increased: {risk.get('base', '?')} \u2192 {risk.get('head', '?')}",
+                "detail": (
+                    f"EMC risk score increased: {risk.get('base', '?')} "
+                    f"\u2192 {risk.get('head', '?')}"
+                ),
             })
 
     elif analyzer_type == "spice":
@@ -810,7 +817,10 @@ def classify_regressions(analyzer_type, diff_result):
                 regressions.append({
                     "category": "routing",
                     "severity": "major",
-                    "detail": f"Unrouted nets increased: {info.get('base', 0)} \u2192 {info.get('head', 0)}",
+                    "detail": (
+                        f"Unrouted nets increased: {info.get('base', 0)} "
+                        f"\u2192 {info.get('head', 0)}"
+                    ),
                 })
         # Also check dedicated unrouted field
         unrouted = diff_result.get("unrouted", {})
@@ -819,7 +829,10 @@ def classify_regressions(analyzer_type, diff_result):
                 regressions.append({
                     "category": "routing",
                     "severity": "major",
-                    "detail": f"Unrouted nets increased: {info.get('base', 0)} \u2192 {info.get('head', 0)}",
+                    "detail": (
+                        f"Unrouted nets increased: {info.get('base', 0)} "
+                        f"\u2192 {info.get('head', 0)}"
+                    ),
                 })
 
     return regressions
@@ -916,15 +929,24 @@ def format_text(output):
     if comp:
         lines.append("Components:")
         for c in comp.get("added", [])[:5]:
-            lines.append(f"  + {c.get('reference', '?')} {c.get('value', '')} {c.get('footprint', '')}")
+            lines.append(
+                f"  + {c.get('reference', '?')} {c.get('value', '')} "
+                f"{c.get('footprint', '')}"
+            )
             shown += 1
         for c in comp.get("removed", [])[:5]:
-            lines.append(f"  - {c.get('reference', '?')} {c.get('value', '')} {c.get('footprint', '')}")
+            lines.append(
+                f"  - {c.get('reference', '?')} {c.get('value', '')} "
+                f"{c.get('footprint', '')}"
+            )
             shown += 1
         for c in comp.get("modified", [])[:5]:
             ref = c.get("reference", "?")
             for ch in c.get("changes", []):
-                lines.append(f"  ~ {ref}: {ch['field']} {ch.get('base', '?')} → {ch.get('head', '?')}")
+                lines.append(
+                    f"  ~ {ref}: {ch['field']} {ch.get('base', '?')} "
+                    f"→ {ch.get('head', '?')}"
+                )
             shown += 1
         lines.append("")
 
@@ -964,13 +986,22 @@ def format_text(output):
     if fp:
         lines.append("Footprints:")
         for f in fp.get("added", [])[:5]:
-            lines.append(f"  + {f.get('reference', '?')} {f.get('value', '')} ({f.get('layer', '')})")
+            lines.append(
+                f"  + {f.get('reference', '?')} {f.get('value', '')} "
+                f"({f.get('layer', '')})"
+            )
         for f in fp.get("removed", [])[:5]:
-            lines.append(f"  - {f.get('reference', '?')} {f.get('value', '')} ({f.get('layer', '')})")
+            lines.append(
+                f"  - {f.get('reference', '?')} {f.get('value', '')} "
+                f"({f.get('layer', '')})"
+            )
         for f in fp.get("modified", [])[:5]:
             ref = f.get("reference", "?")
             for ch in f.get("changes", []):
-                lines.append(f"  ~ {ref}: {ch['field']} {ch.get('base', '?')} → {ch.get('head', '?')}")
+                lines.append(
+                    f"  ~ {ref}: {ch['field']} {ch.get('base', '?')} "
+                    f"→ {ch.get('head', '?')}"
+                )
         lines.append("")
 
     # EMC findings
@@ -978,11 +1009,20 @@ def format_text(output):
     if findings:
         lines.append("EMC Findings:")
         for f in findings.get("new", [])[:5]:
-            lines.append(f"  NEW: {f.get('rule_id', '?')} ({f.get('severity', '?')}) {f.get('title', '')}")
+            lines.append(
+                f"  NEW: {f.get('rule_id', '?')} ({f.get('severity', '?')}) "
+                f"{f.get('title', '')}"
+            )
         for f in findings.get("resolved", [])[:5]:
-            lines.append(f"  RESOLVED: {f.get('rule_id', '?')} ({f.get('severity', '?')}) {f.get('title', '')}")
+            lines.append(
+                f"  RESOLVED: {f.get('rule_id', '?')} ({f.get('severity', '?')}) "
+                f"{f.get('title', '')}"
+            )
         for f in findings.get("changed_severity", [])[:3]:
-            lines.append(f"  CHANGED: {f.get('rule_id', '?')} {f.get('base_severity', '?')} → {f.get('head_severity', '?')}")
+            lines.append(
+                f"  CHANGED: {f.get('rule_id', '?')} "
+                f"{f.get('base_severity', '?')} → {f.get('head_severity', '?')}"
+            )
         lines.append("")
 
     # SPICE status changes
@@ -990,7 +1030,13 @@ def format_text(output):
     if status_changes:
         lines.append("SPICE:")
         for sc in status_changes[:5]:
-            direction = "REGRESSION" if sc.get("head_status") == "fail" else "FIXED" if sc.get("head_status") == "pass" else "CHANGED"
+            head_status = sc.get("head_status")
+            if head_status == "fail":
+                direction = "REGRESSION"
+            elif head_status == "pass":
+                direction = "FIXED"
+            else:
+                direction = "CHANGED"
             comps = ", ".join(sc.get("components", []))
             lines.append(f"  {direction}: {sc.get('subcircuit_type', '?')} {comps}: "
                          f"{sc.get('base_status', '?')} → {sc.get('head_status', '?')}")
@@ -1113,7 +1159,10 @@ def main():
                         help="Output type to diff (schematic, pcb, emc, spice). "
                              "Default: auto-detect first common output")
     parser.add_argument("--output", "-o", help="Write output JSON to file (default: stdout)")
-    parser.add_argument("--text", action="store_true", help="Output human-readable text instead of JSON")
+    parser.add_argument(
+        "--text", action="store_true",
+        help="Output human-readable text instead of JSON",
+    )
     parser.add_argument("--threshold", type=float, default=1.0,
                         help="Ignore numeric deltas below this percentage (default: 1.0%%)")
     parser.add_argument("--trend", type=int, metavar="N",

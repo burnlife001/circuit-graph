@@ -433,9 +433,14 @@ def _compute_junction_temps(power_comps: list, pcb: dict,
             "category": "thermal",
             "severity": "info",
             "confidence": "heuristic" if rtheta_source == "default" else "deterministic",
-            "evidence_source": "datasheet" if rtheta_source == "package_table" else "heuristic_rule",
+            "evidence_source": (
+                "datasheet" if rtheta_source == "package_table" else "heuristic_rule"
+            ),
             "summary": f"Thermal: {ref} Tj={round(tj, 1)}C (margin {round(margin, 1)}C)",
-            "description": f"Component {ref} in {pkg_name} package: Tj={round(tj, 1)}C, margin {round(margin, 1)}C to Tj_max ({tj_max}C).",
+            "description": (
+                f"Component {ref} in {pkg_name} package: Tj={round(tj, 1)}C, "
+                f"margin {round(margin, 1)}C to Tj_max ({tj_max}C)."
+            ),
             "components": [ref],
             "nets": [],
             "pins": [],
@@ -502,7 +507,11 @@ def _generate_findings(assessments: list) -> list:
                 "nets": [],
                 "pins": [],
                 "evidence_source": ev_source,
-                "report_context": {"section": "Thermal Safety", "impact": "Component reliability", "standard_ref": ""},
+                "report_context": {
+                    "section": "Thermal Safety",
+                    "impact": "Component reliability",
+                    "standard_ref": "",
+                },
             })
         elif margin < 15:
             findings.append({
@@ -510,7 +519,10 @@ def _generate_findings(assessments: list) -> list:
                 "severity": "error",
                 "rule_id": "TS-002",
                 "confidence": confidence,
-                "title": f"{label} estimated Tj {tj:.0f}°C — only {margin:.0f}°C margin to abs max",
+                "title": (
+                    f"{label} estimated Tj {tj:.0f}°C — only {margin:.0f}°C "
+                    "margin to abs max"
+                ),
                 "description": (
                     f"{a['component_type']} dissipates {pdiss:.3f}W in {pkg} package "
                     f"(Rθ_JA={a['rtheta_ja_effective']:.0f}°C/W). "
@@ -524,11 +536,18 @@ def _generate_findings(assessments: list) -> list:
                     "voltage differential."
                 ),
                 "detector": "analyze_thermal",
-                "summary": f"{label} estimated Tj {tj:.0f}°C — only {margin:.0f}°C margin to abs max",
+                "summary": (
+                    f"{label} estimated Tj {tj:.0f}°C — only {margin:.0f}°C "
+                    "margin to abs max"
+                ),
                 "nets": [],
                 "pins": [],
                 "evidence_source": ev_source,
-                "report_context": {"section": "Thermal Safety", "impact": "Component reliability", "standard_ref": ""},
+                "report_context": {
+                    "section": "Thermal Safety",
+                    "impact": "Component reliability",
+                    "standard_ref": "",
+                },
             })
         elif tj > 85:
             findings.append({
@@ -554,7 +573,11 @@ def _generate_findings(assessments: list) -> list:
                 "nets": [],
                 "pins": [],
                 "evidence_source": ev_source,
-                "report_context": {"section": "Thermal Safety", "impact": "Component reliability", "standard_ref": ""},
+                "report_context": {
+                    "section": "Thermal Safety",
+                    "impact": "Component reliability",
+                    "standard_ref": "",
+                },
             })
         elif pdiss > 0.1:
             findings.append({
@@ -574,7 +597,11 @@ def _generate_findings(assessments: list) -> list:
                 "nets": [],
                 "pins": [],
                 "evidence_source": ev_source,
-                "report_context": {"section": "Thermal Safety", "impact": "Component reliability", "standard_ref": ""},
+                "report_context": {
+                    "section": "Thermal Safety",
+                    "impact": "Component reliability",
+                    "standard_ref": "",
+                },
             })
 
     # TS-004: High-power component with no thermal vias
@@ -604,7 +631,11 @@ def _generate_findings(assessments: list) -> list:
                 "nets": [],
                 "pins": [],
                 "evidence_source": "geometry",
-                "report_context": {"section": "Thermal Safety", "impact": "Component reliability", "standard_ref": ""},
+                "report_context": {
+                    "section": "Thermal Safety",
+                    "impact": "Component reliability",
+                    "standard_ref": "",
+                },
             })
 
     return findings
@@ -617,7 +648,6 @@ def _generate_findings(assessments: list) -> list:
 def _check_thermal_proximity(assessments: list, pcb: dict) -> list:
     """Check for temperature-sensitive components near hot spots."""
     findings = []
-    fp_map = _get_footprint_map(pcb)
 
     # Find hot components (Tj > 70°C) with known positions
     hot_comps = [a for a in assessments
@@ -680,7 +710,11 @@ def _check_thermal_proximity(assessments: list, pcb: dict) -> list:
                     "nets": [],
                     "pins": [],
                     "evidence_source": "geometry",
-                    "report_context": {"section": "Thermal Proximity", "impact": "Component reliability", "standard_ref": ""},
+                    "report_context": {
+                        "section": "Thermal Proximity",
+                        "impact": "Component reliability",
+                        "standard_ref": "",
+                    },
                 })
             else:
                 findings.append({
@@ -707,7 +741,11 @@ def _check_thermal_proximity(assessments: list, pcb: dict) -> list:
                     "nets": [],
                     "pins": [],
                     "evidence_source": "geometry",
-                    "report_context": {"section": "Thermal Proximity", "impact": "Component reliability", "standard_ref": ""},
+                    "report_context": {
+                        "section": "Thermal Proximity",
+                        "impact": "Component reliability",
+                        "standard_ref": "",
+                    },
                 })
 
     return findings
@@ -889,16 +927,27 @@ def main():
                 "by_severity": "{error: int, warning: int, info: int}",
                 "thermal_score": "float (0-100)",
             },
-            "findings": "[{detector, rule_id, category, severity, confidence, evidence_source, summary, description, components, nets, pins, recommendation, report_context}] — TS-001..005, TP-001..002, TH-DET assessments",
+            "findings": (
+                "[{detector, rule_id, category, severity, confidence, "
+                "evidence_source, summary, description, components, nets, pins, "
+                "recommendation, report_context}] — TS-001..005, TP-001..002, "
+                "TH-DET assessments"
+            ),
             "trust_summary": {
                 "total_findings": "int",
                 "trust_level": "'high' | 'mixed' | 'low'",
                 "by_confidence": "{deterministic: int, heuristic: int, datasheet-backed: int}",
-                "by_evidence_source": "{datasheet|topology|heuristic_rule|symbol_footprint|bom|geometry|api_lookup: int}",
+                "by_evidence_source": (
+                    "{datasheet|topology|heuristic_rule|symbol_footprint|bom|"
+                    "geometry|api_lookup: int}"
+                ),
                 "provenance_coverage_pct": "float",
             },
             "elapsed_s": "float — analysis wall-clock time",
-            "missing_info": "OPTIONAL — {default_rtheta_ja: [ref], default_tj_max: [ref]} when any component used default thermal parameters",
+            "missing_info": (
+                "OPTIONAL — {default_rtheta_ja: [ref], default_tj_max: [ref]} "
+                "when any component used default thermal parameters"
+            ),
         }
         print(json.dumps(schema, indent=2))
         sys.exit(0)
