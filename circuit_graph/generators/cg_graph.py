@@ -14,11 +14,6 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from circuit_graph.enrichers import run_enrichers
-from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
-from circuit_graph.enrichers.net_classifier import NetClassifier
-from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
-from circuit_graph.enrichers.value_normalizer import ValueNormalizer
 from circuit_graph.ir import (
     CapacitanceValue,
     CircuitIR,
@@ -201,7 +196,15 @@ def _ensure_enriched(ir: CircuitIR) -> CircuitIR:
     The cg-graph format relies on normalized values, classified nets and
     topology blocks.  This helper makes the generator safe to call on a bare
     parsed IR while avoiding duplicate work when the caller already enriched it.
+    Enrichers are imported lazily so that importing this module (and any
+    warm-cache CLI path that skips enrichment) does not pull in the matcher.
     """
+    from circuit_graph.enrichers import run_enrichers
+    from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
+    from circuit_graph.enrichers.net_classifier import NetClassifier
+    from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
+    from circuit_graph.enrichers.value_normalizer import ValueNormalizer
+
     enrichers: list[Any] = []
     if any(c.raw_value and c.value is None for c in ir.components):
         enrichers.append(ValueNormalizer())

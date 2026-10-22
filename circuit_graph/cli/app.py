@@ -15,27 +15,17 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 
-from circuit_graph.design import DesignError, DesignSpec, instantiate, parse_number
-from circuit_graph.enrichers import run_enrichers
-from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
-from circuit_graph.enrichers.multi_unit_splitter import MultiUnitSplitter
-from circuit_graph.enrichers.net_classifier import NetClassifier
-from circuit_graph.enrichers.pin_resolver import PinNameResolver
-from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
-from circuit_graph.enrichers.value_normalizer import ValueNormalizer
-from circuit_graph.exporters.graphml import write_graphml
-from circuit_graph.exporters.protel_netlist import write_protel_netlist
-from circuit_graph.generators.cg_graph import write_cg_graph
 from circuit_graph.ir import CircuitIR, ir_to_json
 from circuit_graph.parsers.protel import ParserInput
 from circuit_graph.parsers.registry import parse_netlist
-from circuit_graph.primitives import load_primitives
-from circuit_graph.sim.deck_builder import DeckBuilder
-from circuit_graph.sim.spice_deck import SimulationDeck
-from circuit_graph.sim.spice_runner import SpiceRunner, SpiceRunnerConfig
+
+# Heavy module chains (enrichers → matcher → networkx, sim, erc, design)
+# are imported lazily inside the commands that need them so that warm-cache
+# CLI paths (cg view on an unchanged board) start in ~0.2 s instead of ~0.7 s.
 
 # app.py lives one level deeper than the historical cli.py (cli/ package),
 # so the project root is three parents up: cli/app.py -> cli -> circuit_graph -> root.
@@ -59,6 +49,18 @@ def export() -> None:
     """Export circuit data."""
 
 
+def _cache_options(f: Any) -> Any:
+    """Shared --cache-dir / --no-cache options for parse-backed commands."""
+    f = click.option(
+        "--cache-dir",
+        type=click.Path(path_type=Path),
+        default=None,
+        help="IR cache directory (default: <repo>/.cg-cache).",
+    )(f)
+    f = click.option("--no-cache", is_flag=True, help="Bypass the IR parse/enrich cache.")(f)
+    return f
+
+
 @export.command(name="graphml")
 @click.argument("file", type=click.Path(exists=True, path_type=Path))
 @click.option("-o", "--output", type=click.Path(path_type=Path), default=DEFAULT_GRAPHML_FILE)
@@ -68,11 +70,26 @@ def export() -> None:
     default=None,
     help="Per-template topology match timeout in seconds (default: recognizer built-in).",
 )
-def export_graphml(file: Path, output: Path, topology_timeout: float | None) -> None:
+@_cache_options
+def export_graphml(
+    file: Path,
+    output: Path,
+    topology_timeout: float | None,
+    cache_dir: Path | None,
+    no_cache: bool,
+) -> None:
     """Export the circuit graph to GraphML."""
     warnings: list[str] = []
-    ir = _parse_and_enrich(file, warnings_out=warnings, topology_timeout=topology_timeout)
+    ir = _parse_and_enrich(
+        file,
+        warnings_out=warnings,
+        topology_timeout=topology_timeout,
+        cache_dir=cache_dir,
+        use_cache=not no_cache,
+    )
     _emit_warnings_summary(warnings)
+    from circuit_graph.exporters.graphml import write_graphml
+
     write_graphml(ir, output)
     click.echo(f"Wrote GraphML to {output}")
 
@@ -87,11 +104,27 @@ def export_graphml(file: Path, output: Path, topology_timeout: float | None) -> 
     default=None,
     help="Per-template topology match timeout in seconds (default: recognizer built-in).",
 )
-def export_graph(file: Path, output: Path, pretty: bool, topology_timeout: float | None) -> None:
+@_cache_options
+def export_graph(
+    file: Path,
+    output: Path,
+    pretty: bool,
+    topology_timeout: float | None,
+    cache_dir: Path | None,
+    no_cache: bool,
+) -> None:
     """Generate the cg-graph JSON view of the circuit."""
     warnings: list[str] = []
-    ir = _parse_and_enrich(file, warnings_out=warnings, topology_timeout=topology_timeout)
+    ir = _parse_and_enrich(
+        file,
+        warnings_out=warnings,
+        topology_timeout=topology_timeout,
+        cache_dir=cache_dir,
+        use_cache=not no_cache,
+    )
     _emit_warnings_summary(warnings)
+    from circuit_graph.generators.cg_graph import write_cg_graph
+
     write_cg_graph(ir, output, pretty=pretty)
     click.echo(f"Wrote cg-graph JSON to {output}")
 
@@ -304,11 +337,15 @@ def layout_check(
 )
 def design(primitive_id: str, spec_path: Path, output: Path | None, as_json: bool) -> None:
     """Instantiate a primitive template into a concrete netlist."""
+    from circuit_graph.primitives import load_primitives
+
     templates = load_primitives()
     template = next((t for t in templates if t.id == primitive_id), None)
     if template is None:
         click.echo(f"Unknown primitive: {primitive_id}", err=True)
         sys.exit(1)
+
+    from circuit_graph.design import DesignError, DesignSpec, instantiate, parse_number
 
     raw = json.loads(spec_path.read_text(encoding="utf-8"))
     spec = DesignSpec(
@@ -330,6 +367,8 @@ def design(primitive_id: str, spec_path: Path, output: Path | None, as_json: boo
     if as_json:
         out.write_text(ir_to_json(result.ir), encoding="utf-8")
     else:
+        from circuit_graph.exporters.protel_netlist import write_protel_netlist
+
         write_protel_netlist(result.ir, out)
     click.echo(f"Wrote {len(result.ir.components)} components to {out}")
 
@@ -373,6 +412,8 @@ def sim(
         "part you passed in; results only prove the LM321 deck self-checks.",
         err=True,
     )
+    from circuit_graph.sim.deck_builder import DeckBuilder
+
     builder = DeckBuilder()
     deck = builder.build_lm321_non_inverting()
 
@@ -389,6 +430,8 @@ def sim(
         analyses = deck.analyses
 
     ngspice_opts = tuple(f".OPTIONS {opt}" for opt in ngspice_opt)
+
+    from circuit_graph.sim.spice_deck import SimulationDeck
 
     deck = SimulationDeck(
         name=deck.name,
@@ -433,6 +476,8 @@ def sim(
 
     # Pre-flight: fail fast with a clear message when Ngspice is absent
     # instead of dying inside the subprocess call.
+    from circuit_graph.sim.spice_runner import SpiceRunner, SpiceRunnerConfig
+
     config = SpiceRunnerConfig(timeout_seconds=30.0)
     if shutil.which(config.ngspice_bin) is None:
         click.echo(
@@ -498,6 +543,8 @@ def _parse_and_enrich(
     *,
     warnings_out: list[str] | None = None,
     topology_timeout: float | None = None,
+    cache_dir: Path | None = None,
+    use_cache: bool = True,
 ) -> CircuitIR:
     """Parse the netlist and run the standard enricher pipeline.
 
@@ -508,8 +555,38 @@ def _parse_and_enrich(
     When ``warnings_out`` is given, the pipeline's warnings (dependency
     misses, skipped enrichers, and enricher-level warnings such as
     ``TOPOLOGY_MATCH_ABORTED``) are appended to it.
+
+    Results are cached in ``cache_dir`` (default ``<repo>/.cg-cache``) keyed
+    by netlist content + enricher version + primitive library hash; pass
+    ``use_cache=False`` to bypass.  Cache hits restore the warnings too, so
+    diagnostics stay visible on warm runs.
     """
+    from circuit_graph.cache import cache_key, default_cache_dir, load_cached, save_cached
+    from circuit_graph.enrichers import run_enrichers
+    from circuit_graph.enrichers.edge_semantic import EdgeSemanticEnricher
+    from circuit_graph.enrichers.multi_unit_splitter import MultiUnitSplitter
+    from circuit_graph.enrichers.net_classifier import NetClassifier
+    from circuit_graph.enrichers.pin_resolver import PinNameResolver
+    from circuit_graph.enrichers.topology_recognizer import TopologyRecognizer
+    from circuit_graph.enrichers.value_normalizer import ValueNormalizer
+
+    cache_root = cache_dir if cache_dir is not None else default_cache_dir()
+    key: str | None = None
+    if use_cache:
+        try:
+            key = cache_key(file)
+        except OSError:
+            key = None
+        if key is not None:
+            hit = load_cached(cache_root, key)
+            if hit is not None:
+                ir, cached_warnings = hit
+                if warnings_out is not None:
+                    warnings_out.extend(cached_warnings)
+                return ir
+
     ir = parse_netlist(ParserInput(source_id=str(file), file_path=str(file)))
+    collected: list[str] = []
     result = run_enrichers(
         ir,
         [
@@ -521,8 +598,14 @@ def _parse_and_enrich(
             TopologyRecognizer(timeout_seconds=topology_timeout),
         ],
     )
+    collected.extend(result.warnings)
     if warnings_out is not None:
-        warnings_out.extend(result.warnings)
+        warnings_out.extend(collected)
+    if key is not None:
+        try:
+            save_cached(cache_root, key, result.ir, collected)
+        except OSError:
+            pass  # cache write failure must not break the command
     return result.ir
 
 

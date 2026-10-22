@@ -9,10 +9,7 @@ from pathlib import Path
 import click
 
 from circuit_graph.cli.app import _parse_and_enrich, main
-from circuit_graph.generators.cg_graph import view_component
-from circuit_graph.graph import create_graph
 from circuit_graph.ir import CircuitIR
-from circuit_graph.knowledge.db import ComponentDatabase
 
 
 @main.command()
@@ -46,6 +43,13 @@ from circuit_graph.knowledge.db import ComponentDatabase
     default=None,
     help="Per-template topology match timeout in seconds (default: recognizer built-in).",
 )
+@click.option(
+    "--cache-dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="IR cache directory (default: <repo>/.cg-cache).",
+)
+@click.option("--no-cache", is_flag=True, help="Bypass the IR parse/enrich cache.")
 def view(
     designator: str,
     file: Path,
@@ -56,6 +60,8 @@ def view(
     with_blocks: bool,
     with_all: bool,
     topology_timeout: float | None,
+    cache_dir: Path | None,
+    no_cache: bool,
 ) -> None:
     """Output a scoped ego-subgraph for a single component.
 
@@ -69,11 +75,21 @@ def view(
         with_blocks = True
 
     warnings: list[str] = []
-    ir = _parse_and_enrich(file, warnings_out=warnings, topology_timeout=topology_timeout)
+    ir = _parse_and_enrich(
+        file,
+        warnings_out=warnings,
+        topology_timeout=topology_timeout,
+        cache_dir=cache_dir,
+        use_cache=not no_cache,
+    )
     if warnings:
         click.echo(f"warnings: {len(warnings)} — {'; '.join(warnings)}", err=True)
     designator = _canonical_designator(ir, designator)
+    from circuit_graph.knowledge.db import ComponentDatabase
+
     db = ComponentDatabase.default()
+    from circuit_graph.generators.cg_graph import view_component
+
     result = view_component(ir, designator, hops=hops, db=db)
     if result is None:
         payload = {"error": _not_found_message(ir, designator), "warnings": warnings}
@@ -167,6 +183,7 @@ def _build_power_context(ir: CircuitIR, designator: str) -> dict[str, object] | 
     ``--with-power`` is requested.
     """
     from circuit_graph.ir import NetType
+    from circuit_graph.knowledge.db import ComponentDatabase
     from circuit_graph.power_tree_recognizer import build_power_tree
 
     comp_map = {c.id: c for c in ir.components}
@@ -179,6 +196,8 @@ def _build_power_context(ir: CircuitIR, designator: str) -> dict[str, object] | 
             net_ids_for_comp.add(conn.net_id)
     if not net_ids_for_comp:
         return None
+
+    from circuit_graph.graph import create_graph
 
     graph = create_graph().load(ir).graph
     db = ComponentDatabase.default()

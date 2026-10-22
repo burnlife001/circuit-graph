@@ -177,3 +177,4 @@ circuit_graph/knowledge/*.db-*
 
 lm321_ccs/
 .omc/
+.cg-cache/
