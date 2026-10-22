@@ -49,6 +49,10 @@ select = ["E", "F", "I", "N", "W"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["circuit_graph"]
+# skills/ 已在 circuit_graph 包内，随 packages 一并打包；
+# 再加 force-include 会把同一批文件重复写进 wheel，构建直接报错。
 
 [tool.hatch.build.targets.wheel.force-include]
-"circuit_graph/skills" = "circuit_graph/skills"
+# KB 库被 .gitignore 排除（hatchling 遵守 .gitignore），必须显式打包；
+# 否则装出来的 cg kb / cg role 面对的是一个 open() 时现建的空库。
+"circuit_graph/knowledge/circuit_graph.db" = "circuit_graph/knowledge/circuit_graph.db"
