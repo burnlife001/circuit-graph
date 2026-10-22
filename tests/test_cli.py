@@ -316,7 +316,7 @@ def test_cli_help(runner: CliRunner) -> None:
     assert "power" not in result.output
     assert "comm " not in result.output
     assert "generate" not in result.output
-    assert "query" not in result.output
+    assert "query" in result.output
 
 
 def test_cli_default_pipeline_resolves_pin_names(tmp_path: Path, monkeypatch) -> None:
