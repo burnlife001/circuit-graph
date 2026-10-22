@@ -7,26 +7,25 @@ description: Use when analyzing electronic circuits — Protel .NET netlists, Ki
 
 `cg` 全局可用（`C:\Users\yg\.local\bin\cg.exe`）。**所有**电路信息只能经 `cg` 取得。
 
-## 标准流程（目标 < 2 s）
+## 默认最小路径（通常 1 次调用）
 
 ```powershell
 $NET = "<project>\__docs\FX-T268-V6-10米-5065.NET"
-cg role R100 $NET            # ~300 ms：一条命令出功能定性（首选！）
-cg query $NET --conn R100    # role 未命中 / 需复核时：引脚 → 所在网 → 同网元件（带值）
-cg query $NET --net SW2      # 需要时再展开一层（~220 ms）
+cg role R100 $NET     # ~300 ms：一条命令出功能定性，直接照此回答
 ```
 
-`cg role` 自动完成「--conn → 追另一端 → kb lookup → 拓扑推理」全链路并答案前置；
-只有它 fallback（未命中规则 / KB 无该 IC pinout）时才退回手动 `cg query` 路径。
+`cg role` 自动完成「--conn → 追另一端 → kb pinout → 拓扑推理」并答案前置。
+**跑到这里就够了 —— 默认不再查别的。** 直接引用 role 的结论回答用户。
 
-## 最省调用路径（role 优先，手动兜底）
+## 只有两种情况才继续调查
 
-问「X 的作用 / X 是什么」时：
+1. role 输出 **fallback**（未命中规则 / KB 无该 IC pinout）；
+2. 结论可疑、或用户明确要求看证据 / 追更深。
 
 | 步 | 命令 | 拿到什么 |
 |---|---|---|
-| 1 | `cg role X $NET` | 功能定性结论（反馈电阻/上下拉/分压/RC 滤波/去耦/耦合/shunt…，含增益、fc、分压比） |
-| 2 | role 显示 fallback 或结论可疑时：`cg query $NET --conn X`（IC 用 `--comp X`） | 引脚 → 所在网 → 同网元件（带值） |
+| 1 | `cg role X $NET` | 功能定性（反馈电阻/上下拉/分压/RC 滤波/去耦/耦合/shunt…，含增益、fc、分压比） |
+| 2 | role fallback 或结论可疑时：`cg query $NET --conn X`（IC 用 `--comp X`） | 引脚 → 所在网 → 同网元件（带值） |
 | 3 | `cg query $NET --net <网>` 或 `--comp A --comp B` | 同网其余成员的**另一端**接在哪 |
 | 4 | `cg kb lookup <IC型号>` | IC 引脚功能（唯一来源） |
 | 5 | 可选：`cbm search_code` 找固件里这个信号的用法 | 闭环验证（`|` 需显式 `regex=true`） |

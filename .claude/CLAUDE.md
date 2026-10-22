@@ -18,7 +18,7 @@
 - 主项目仓库不混入调研性克隆或临时构建
 
 ## 用户测试约定(默认用"fixtures\protel\FX-T268-V6-10米-5065.NET"进行分析)
-- 用户输入:测试：R100是干什么的,就使用cg view <id> <file> [--hops N] [--pretty]`
+- 用户输入:测试：R100是干什么的,就使用cg role <id> <file>`（一条命令出结论；fallback 或存疑时才走 cg query 手动路径，见 .claude/skills/cg/SKILL.md）
 - 每完成一个小任务都 `修Readme.md + git commit + git push`
 
 ## 回答风格(答案前置)
