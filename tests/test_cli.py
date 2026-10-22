@@ -49,7 +49,7 @@ def test_cli_view_component(runner: CliRunner, tmp_path: Path) -> None:
 
     result = runner.invoke(main, ["view", "R70", str(fixture)])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["designator"] == "R70"
     assert data["nets"]["PGND"]["kind"] == "ground"
     # Without --with-power / --with-comm, the optional context fields are
@@ -66,7 +66,7 @@ def test_cli_view_with_power(runner: CliRunner, tmp_path: Path) -> None:
     # U2 is the main MCU on T268; it sits on the 5V2 / GND rails.
     result = runner.invoke(main, ["view", "U2", str(fixture), "--with-power"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "power_context" in data
     ctx = data["power_context"]
     # T268 fixture does not annotate regulator part numbers, so the source
@@ -81,7 +81,7 @@ def test_cli_view_without_power_flag_omits_context(runner: CliRunner) -> None:
         pytest.skip(f"Fixture not found: {fixture}")
 
     result = runner.invoke(main, ["view", "U2", str(fixture)])
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "power_context" not in data
 
 
@@ -93,7 +93,7 @@ def test_cli_view_with_comm(runner: CliRunner, tmp_path: Path) -> None:
     # U2 is the main MCU on T268; it sits on I2C / UART / PWM buses.
     result = runner.invoke(main, ["view", "U2", str(fixture), "--with-comm"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "comm_context" in data
     assert "buses" in data["comm_context"]
     assert isinstance(data["comm_context"]["buses"], list)
@@ -106,7 +106,7 @@ def test_cli_view_without_comm_flag_omits_context(runner: CliRunner) -> None:
         pytest.skip(f"Fixture not found: {fixture}")
 
     result = runner.invoke(main, ["view", "U2", str(fixture)])
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "comm_context" not in data
 
 
@@ -117,7 +117,7 @@ def test_cli_view_with_all(runner: CliRunner, tmp_path: Path) -> None:
 
     result = runner.invoke(main, ["view", "U2", str(fixture), "--with-all"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "power_context" in data
     assert "comm_context" in data
     assert "blocks" in data
@@ -132,7 +132,7 @@ def test_cli_view_with_blocks(runner: CliRunner) -> None:
     # R100 is the feedback resistor of the U7 (LM321) amplifier stage.
     result = runner.invoke(main, ["view", "R100", str(fixture), "--with-blocks"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     blocks = {b["id"]: b for b in data["blocks"]}
     assert "inverting-amplifier-u7" in blocks
     assert {"R100", "R101", "U7"} <= set(blocks["inverting-amplifier-u7"]["component_ids"])
@@ -147,7 +147,7 @@ def test_cli_view_without_blocks_flag_omits_context(runner: CliRunner) -> None:
         pytest.skip(f"Fixture not found: {fixture}")
 
     result = runner.invoke(main, ["view", "R100", str(fixture)])
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "blocks" not in data
 
 
@@ -161,7 +161,7 @@ def test_cli_view_with_blocks_empty_when_unrecognised(runner: CliRunner) -> None
     # keeps the ego to E1 alone so no neighbourhood block spills in.
     result = runner.invoke(main, ["view", "E1", str(fixture), "--hops", "0", "--with-blocks"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["blocks"] == []
 
 
@@ -175,7 +175,7 @@ def test_cli_view_component_not_on_power_net(runner: CliRunner) -> None:
     # power_context is omitted.
     result = runner.invoke(main, ["view", "R70", str(fixture), "--with-power"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "power_context" not in data
 
 
@@ -188,7 +188,7 @@ def test_cli_view_component_with_no_comm_bus(runner: CliRunner) -> None:
     # R70 is a power-path resistor; it should not be on a comm bus.
     result = runner.invoke(main, ["view", "R70", str(fixture), "--with-comm"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "comm_context" not in data
 
 
@@ -229,7 +229,7 @@ def test_cli_view_designator_case_insensitive(runner: CliRunner) -> None:
 
     result = runner.invoke(main, ["view", focal.lower(), str(fixture)])
     assert result.exit_code == 0, result.output
-    assert json.loads(result.output)["designator"] == focal
+    assert json.loads(result.stdout)["designator"] == focal
 
 
 def test_cli_view_lowercase_parent_shows_unit_hint(runner: CliRunner) -> None:
@@ -302,7 +302,7 @@ def test_cli_view_multi_unit_with_blocks(runner: CliRunner) -> None:
 
     result = runner.invoke(main, ["view", focal, str(fixture), "--with-blocks"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["designator"] == focal
     assert block.id in {b["id"] for b in data["blocks"]}
 

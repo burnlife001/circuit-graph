@@ -71,10 +71,7 @@ def view(
     warnings: list[str] = []
     ir = _parse_and_enrich(file, warnings_out=warnings, topology_timeout=topology_timeout)
     if warnings:
-        click.echo(
-            f"warnings: {len(warnings)} — {'; '.join(warnings)}",
-            err=True,
-        )
+        click.echo(f"warnings: {len(warnings)} — {'; '.join(warnings)}", err=True)
     designator = _canonical_designator(ir, designator)
     db = ComponentDatabase.default()
     result = view_component(ir, designator, hops=hops, db=db)

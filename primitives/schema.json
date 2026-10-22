@@ -49,6 +49,8 @@
           },
           "required": {"type": "boolean", "default": true},
           "value_pattern": {"type": ["string", "null"]},
+          "pin_count_max": {"type": ["integer", "null"], "minimum": 1},
+          "strict_value": {"type": "boolean", "default": false},
           "pins": {
             "type": "array",
             "items": {

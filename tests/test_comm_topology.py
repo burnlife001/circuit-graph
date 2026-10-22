@@ -248,7 +248,7 @@ def test_cli_comm_prints_buses() -> None:
     # U2 is the main MCU on the T268 fixture — it sits on the comm buses.
     result = runner.invoke(cli_main, ["view", "U2", str(T268_FIXTURE), "--with-comm"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "comm_context" in data
     protocols = {b["protocol"].upper() for b in data["comm_context"]["buses"]}
     # The T268 fixture has at least I2C / UART wiring; PWM presence depends

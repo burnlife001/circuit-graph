@@ -22,7 +22,7 @@
   ],
   "components": [
     {
-      "id": "Q1", "type": "Mosfet", "required": true,
+      "id": "Q1", "type": "Mosfet", "required": true, "pin_count_max": 6,
       "pins": [
         {"number": "S", "net": "vcc"},
         {"number": "D", "net": "load_net"},

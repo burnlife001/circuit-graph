@@ -24,7 +24,7 @@
   ],
   "components": [
     {
-      "id": "Q1", "type": "Unknown", "required": true,
+      "id": "Q1", "type": "Unknown", "required": true, "pin_count_max": 6,
       "pins": [
         {"number": "C", "net": "load_net"},
         {"number": "E", "net": "gnd"},

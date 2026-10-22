@@ -17,7 +17,14 @@ from typing import Any
 
 import networkx as nx
 
-from circuit_graph.ir import CircuitIR, Component
+from circuit_graph.ir import (
+    CircuitIR,
+    Component,
+    CapacitanceValue,
+    InductanceValue,
+    ResistanceValue,
+    UnknownValue,
+)
 
 
 # Primitive node kinds used in the bipartite encoding.
@@ -121,6 +128,8 @@ class PrimitiveComponent:
     required: bool = True
     value_pattern: str | None = None
     pins: list[PrimitivePin] = field(default_factory=list)
+    pin_count_max: int | None = None
+    strict_value: bool = False
 
 
 @dataclass(frozen=True)
@@ -347,6 +356,8 @@ def _parse_component(raw: dict[str, Any], signals: list[PrimitiveSignal]) -> Pri
         required=raw.get("required", True),
         value_pattern=raw.get("value_pattern"),
         pins=pins,
+        pin_count_max=raw.get("pin_count_max"),
+        strict_value=raw.get("strict_value", False),
     )
 
 
@@ -596,11 +607,40 @@ def component_type_matches(expected: str | tuple[str, ...], comp: Component) -> 
 
 
 def component_value_matches(pattern: str | None, comp: Component) -> bool:
-    """Check whether ``comp``'s raw value matches ``pattern``."""
+    """Check whether any of ``comp``'s value texts matches ``pattern``.
+
+    Both the raw value string ("4.7NF50V") and the normalised rendering
+    ("4.7nF") are tested, so patterns can be written against either form.
+    """
     if pattern is None:
         return True
-    raw = comp.raw_value or ""
-    return bool(re.search(pattern, raw, re.IGNORECASE))
+    for text in _component_value_texts(comp):
+        if re.search(pattern, text, re.IGNORECASE):
+            return True
+    return False
+
+
+def _component_value_texts(comp: Component) -> list[str]:
+    """All textual representations of a component's value."""
+    texts: list[str] = []
+    if comp.raw_value:
+        texts.append(comp.raw_value)
+    val = comp.value
+    if isinstance(val, ResistanceValue):
+        mag = val.magnitude
+        if mag >= 1_000_000:
+            texts.append(f"{mag / 1_000_000:g}MΩ")
+        elif mag >= 1000:
+            texts.append(f"{mag / 1000:g}kΩ")
+        else:
+            texts.append(f"{mag:g}Ω")
+    elif isinstance(val, CapacitanceValue):
+        texts.append(f"{val.magnitude:g}{val.unit}")
+    elif isinstance(val, InductanceValue):
+        texts.append(f"{val.magnitude:g}{val.unit}")
+    elif isinstance(val, UnknownValue) and val.raw:
+        texts.append(val.raw)
+    return texts
 
 
 __all__ = [

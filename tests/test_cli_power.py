@@ -32,7 +32,7 @@ def test_view_with_power_text_context_on_t268(runner: CliRunner) -> None:
     # U2 is the main MCU on the T268 — it sits on the 5V2 / GND rails.
     result = runner.invoke(main, ["view", "U2", str(fixture), "--with-power"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "power_context" in data
     ctx = data["power_context"]
     # T268 has no annotated regulator part numbers, so source tracing may
@@ -60,7 +60,7 @@ def test_view_without_with_power_flag_omits_context(runner: CliRunner) -> None:
 
     result = runner.invoke(main, ["view", "U2", str(fixture)])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "power_context" not in data
 
 
@@ -74,5 +74,5 @@ def test_view_with_power_component_not_on_rail(runner: CliRunner) -> None:
     # power_context is omitted from the output.
     result = runner.invoke(main, ["view", "R70", str(fixture), "--with-power"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert "power_context" not in data

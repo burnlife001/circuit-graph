@@ -97,11 +97,9 @@ def export_graph(file: Path, output: Path, pretty: bool, topology_timeout: float
 
 
 def _emit_warnings_summary(warnings: list[str]) -> None:
-    """Print a one-line warnings summary to stderr (full list when non-empty)."""
+    """Print a one-line warnings summary to stderr (silent when clean)."""
     if warnings:
         click.echo(f"warnings: {len(warnings)} — {'; '.join(warnings)}", err=True)
-    else:
-        click.echo("warnings: 0", err=True)
 
 
 
