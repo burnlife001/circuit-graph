@@ -44,6 +44,7 @@
     }
   ],
   "constraints": {"min_components": 2, "exact_component_count": true},
+  "symmetry": {"axis_signal": "sw", "include_axis_extras": true},
   "scoring": {
     "weights": {"structural": 0.45, "naming": 0.10, "parametric": 0.20, "type": 0.25},
     "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}

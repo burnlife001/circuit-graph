@@ -29,6 +29,7 @@
     }
   ],
   "constraints": {"min_components": 1, "exact_component_count": true},
+  "symmetry": {"axis_signal": "sw", "include_axis_extras": true},
   "scoring": {
     "weights": {"structural": 0.30, "naming": 0.15, "parametric": 0.25, "type": 0.30},
     "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}

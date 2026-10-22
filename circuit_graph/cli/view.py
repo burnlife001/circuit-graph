@@ -111,6 +111,9 @@ def view(
             result["comm_context"] = ctx
     if with_blocks:
         result["blocks"] = _build_blocks_context(ir, result)
+        groups = _build_symmetry_context(ir, result)
+        if groups:
+            result["symmetry_groups"] = groups
 
     output = json.dumps(result, indent=2 if pretty else None, ensure_ascii=False)
     sys.stdout.buffer.write(output.encode("utf-8"))
@@ -390,6 +393,22 @@ def _build_comm_context(ir: CircuitIR, designator: str) -> dict[str, object] | N
     if not buses:
         return None
     return {"buses": buses}
+
+
+def _build_symmetry_context(
+    ir: CircuitIR, view_result: dict[str, object]
+) -> list[dict[str, object]]:
+    """Return repeated-structure groups touching the ego subgraph.
+
+    Only templates that declare a ``symmetry`` block participate (see
+    ``circuit_graph.symmetry``); groups need ≥2 instances board-wide and at
+    least one instance intersecting the view's component set to be listed.
+    """
+    from circuit_graph.symmetry import detect_symmetry_groups, groups_touching
+
+    ego_components = set(view_result.get("components", {}))
+    groups = detect_symmetry_groups(ir)
+    return [g.to_dict() for g in groups_touching(groups, ego_components)]
 
 
 def _build_blocks_context(ir: CircuitIR, view_result: dict[str, object]) -> list[dict[str, object]]:

@@ -185,6 +185,7 @@ class PrimitiveTemplate:
     parameters: dict[str, str] = field(default_factory=dict)
     recommended_parts: dict[str, list[RecommendedPart]] = field(default_factory=dict)
     strict_pin_matching: bool = False
+    symmetry: dict[str, Any] | None = None
     _signal_to_components: dict[str, list[str]] = field(
         default_factory=dict, repr=False, compare=False
     )
@@ -262,6 +263,7 @@ def _parse_primitive(raw: dict[str, Any]) -> PrimitiveTemplate:
         parameters=parameters,
         recommended_parts=recommended_parts,
         strict_pin_matching=raw.get("strict_pin_matching", False),
+        symmetry=raw.get("symmetry"),
         raw=raw,
     )
 

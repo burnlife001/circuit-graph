@@ -73,6 +73,16 @@
         "exact_component_count": {"type": "boolean"}
       }
     },
+    "symmetry": {
+      "type": "object",
+      "description": "重复结构分组声明：多块同模板实例按 axis_signal 所在网络归为一组，并列出轴网上的差异件",
+      "properties": {
+        "axis_signal": {"type": "string"},
+        "include_axis_extras": {"type": "boolean", "default": true}
+      },
+      "required": ["axis_signal"],
+      "additionalProperties": false
+    },
     "scoring": {
       "type": "object",
       "properties": {
