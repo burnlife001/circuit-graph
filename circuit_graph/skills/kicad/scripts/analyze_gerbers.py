@@ -198,7 +198,9 @@ def parse_gerber(path: str) -> dict:
         if "D03" in s:
             result["flash_count"] += 1
             if current_aperture:
-                aperture_flash_counts[current_aperture] = aperture_flash_counts.get(current_aperture, 0) + 1
+                aperture_flash_counts[current_aperture] = (
+                    aperture_flash_counts.get(current_aperture, 0) + 1
+                )
             if current_component and current_component in component_pads:
                 component_pads[current_component] += 1
             if current_net:
@@ -214,10 +216,14 @@ def parse_gerber(path: str) -> dict:
             x = int(cm.group(1)) / x_div
             y = int(cm.group(2)) / y_div
             cr = result["coordinate_range"]
-            if x < cr["x_min"]: cr["x_min"] = x
-            if x > cr["x_max"]: cr["x_max"] = x
-            if y < cr["y_min"]: cr["y_min"] = y
-            if y > cr["y_max"]: cr["y_max"] = y
+            if x < cr["x_min"]:
+                cr["x_min"] = x
+            if x > cr["x_max"]:
+                cr["x_max"] = x
+            if y < cr["y_min"]:
+                cr["y_min"] = y
+            if y > cr["y_max"]:
+                cr["y_max"] = y
 
     # Fix infinite values if no coordinates found
     for key in result["coordinate_range"]:
@@ -437,10 +443,14 @@ def parse_drill(path: str) -> dict:
                 result["tools"][current_tool]["hole_count"] += 1
 
             cr = result["coordinate_range"]
-            if x < cr["x_min"]: cr["x_min"] = x
-            if x > cr["x_max"]: cr["x_max"] = x
-            if y < cr["y_min"]: cr["y_min"] = y
-            if y > cr["y_max"]: cr["y_max"] = y
+            if x < cr["x_min"]:
+                cr["x_min"] = x
+            if x > cr["x_max"]:
+                cr["x_max"] = x
+            if y < cr["y_min"]:
+                cr["y_min"] = y
+            if y > cr["y_max"]:
+                cr["y_max"] = y
 
     # Fix infinite values
     for key in result["coordinate_range"]:
@@ -645,21 +655,25 @@ def classify_drill_tools(drills: list[dict]) -> dict:
                     if dia >= 2.5:
                         mounting_count += count
                         if count > 0:
-                            mounting_tools.append({"diameter_mm": dia, "count": count, "type": "NPTH"})
+                            mounting_tools.append(
+                                {"diameter_mm": dia, "count": count, "type": "NPTH"})
                     else:
                         component_count += count
                         if count > 0:
-                            component_tools.append({"diameter_mm": dia, "count": count, "type": "NPTH"})
+                            component_tools.append(
+                                {"diameter_mm": dia, "count": count, "type": "NPTH"})
                 else:
                     # NPTH heuristic: small holes are component alignment pins
                     if dia <= 2.0:
                         component_count += count
                         if count > 0:
-                            component_tools.append({"diameter_mm": dia, "count": count, "type": "NPTH"})
+                            component_tools.append(
+                                {"diameter_mm": dia, "count": count, "type": "NPTH"})
                     else:
                         mounting_count += count
                         if count > 0:
-                            mounting_tools.append({"diameter_mm": dia, "count": count, "type": "NPTH"})
+                            mounting_tools.append(
+                                {"diameter_mm": dia, "count": count, "type": "NPTH"})
                 continue
 
             if "ViaDrill" in aper:
@@ -693,8 +707,14 @@ def classify_drill_tools(drills: list[dict]) -> dict:
 
     return {
         "vias": {"count": via_count, "tools": sorted(via_tools, key=lambda t: t["diameter_mm"])},
-        "component_holes": {"count": component_count, "tools": sorted(component_tools, key=lambda t: t["diameter_mm"])},
-        "mounting_holes": {"count": mounting_count, "tools": sorted(mounting_tools, key=lambda t: t["diameter_mm"])},
+        "component_holes": {
+            "count": component_count,
+            "tools": sorted(component_tools, key=lambda t: t["diameter_mm"]),
+        },
+        "mounting_holes": {
+            "count": mounting_count,
+            "tools": sorted(mounting_tools, key=lambda t: t["diameter_mm"]),
+        },
         "classification_method": "x2_attributes" if any(
             "aper_function" in ti
             for d in drills for ti in d.get("tools", {}).values()
@@ -781,10 +801,16 @@ def check_alignment(gerbers: list[dict], drills: list[dict]) -> dict:
     issues = []
     if widths and max(widths) - min(widths) > threshold_w:
         aligned = False
-        issues.append(f"Width varies by {max(widths) - min(widths):.1f}mm across copper/edge layers")
+        w_variation = max(widths) - min(widths)
+        issues.append(
+            f"Width varies by {w_variation:.1f}mm across copper/edge layers"
+        )
     if heights and max(heights) - min(heights) > threshold_h:
         aligned = False
-        issues.append(f"Height varies by {max(heights) - min(heights):.1f}mm across copper/edge layers")
+        h_variation = max(heights) - min(heights)
+        issues.append(
+            f"Height varies by {h_variation:.1f}mm across copper/edge layers"
+        )
 
     return {"aligned": aligned, "issues": issues, "layer_extents": ranges}
 
@@ -871,7 +897,8 @@ def build_component_analysis(gerbers: list[dict], drills: list[dict]) -> dict | 
     unnamed_nets = 0
     for n in all_nets:
         nl = n.lower()
-        if nl in _POWER_KEYWORDS_GERBER or n.startswith(power_prefixes) or nl.startswith("vcc") or nl.startswith("vdd"):
+        if (nl in _POWER_KEYWORDS_GERBER or n.startswith(power_prefixes)
+                or nl.startswith("vcc") or nl.startswith("vdd")):
             power_nets.add(n)
         elif n.startswith("Net-(") or n.startswith("unconnected-("):
             unnamed_nets += 1
@@ -1393,7 +1420,10 @@ def _build_gerber_findings(completeness, alignment, drill_classification,
     if completeness.get('source') == 'gbrjob':
         missing = completeness.get('missing', [])
     else:
-        missing = completeness.get('missing_required', []) + completeness.get('missing_recommended', [])
+        missing = (
+            completeness.get('missing_required', [])
+            + completeness.get('missing_recommended', [])
+        )
         required_layers.update(completeness.get('missing_required', []))
 
     for layer in missing:
@@ -1406,12 +1436,19 @@ def _build_gerber_findings(completeness, alignment, drill_classification,
             'confidence': 'deterministic',
             'evidence_source': 'topology',
             'summary': f'Missing layer: {layer}',
-            'description': f'Expected {"required" if is_required else "recommended"} layer {layer} not found in gerber set.',
+            'description': (
+                f'Expected {"required" if is_required else "recommended"} '
+                f'layer {layer} not found in gerber set.'
+            ),
             'components': [],
             'nets': [],
             'pins': [],
             'recommendation': f'Add {layer} to gerber export.',
-            'report_context': {'section': 'Gerber Completeness', 'impact': 'Fab may reject' if is_required else 'Assembly quality', 'standard_ref': ''},
+            'report_context': {
+                'section': 'Gerber Completeness',
+                'impact': 'Fab may reject' if is_required else 'Assembly quality',
+                'standard_ref': '',
+            },
         })
 
     # GR-003: Missing or empty drill file
@@ -1430,7 +1467,10 @@ def _build_gerber_findings(completeness, alignment, drill_classification,
             'nets': [],
             'pins': [],
             'recommendation': 'Include drill file(s) in gerber export.',
-            'report_context': {'section': 'Gerber Completeness', 'impact': 'Fab will reject', 'standard_ref': ''},
+            'report_context': {
+                'section': 'Gerber Completeness',
+                'impact': 'Fab will reject', 'standard_ref': '',
+            },
         })
     elif statistics.get('total_holes', 0) == 0:
         findings.append({
@@ -1464,7 +1504,10 @@ def _build_gerber_findings(completeness, alignment, drill_classification,
             'nets': [],
             'pins': [],
             'recommendation': 'Re-export gerbers to ensure consistent layer alignment.',
-            'report_context': {'section': 'Gerber Alignment', 'impact': 'Layer misregistration', 'standard_ref': ''},
+            'report_context': {
+                'section': 'Gerber Alignment',
+                'impact': 'Layer misregistration', 'standard_ref': '',
+            },
         })
 
     # GR-004: Solder paste aperture mismatch
@@ -1493,13 +1536,27 @@ def _build_gerber_findings(completeness, alignment, drill_classification,
                 'severity': 'warning',
                 'confidence': 'heuristic',
                 'evidence_source': 'topology',
-                'summary': f'{side} paste layer: {p_count} flashes vs {c_count} copper ({ratio:.0f}%)',
-                'description': f'{side}-side paste layer has significantly fewer flashes ({p_count}) than copper layer ({c_count}). This may indicate missing solder paste apertures.',
+                'summary': (
+                    f'{side} paste layer: {p_count} flashes vs {c_count} '
+                    f'copper ({ratio:.0f}%)'
+                ),
+                'description': (
+                    f'{side}-side paste layer has significantly fewer '
+                    f'flashes ({p_count}) than copper layer ({c_count}). '
+                    f'This may indicate missing solder paste apertures.'
+                ),
                 'components': [],
                 'nets': [],
                 'pins': [],
-                'recommendation': 'Check solder paste aperture generation — missing apertures cause assembly defects.',
-                'report_context': {'section': 'Gerber Completeness', 'impact': 'Assembly solder joint quality', 'standard_ref': ''},
+                'recommendation': (
+                    'Check solder paste aperture generation — missing '
+                    'apertures cause assembly defects.'
+                ),
+                'report_context': {
+                    'section': 'Gerber Completeness',
+                    'impact': 'Assembly solder joint quality',
+                    'standard_ref': '',
+                },
             })
 
     # GR-005: Board outline not closed (heuristic)
@@ -1520,12 +1577,23 @@ def _build_gerber_findings(completeness, alignment, drill_classification,
                 'confidence': 'heuristic',
                 'evidence_source': 'topology',
                 'summary': f'Board outline may not be closed — only {draws} draw(s)',
-                'description': f'Edge.Cuts layer has only {draws} draw command(s). A closed rectangular outline needs at least 4. The outline may be incomplete.',
+                'description': (
+                    f'Edge.Cuts layer has only {draws} draw command(s). '
+                    f'A closed rectangular outline needs at least 4. '
+                    f'The outline may be incomplete.'
+                ),
                 'components': [],
                 'nets': [],
                 'pins': [],
-                'recommendation': 'Verify board outline forms a closed shape before submitting to fab.',
-                'report_context': {'section': 'Gerber Completeness', 'impact': 'Fab will reject open outlines', 'standard_ref': ''},
+                'recommendation': (
+                    'Verify board outline forms a closed shape before '
+                    'submitting to fab.'
+                ),
+                'report_context': {
+                    'section': 'Gerber Completeness',
+                    'impact': 'Fab will reject open outlines',
+                    'standard_ref': '',
+                },
             })
     elif completeness.get('complete', True) is False:
         # Edge.Cuts missing entirely — already covered by GR-001
@@ -1539,13 +1607,25 @@ def _get_schema():
     return {
         "analyzer_type": "string — always 'gerber'",
         "schema_version": "string — semver (currently '1.3.0')",
-        "summary": {"total_findings": "int", "by_severity": {"error": "int", "warning": "int", "info": "int"}},
-        "findings": "[{detector, rule_id, category, severity, confidence, evidence_source, summary, description, components, nets, pins, recommendation, report_context}] — GR-001..005 (missing layers, alignment, drill, paste apertures, outline closure)",
+        "summary": {
+            "total_findings": "int",
+            "by_severity": {"error": "int", "warning": "int", "info": "int"},
+        },
+        "findings": (
+            "[{detector, rule_id, category, severity, confidence, "
+            "evidence_source, summary, description, components, nets, "
+            "pins, recommendation, fix_params, report_context}] — "
+            "GR-001..005 (missing layers, alignment, drill, paste "
+            "apertures, outline closure)"
+        ),
         "trust_summary": {
             "total_findings": "int",
             "trust_level": "'high' | 'mixed' | 'low'",
             "by_confidence": "{deterministic: int, heuristic: int, datasheet-backed: int}",
-            "by_evidence_source": "{datasheet|topology|heuristic_rule|symbol_footprint|bom|geometry|api_lookup: int}",
+            "by_evidence_source": (
+                "{datasheet|topology|heuristic_rule|symbol_footprint|bom"
+                "|geometry|api_lookup: int}"
+            ),
             "provenance_coverage_pct": "float",
         },
         "directory": "string — scan directory path",
@@ -1567,9 +1647,22 @@ def _get_schema():
                                  "smd_apertures": "int"},
         "pad_summary": {"smd_apertures": "int", "via_apertures": "int",
                         "component_holes": "int", "tht": "int"},
-        "gerbers": "[{file, filename, layer_type, format: {zero_omit, notation, x_integer, x_decimal, y_integer, y_decimal}, units: mm|inch, flash_count: int, draw_count: int, region_count: int, apertures: {d_code: {type, params, function}}, x2_attributes: {FileFunction, ...}}]",
-        "drills": "[{file, filename, units: mm|inch|null, type: PTH|NPTH|unknown, hole_count: int, coordinate_range, tools: {tool_id: {diameter_mm: float, hole_count: int}}, x2_attributes}]",
-        "_optional_sections": "component_analysis, net_analysis, trace_widths, job_file, zip_archives, connectivity (--full)",
+        "gerbers": (
+            "[{file, filename, layer_type, format: {zero_omit, notation, "
+            "x_integer, x_decimal, y_integer, y_decimal}, units: mm|inch, "
+            "flash_count: int, draw_count: int, region_count: int, "
+            "apertures: {d_code: {type, params, function}}, "
+            "x2_attributes: {FileFunction, ...}}]"
+        ),
+        "drills": (
+            "[{file, filename, units: mm|inch|null, type: PTH|NPTH|"
+            "unknown, hole_count: int, coordinate_range, tools: {tool_id: "
+            "{diameter_mm: float, hole_count: int}}, x2_attributes}]"
+        ),
+        "_optional_sections": (
+            "component_analysis, net_analysis, trace_widths, job_file, "
+            "zip_archives, connectivity (--full)"
+        ),
     }
 
 

@@ -27,7 +27,8 @@ def snap_to_mil_grid(x_mm: float) -> float:
 # guessing from a list.  Lookup uses longest-prefix-match so that specific
 # entries (e.g. LMR51420=0.6V) beat broader ones (e.g. LMR514=0.8V).
 # When a part isn't found here the analyzer falls back to the heuristic sweep.
-# Sources: DigiKey parametric data + manufacturer datasheets (verified 2026-04-12) (KH-236 collision audit)
+# Sources: DigiKey parametric data + manufacturer datasheets
+# (verified 2026-04-12) (KH-236 collision audit)
 _REGULATOR_VREF: dict[str, float] = {
     # TI switching regulators — verified against TI datasheets + DigiKey 2026-04-12
     "TPS6100": 0.5,                                               # TPS61000/01 FB = 0.5V
@@ -35,12 +36,12 @@ _REGULATOR_VREF: dict[str, float] = {
     "TPS5430": 1.221,  "TPS5450": 1.221,  "TPS5410": 1.221,     # TPS5430/50/10 Vref = 1.221V
     "TPS54160": 0.8,   "TPS54260": 0.8,   "TPS54360": 0.8,      # TPS541x0/542x0/543x0 FB = 0.8V
     "TPS54040": 0.8,   "TPS54060": 0.8,                          # TPS54040/60 Vref = 0.8V
-    "TPS54302": 0.596, "TPS54308": 0.596,                        # TPS54302/08 FB = 0.596V (KH-237 verified)
+    "TPS54302": 0.596, "TPS54308": 0.596,   # TPS54302/08 FB = 0.596V (KH-237 verified)
     # TPS56 family — split per DigiKey verification (was single 'TPS56': 0.6)
     "TPS56339": 0.8,   "TPS56637": 0.6,                          # TPS56339 = 0.8V, TPS56637 = 0.6V
     "TPS560200": 0.8,                                             # TPS560200 VSENSE = 0.8V
-    "TPS560430": 1.0,                                             # TPS560430 VOUT accuracy (integrated FB)
-    "TPS561": 0.6,                                                # TPS561201/243 = 0.6-0.76V, use 0.6
+    "TPS560430": 1.0,    # TPS560430 VOUT accuracy (integrated FB)
+    "TPS561": 0.6,      # TPS561201/243 = 0.6-0.76V, use 0.6
     "TPS562": 0.768,                                              # TPS562201/08 = 0.768V
     "TPS5632": 0.76,                                              # TPS563200 = 0.76V
     "TPS5633": 0.8,                                               # TPS563300 = 0.8V
@@ -57,7 +58,7 @@ _REGULATOR_VREF: dict[str, float] = {
     "LMR51640": 0.8,   "LMR51660": 0.8,                          # LMR51640/60 Vref = 0.8V
     "LMR336": 1.0,     "LMR338": 1.0,                            # LMR33630/60 Vref = 1.0V
     "LMR380": 1.0,                                                # LMR38010 VFB = 1.0V
-    "LM258": 1.23,     "LM259": 1.23,                            # LM2596/LM2585 VFB = 1.23V (adj variants)
+    "LM258": 1.23,     "LM259": 1.23,   # LM2596/LM2585 VFB = 1.23V (adj)
     "LMZ2": 0.795,                                                # LMZ23610 VFB = 0.795V
     "LM614": 1.0,      "LM619": 1.0,                             # LM61495 VFB = 1.0V
     # TI LDOs — TPS7A split per DigiKey verification (was single 'TPS7A': 1.19)
@@ -69,7 +70,7 @@ _REGULATOR_VREF: dict[str, float] = {
     "TPS7A92": 0.8,                                               # TPS7A92xx VFB = 0.8V
     "TPS7A70": 0.5,                                               # TPS7A7002 VFB = 0.5V
     "TPS7A73": 0.9,                                               # TPS7A7300 VFB = 0.9V
-    "TPS7A30": 1.18,   "TPS7A33": 1.18,                          # TPS7A30xx/33xx negative, |Vref| = 1.18V
+    "TPS7A30": 1.18,   "TPS7A33": 1.18,  # TPS7A30xx/33xx negative, |Vref| = 1.18V
     "TPS7A16": 1.2,                                               # TPS7A1601 VFB = 1.2V
     "TLV759": 0.55,                                               # TLV759P (adjustable) FB = 0.55V
     "TPS736": 1.204,                                              # TPS73601/TPS736xx VFB = 1.204V
@@ -84,11 +85,11 @@ _REGULATOR_VREF: dict[str, float] = {
     "RT2875": 0.6,                                                # RT2875 VFB = 0.6V
     # MPS — split per DigiKey verification (was single 'MP2': 0.8)
     "MP1": 0.8,                                                    # MP1584 VFB = 0.8V
-    "MP2307": 0.925,                                               # MP2307 VFB = 0.925V (DigiKey verified)
+    "MP2307": 0.925,   # MP2307 VFB = 0.925V (DigiKey verified)
     "MP2315": 0.8,                                                 # MP2315 VFB = 0.8V
-    "MP2338": 0.5,                                                 # MP2338 VFB = 0.5V (DigiKey verified)
-    "MP2359": 0.81,                                                # MP2359 VFB = 0.81V (DigiKey verified)
-    "MP2384": 0.6,                                                 # MP2384 VFB = 0.6V (DigiKey verified)
+    "MP2338": 0.5,     # MP2338 VFB = 0.5V (DigiKey verified)
+    "MP2359": 0.81,    # MP2359 VFB = 0.81V (DigiKey verified)
+    "MP2384": 0.6,     # MP2384 VFB = 0.6V (DigiKey verified)
     "MP2403": 0.8,                                                 # MP2403 VFB = 0.8V
     "MP2451": 0.8,                                                 # MP2451 VFB = 0.8V
     "MP2459": 0.81,                                                # MP2459 VFB = 0.81V
@@ -96,12 +97,12 @@ _REGULATOR_VREF: dict[str, float] = {
     "MP2143": 0.6,                                                 # MP2143 VFB = 0.6V
     "MP2162": 0.6,                                                 # MP2162 VFB = 0.6V
     "MP2303": 0.8,                                                 # MP2303 VFB = 0.8V
-    "MP28167": 1.0,                                                # MP28167 VFB = 1.0V (DigiKey verified)
+    "MP28167": 1.0,   # MP28167 VFB = 1.0V (DigiKey verified)
     # Microchip — MIC29 kept for adjustable variant only
     "MIC29": 1.24,                                                # MIC29150/29300 adj Vref = 1.24V
     # Diodes Inc — AP73 split (was 'AP73': 0.6, 'AP736': 0.8)
     "AP633": 0.8,                                                 # AP63356/AP63357 VFB = 0.8V
-    "AP632": 0.8,                                                 # AP63200/AP63203/AP63205 VFB = 0.8V
+    "AP632": 0.8,     # AP63200/AP63203/AP63205 VFB = 0.8V
     "AP7335": 0.8,                                                # AP7335 adjustable VFB = 0.8V
     "AP7362": 0.6,     "AP7363": 0.6,                            # AP7362/63 adjustable VFB = 0.6V
     "AP7365": 0.8,     "AP7366": 0.8,                            # AP7365/66 adjustable VFB = 0.8V
@@ -115,7 +116,7 @@ _REGULATOR_VREF: dict[str, float] = {
     "SY8": 0.6,                                                   # SY8089/8113 FB = 0.6V
     # Maxim
     "MAX5035": 1.22,    "MAX5033": 1.22,                          # MAX5035/33 VFB = 1.22V
-    "MAX1771": 1.5,     "MAX1709": 1.25,                          # MAX1771 Vref = 1.5V, MAX1709 VFB = 1.25V
+    "MAX1771": 1.5,  "MAX1709": 1.25,   # MAX1771 Vref=1.5V, MAX1709 VFB=1.25V
     "MAX17760": 0.8,                                               # MAX17760 FB = 0.8V
     # ISL (Renesas/Intersil)
     "ISL854": 0.6,      "ISL850": 0.8,                            # ISL85410 = 0.6V, ISL85003 = 0.8V
@@ -123,7 +124,7 @@ _REGULATOR_VREF: dict[str, float] = {
     "XL70": 1.25,                                                  # XL7015 VFB = 1.25V
     # TI misc
     "TPS6291": 0.8,                                                # TPS62912 VFB = 0.8V
-    "LM2267": 1.285,                                               # LM22676 VFB = 1.285V (adj variant)
+    "LM2267": 1.285,  # LM22676 VFB = 1.285V (adj variant)
     # Generic adjustable regulators
     "LM317": 1.25,     "LM337": 1.25,
     "AMS1117": 1.25,   "AMS1085": 1.25,
@@ -606,7 +607,9 @@ def classify_component(ref: str, lib_id: str, value: str, is_power: bool = False
     if prefix == "X":
         desc_lower = description.lower() if description else ""
         # Active oscillator ICs (MEMS, TCXO, VCXO) — have VCC/GND/OUT, no load caps
-        if any(x in lib_lower for x in ["oscillator"]) and not any(x in lib_lower for x in ["crystal", "xtal"]):
+        is_osc = any(x in lib_lower for x in ["oscillator"])
+        not_xtal = not any(x in lib_lower for x in ["crystal", "xtal"])
+        if is_osc and not_xtal:
             return "oscillator"
         # KH-220: Custom lib symbols with oscillator in description
         if any(x in desc_lower for x in ("oscillator", "xo ", "xtal osc",
@@ -651,7 +654,9 @@ def classify_component(ref: str, lib_id: str, value: str, is_power: bool = False
         return "led"
     if "ws2812" in val_lower or "neopixel" in val_lower or "sk6812" in val_lower:
         return "led"
-    if "jumper" in lib_lower or val_lower in ("opened", "closed") or val_lower.startswith("opened("):
+    if "jumper" in lib_lower or val_lower in ("opened", "closed"):
+        return "jumper"
+    if val_lower.startswith("opened("):
         return "jumper"
     # Connector detection: lib names and common connector part number patterns
     if "connector" in lib_lower or "conn_" in val_lower:
@@ -1322,7 +1327,9 @@ def classify_inductor_shielding(footprint_lib='', value_str='', mpn=''):
     # Combine all available text for pattern matching.
     # Normalize hyphens to underscores — KiCad footprint libraries use
     # underscores (WE_MAPI) while manufacturer names use hyphens (WE-MAPI).
-    text = ((footprint_lib or '') + ' ' + (value_str or '') + ' ' + (mpn or '')).upper().replace('-', '_')
+    text = (
+        (footprint_lib or '') + ' ' + (value_str or '') + ' ' + (mpn or '')
+    ).upper().replace('-', '_')
 
     if not text.strip():
         return 'unknown'
@@ -1967,7 +1974,8 @@ _KNOWN_FREQS = {
     'MP2359': 1.4e6,   # MP2359: 1.4MHz
     'AP3012': 1.5e6,   # AP3012: 1.5MHz
     'RT8059': 1.5e6,   # RT8059: 1.5MHz
-    'SY8208': 800e3,   # SY8208: 800kHz (prefix narrowed from 'SY820' to avoid matching SY8200 family at 500kHz)
+    'SY8208': 800e3,   # SY8208: 800kHz (prefix narrowed from 'SY820' to
+                        # avoid matching SY8200 family at 500kHz)
     'MCP1640': 500e3,  # MCP1640: 500kHz
     'MCP1603': 2.0e6,  # MCP1603: 2MHz
     'XL6009': 400e3,   # XL6009: 400kHz

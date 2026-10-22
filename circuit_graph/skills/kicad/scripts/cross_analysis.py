@@ -213,7 +213,10 @@ def check_connector_current(schematic: dict, pcb: dict | None) -> list[dict]:
                 findings.append(make_finding(
                     detector='check_connector_current', rule_id='CC-001',
                     category='current_capacity',
-                    summary=f'Connector {ref}: trace on {net_name} too narrow for ~{total_current:.1f}A',
+                    summary=(
+                        f'Connector {ref}: trace on {net_name} too narrow '
+                        f'for ~{total_current:.1f}A'
+                    ),
                     description=(
                         f'Power net {net_name} at connector {ref} carries estimated '
                         f'{total_current:.1f}A but narrowest trace is {trace_w:.2f}mm. '
@@ -221,7 +224,10 @@ def check_connector_current(schematic: dict, pcb: dict | None) -> list[dict]:
                     ),
                     severity='warning', confidence='heuristic', evidence_source='topology',
                     components=[ref], nets=[net_name],
-                    recommendation=f'Widen trace on {net_name} to >= {min_w:.1f}mm or use copper pour.',
+                    recommendation=(
+                        f'Widen trace on {net_name} to >= {min_w:.1f}mm '
+                        f'or use copper pour.'
+                    ),
                     standard_ref='IPC-2152', impact='Trace overheating and voltage drop',
                 ))
     return findings
@@ -288,7 +294,8 @@ def check_esd_coverage_gaps(schematic: dict, pcb: dict | None) -> list[dict]:
                 description=(
                     f'External connector {ref} ({conn.get("value", "")}) has '
                     f'{len(unprotected_nets)} unprotected signal net(s): '
-                    f'{", ".join(unprotected_nets[:5])}{"..." if len(unprotected_nets) > 5 else ""}.'
+                    f'{", ".join(unprotected_nets[:5])}'
+                    f'{"..." if len(unprotected_nets) > 5 else ""}.'
                 ),
                 severity='warning', confidence='heuristic', evidence_source='topology',
                 components=[ref], nets=unprotected_nets[:10],
@@ -344,7 +351,8 @@ def check_decoupling_adequacy(schematic: dict, pcb: dict | None) -> list[dict]:
                 fix_params={
                     'type': 'add_component',
                     'components': [{'type': 'capacitor', 'value': '100n',
-                                    'net_from': rail_name, 'net_to': 'GND'}] * min(ic_count - cap_count, 5),
+                                    'net_from': rail_name,
+                                    'net_to': 'GND'}] * min(ic_count - cap_count, 5),
                     'basis': 'One 100nF per IC power pin pair minimum',
                 },
                 impact='Increased power supply noise and EMI',
@@ -376,7 +384,10 @@ def check_cross_validation(schematic: dict, pcb: dict | None) -> list[dict]:
         findings.append(make_finding(
             detector='check_cross_validation', rule_id='XV-001', category='design_sync',
             summary=f'{len(real_missing)} component(s) in schematic but not PCB',
-            description=f'Missing from PCB: {", ".join(sorted(real_missing)[:20])}{"..." if len(real_missing) > 20 else ""}.',
+            description=(
+                f'Missing from PCB: {", ".join(sorted(real_missing)[:20])}'
+                f'{"..." if len(real_missing) > 20 else ""}.'
+            ),
             severity='warning', confidence='deterministic', evidence_source='topology',
             components=sorted(real_missing)[:20],
             recommendation='Update PCB from schematic (Tools > Update PCB from Schematic).',
@@ -384,12 +395,18 @@ def check_cross_validation(schematic: dict, pcb: dict | None) -> list[dict]:
         ))
 
     # XV-001: Components in PCB but not schematic
-    real_extra = {r for r in in_pcb_not_sch if not r.startswith(('TP', 'MH', 'NT', 'FID', 'H', 'G'))}
+    real_extra = {
+        r for r in in_pcb_not_sch
+        if not r.startswith(('TP', 'MH', 'NT', 'FID', 'H', 'G'))
+    }
     if real_extra:
         findings.append(make_finding(
             detector='check_cross_validation', rule_id='XV-001', category='design_sync',
             summary=f'{len(real_extra)} component(s) in PCB but not schematic',
-            description=f'Extra in PCB: {", ".join(sorted(real_extra)[:20])}{"..." if len(real_extra) > 20 else ""}.',
+            description=(
+                f'Extra in PCB: {", ".join(sorted(real_extra)[:20])}'
+                f'{"..." if len(real_extra) > 20 else ""}.'
+            ),
             severity='info', confidence='deterministic', evidence_source='topology',
             components=sorted(real_extra)[:20],
             recommendation='Verify these are intentional (mounting holes, test points, fiducials).',
@@ -469,10 +486,17 @@ def check_critical_net_routing(schematic, pcb):
             detector='check_critical_net_routing', rule_id='NR-001',
             category='signal_routing',
             summary=f'{net_type} net {net_name}: {dist:.1f}mm from board edge',
-            description=f'High-speed {net_type} net {net_name} is routed {dist:.1f}mm from the board edge. Signals near edges radiate more effectively.',
+            description=(
+                f'High-speed {net_type} net {net_name} is routed '
+                f'{dist:.1f}mm from the board edge. Signals near edges '
+                f'radiate more effectively.'
+            ),
             severity=severity, confidence='deterministic', evidence_source='topology',
             nets=[net_name],
-            recommendation=f'Re-route {net_name} at least {_EDGE_DISTANCE_WARN_MM}mm from board edges.',
+            recommendation=(
+                f'Re-route {net_name} at least '
+                f'{_EDGE_DISTANCE_WARN_MM}mm from board edges.'
+            ),
             impact='Increased EMI radiation and susceptibility',
         ))
     return findings
@@ -512,7 +536,10 @@ def check_return_path_enhanced(schematic, pcb):
                         detector='check_return_path_enhanced', rule_id='RP-002',
                         category='return_path',
                         summary=f'Net {net_name}: {coverage:.0f}% reference plane coverage',
-                        description=f'High-speed net {net_name} has only {coverage:.0f}% reference plane coverage.',
+                        description=(
+                            f'High-speed net {net_name} has only '
+                            f'{coverage:.0f}% reference plane coverage.'
+                        ),
                         severity='warning', confidence='heuristic', evidence_source='topology',
                         nets=[net_name],
                         recommendation='Re-route signal to avoid reference plane gaps.',
@@ -546,10 +573,17 @@ def check_return_path_enhanced(schematic, pcb):
                     detector='check_return_path_enhanced', rule_id='RP-002',
                     category='return_path',
                     summary=f'{net_type} net {net_name} crosses {gap["net"]} plane gap',
-                    description=f'{net_type} signal {net_name} crosses a gap in {gap["net"]} plane on layer {gap.get("layer", "?")}.',
+                    description=(
+                        f'{net_type} signal {net_name} crosses a gap in '
+                        f'{gap["net"]} plane on layer '
+                        f'{gap.get("layer", "?")}.'
+                    ),
                     severity=severity, confidence='deterministic', evidence_source='topology',
                     nets=[net_name, gap['net']],
-                    recommendation=f'Re-route {net_name} to avoid the {gap["net"]} plane gap, or bridge with a stitching capacitor.',
+                    recommendation=(
+                        f'Re-route {net_name} to avoid the {gap["net"]} '
+                        f'plane gap, or bridge with a stitching capacitor.'
+                    ),
                     impact='Increased EMI from enlarged return path loop',
                 ))
                 flagged.add(net_name)
@@ -600,12 +634,23 @@ def check_trace_width_power(schematic, pcb):
             findings.append(make_finding(
                 detector='check_trace_width_power', rule_id='TW-001',
                 category='current_capacity',
-                summary=f'Power net {net_name}: trace {trace_w:.2f}mm too narrow for ~{current:.1f}A',
-                description=f'Power net {net_name} carries ~{current:.1f}A but narrowest trace is {trace_w:.2f}mm. IPC-2152 recommends >= {min_w:.2f}mm.',
+                summary=(
+                    f'Power net {net_name}: trace {trace_w:.2f}mm '
+                    f'too narrow for ~{current:.1f}A'
+                ),
+                description=(
+                    f'Power net {net_name} carries ~{current:.1f}A but '
+                    f'narrowest trace is {trace_w:.2f}mm. IPC-2152 '
+                    f'recommends >= {min_w:.2f}mm.'
+                ),
                 severity='warning', confidence='heuristic', evidence_source='topology',
                 nets=[net_name],
                 recommendation=f'Widen {net_name} traces to >= {min_w:.1f}mm or use copper pour.',
-                fix_params={'type': 'resistor_value_change', 'change': f'trace width -> {min_w:.1f}mm', 'basis': f'IPC-2152: {current:.1f}A'},
+                fix_params={
+                    'type': 'resistor_value_change',
+                    'change': f'trace width -> {min_w:.1f}mm',
+                    'basis': f'IPC-2152: {current:.1f}A',
+                },
                 standard_ref='IPC-2152', impact='Trace overheating and voltage drop',
             ))
     return findings
@@ -633,14 +678,21 @@ def check_plane_splits(schematic, pcb):
             continue
         island_sizes = _island_size_map(graph)
         significant_islands = [size for size in island_sizes.values() if size >= 2]
-        is_intentional = any(plane_net.upper().startswith(p) for p in ('AGND', 'DGND', 'PGND', 'GNDA', 'GNDD'))
+        is_intentional = any(
+            plane_net.upper().startswith(p)
+            for p in ('AGND', 'DGND', 'PGND', 'GNDA', 'GNDD')
+        )
         gaps = graph.get('gaps', [])
         if not gaps:
             continue
         crossing_signals = []
         for seg in segments:
             seg_net_id = seg.get('net', 0)
-            seg_net = net_id_map.get(seg_net_id, '') if isinstance(seg_net_id, int) else str(seg_net_id)
+            seg_net = (
+                net_id_map.get(seg_net_id, '')
+                if isinstance(seg_net_id, int)
+                else str(seg_net_id)
+            )
             if not seg_net or _is_power_net(seg_net) or _is_ground_net(seg_net):
                 continue
             sx1, sy1 = seg.get('x1', 0), seg.get('y1', 0)
@@ -664,12 +716,25 @@ def check_plane_splits(schematic, pcb):
             severity = 'error' if has_hs else 'warning'
         else:
             severity = 'info'
-        desc_signals = f' Signals crossing: {", ".join(crossing_signals_rpc[:5])}.' if crossing_signals_rpc else ''
+        desc_signals = (
+            f' Signals crossing: {", ".join(crossing_signals_rpc[:5])}.'
+            if crossing_signals_rpc else ''
+        )
+        cross_txt = (
+            f'{len(crossing_signals_rpc)} signals crossing'
+            if crossing_signals_rpc else ''
+        )
         findings.append(make_finding(
             detector='check_plane_splits', rule_id='PS-002',
             category='plane_integrity',
-            summary=f'{plane_net} plane split: {graph["islands"]} islands{", " + str(len(crossing_signals_rpc)) + " signals crossing" if crossing_signals_rpc else ""}',
-            description=f'{plane_net} plane has {graph["islands"]} disconnected islands.{desc_signals}',
+            summary=(
+                f'{plane_net} plane split: {graph["islands"]} islands'
+                f'{", " + cross_txt if cross_txt else ""}'
+            ),
+            description=(
+                f'{plane_net} plane has {graph["islands"]} '
+                f'disconnected islands.{desc_signals}'
+            ),
             severity=severity, confidence='deterministic', evidence_source='topology',
             nets=[plane_net] + crossing_signals_rpc[:5],
             recommendation='Bridge the plane gap with copper pour or stitching vias.',
@@ -719,7 +784,10 @@ def check_via_stitching_density(schematic, pcb):
             detector='check_via_stitching_density', rule_id='VS-002',
             category='via_stitching',
             summary='No ground stitching vias found',
-            description='The board has no ground vias. Ground stitching vias are important for EMC.',
+            description=(
+                'The board has no ground vias. Ground stitching vias '
+                'are important for EMC.'
+            ),
             severity='warning', confidence='deterministic', evidence_source='topology',
             recommendation=f'Add ground stitching vias at <= {max_spacing_mm:.0f}mm spacing.',
             impact='Poor ground plane connectivity between layers',
@@ -743,7 +811,12 @@ def check_via_stitching_density(schematic, pcb):
             detector='check_via_stitching_density', rule_id='VS-002',
             category='via_stitching',
             summary=f'Via stitching sparse: {empty_pct:.0f}% of board lacks ground vias',
-            description=f'{empty_pct:.0f}% of board area (at {cell_size:.1f}mm grid) has no ground stitching vias. For {highest_freq/1e6:.0f}MHz, lambda/20 = {max_spacing_mm:.1f}mm.',
+            description=(
+                f'{empty_pct:.0f}% of board area (at {cell_size:.1f}mm '
+                f'grid) has no ground stitching vias. For '
+                f'{highest_freq/1e6:.0f}MHz, lambda/20 = '
+                f'{max_spacing_mm:.1f}mm.'
+            ),
             severity='warning' if empty_pct > 50 else 'info',
             confidence='heuristic', evidence_source='topology',
             recommendation=f'Add ground stitching vias at <= {max_spacing_mm:.0f}mm intervals.',
@@ -863,10 +936,16 @@ def check_diff_pair_quality(schematic, pcb):
                 detector='check_diff_pair_quality', rule_id='DP-005',
                 category='differential_pair',
                 summary=f'Diff pair {p_net}/{n_net}: {", ".join(issues)}',
-                description=f'Differential pair {p_net}/{n_net} has routing issues: {"; ".join(issues)}.',
+                description=(
+                    f'Differential pair {p_net}/{n_net} has routing '
+                    f'issues: {"; ".join(issues)}.'
+                ),
                 severity='warning', confidence='deterministic', evidence_source='topology',
                 nets=[p_net, n_net],
-                recommendation='Match via counts, layer transitions, and trace lengths between P and N.',
+                recommendation=(
+                    'Match via counts, layer transitions, and trace '
+                    'lengths between P and N.'
+                ),
                 impact='Degraded signal integrity and increased common-mode EMI',
             ))
     return findings
@@ -915,13 +994,24 @@ def main():
             'analyzer_type': "string — always 'cross_analysis'",
             'schema_version': "string — semver (currently '1.3.0')",
             'elapsed_s': 'float — analysis wall-clock time',
-            'summary': {'total_findings': 'int', 'by_severity': {'error': 'int', 'warning': 'int', 'info': 'int'}},
-            'findings': '[{detector, rule_id, category, severity, confidence, evidence_source, summary, description, components, nets, pins, recommendation, fix_params, report_context}]',
+            'summary': {
+                'total_findings': 'int',
+                'by_severity': {'error': 'int', 'warning': 'int',
+                                'info': 'int'},
+            },
+            'findings': (
+                '[{detector, rule_id, category, severity, confidence, '
+                'evidence_source, summary, description, components, '
+                'nets, pins, recommendation, fix_params, report_context}]'
+            ),
             'trust_summary': {
                 'total_findings': 'int',
                 'trust_level': "'high' | 'mixed' | 'low'",
                 'by_confidence': '{deterministic: int, heuristic: int, datasheet-backed: int}',
-                'by_evidence_source': '{datasheet|topology|heuristic_rule|symbol_footprint|bom|geometry|api_lookup: int}',
+                'by_evidence_source': (
+                    '{datasheet|topology|heuristic_rule|symbol_footprint'
+                    '|bom|geometry|api_lookup: int}'
+                ),
                 'provenance_coverage_pct': 'float',
             },
         }
