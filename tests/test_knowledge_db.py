@@ -916,3 +916,42 @@ def test_legacy_knowledgebase_emits_warning(tmp_path: Path) -> None:
     with pytest.warns(DeprecationWarning):
         kb = KnowledgeBase.load(f)
     assert kb.get_category("XX1") == "ldo"
+
+
+# ---------------------------------------------------------------------------
+# Pin-name reverse lookup (todolist P2-9)
+
+
+def _seed_pinout(db: ComponentDatabase) -> None:
+    """Two parts sharing pin name SW2, one without it."""
+    sw = db._upsert_component("SW5001", manufacturer="Silan", category="dcdc")
+    other = db._upsert_component("SCT63140@FCQFN-15L(3x3)", category="dcdc")
+    plain = db._upsert_component("HT7533", category="ldo")
+    with db.conn:
+        for comp_id, pins in (
+            (sw, {"7": "BST1", "13": "SW2", "22": "GND"}),
+            (other, {"5": "SW2", "9": "BST1"}),
+            (plain, {"1": "VIN", "2": "GND", "3": "VOUT"}),
+        ):
+            for num, name in pins.items():
+                db.conn.execute(
+                    """
+                    INSERT INTO pinouts (component_id, pin_number, pin_name, pin_type)
+                    VALUES (?, ?, ?, 'unknown')
+                    """,
+                    (comp_id, num, name),
+                )
+
+
+def test_find_by_pin_name(tmp_path: Path) -> None:
+    db = ComponentDatabase.open(tmp_path / "kb.db")
+    try:
+        _seed_pinout(db)
+        hits = db.find_by_pin_name("SW2")
+        assert hits == ["SCT63140@FCQFN-15L(3x3)", "SW5001"]
+        # Case-insensitive.
+        assert db.find_by_pin_name("sw2") == hits
+        assert db.find_by_pin_name("BST1") == hits
+        assert db.find_by_pin_name("NOPE") == []
+    finally:
+        db.close()

@@ -53,8 +53,14 @@ def kb_init(ctx: click.Context) -> None:
 
 @kb.command(name="lookup")
 @click.argument("part_number")
+@click.option(
+    "--usage-in",
+    "usage_netlist",
+    type=click.Path(exists=True, path_type=Path),
+    help="Also report where this part is used in the given netlist (designators + nets).",
+)
 @click.pass_context
-def kb_lookup(ctx: click.Context, part_number: str) -> None:
+def kb_lookup(ctx: click.Context, part_number: str, usage_netlist: Path | None) -> None:
     """Show a single component + pinout + properties."""
     db = _open_kb(ctx)
     rec = db.get_component(part_number)
@@ -78,15 +84,59 @@ def kb_lookup(ctx: click.Context, part_number: str) -> None:
     props = db.get_properties(rec.part_number)
     if props:
         payload["properties"] = props
+    if usage_netlist is not None:
+        payload["usage"] = _usage_in(db, rec.part_number, usage_netlist)
     click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
 
 
+def _usage_in(db: ComponentDatabase, part_number: str, netlist: Path) -> dict[str, object]:
+    """Find designators using ``part_number`` in ``netlist`` and their nets."""
+    ir = parse_netlist(ParserInput(source_id=str(netlist), file_path=str(netlist)))
+    net_names = {n.id: n.name for n in ir.nets}
+    needle = part_number.lower()
+    instances = []
+    for comp in ir.components:
+        candidates = [comp.part_number or "", comp.raw_value or ""]
+        if not any(needle == c.lower() or needle in c.lower() for c in candidates):
+            continue
+        nets = sorted(
+            {
+                net_names.get(conn.net_id, conn.net_id)
+                for conn in ir.connections
+                if conn.pin_id.startswith(f"{comp.id}.")
+            }
+        )
+        instances.append({"designator": comp.id, "part": comp.raw_value, "nets": nets})
+    return {"netlist": str(netlist), "instances": instances}
+
+
 @kb.command(name="search")
-@click.argument("keyword")
+@click.argument("keyword", required=False)
+@click.option(
+    "--pin",
+    "pin_name",
+    help="Search by pin function name instead of keyword (e.g. --pin SW2).",
+)
 @click.pass_context
-def kb_search(ctx: click.Context, keyword: str) -> None:
-    """Full-text search across part_number / description / category."""
+def kb_search(ctx: click.Context, keyword: str | None, pin_name: str | None) -> None:
+    """Full-text search across part_number / description / category.
+
+    With ``--pin NAME``, list every known part that has a pin named NAME.
+    """
     db = _open_kb(ctx)
+    if pin_name is not None:
+        part_numbers = db.find_by_pin_name(pin_name)
+        payload = {
+            "pin": pin_name,
+            "matches": [
+                {"part_number": pn} for pn in part_numbers
+            ],
+        }
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        click.echo(f"# {len(part_numbers)} match(es)", err=True)
+        return
+    if keyword is None:
+        raise click.UsageError("either KEYWORD or --pin is required")
     rows = db.query(any=keyword)
     payload = [
         {

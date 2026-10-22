@@ -658,6 +658,19 @@ class ComponentDatabase:
             return None
         return {r["pin_number"]: r["pin_name"] for r in rows}
 
+    def find_by_pin_name(self, pin_name: str) -> list[str]:
+        """Return part numbers having a pin named ``pin_name`` (case-insensitive)."""
+        rows = self.conn.execute(
+            """
+            SELECT DISTINCT c.part_number AS pn
+            FROM pinouts p JOIN components c ON c.id = p.component_id
+            WHERE p.pin_name = ? COLLATE NOCASE
+            ORDER BY pn
+            """,
+            (pin_name,),
+        ).fetchall()
+        return [r["pn"] for r in rows]
+
     def get_properties(self, part_number: str) -> dict[str, str]:
         """Return ``{key: value}`` for ``part_number`` (empty if none)."""
         comp = self.get_component(part_number)
