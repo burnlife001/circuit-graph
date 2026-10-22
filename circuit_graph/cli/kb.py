@@ -5,8 +5,12 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
+
+if TYPE_CHECKING:
+    from circuit_graph.knowledge.db import ComponentDatabase
 
 from circuit_graph.cli.app import _PROJECT_ROOT, DEFAULT_KB_PATH, main
 

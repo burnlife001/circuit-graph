@@ -56,7 +56,11 @@ class TopologyRecognizer:
         component_map = {c.id: c for c in ir.components}
         net_map = {n.id: n for n in ir.nets}
 
-        timeout = self.timeout_seconds if self.timeout_seconds is not None else DEFAULT_TIMEOUT_SECONDS
+        timeout = (
+            self.timeout_seconds
+            if self.timeout_seconds is not None
+            else DEFAULT_TIMEOUT_SECONDS
+        )
 
         # The matcher only depends on (ir, ignore_pin_numbers), so build one
         # per strict-mode variant instead of rebuilding it per template.

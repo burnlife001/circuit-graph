@@ -18,9 +18,9 @@ from typing import Any
 import networkx as nx
 
 from circuit_graph.ir import (
+    CapacitanceValue,
     CircuitIR,
     Component,
-    CapacitanceValue,
     InductanceValue,
     ResistanceValue,
     UnknownValue,

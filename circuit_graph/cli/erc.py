@@ -5,8 +5,12 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
+
+if TYPE_CHECKING:
+    from circuit_graph.erc import ErcReport
 
 from circuit_graph.cli.app import main
 

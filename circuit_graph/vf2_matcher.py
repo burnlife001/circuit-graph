@@ -16,13 +16,12 @@ from networkx.algorithms.isomorphism import GraphMatcher
 
 from circuit_graph.ir import CircuitIR, Component, Net, parse_pin_id
 from circuit_graph.primitives import (
-    _NodeKind,
     PrimitiveSignal,
     PrimitiveTemplate,
+    _NodeKind,
     circuit_to_bipartite_graph,
     component_type_matches,
     component_value_matches,
-    primitive_to_bipartite_graph,
     signal_name_matches,
     signal_semantic_matches,
 )

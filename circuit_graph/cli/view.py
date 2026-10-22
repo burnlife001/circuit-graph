@@ -11,7 +11,6 @@ import click
 from circuit_graph.cli.app import _parse_and_enrich, main
 from circuit_graph.ir import CircuitIR
 
-
 # Maximum warnings embedded in the view JSON before folding to a
 # "(+N more)" marker — flood diagnostics must not dominate scoped views.
 _MAX_WARNINGS_IN_VIEW = 5

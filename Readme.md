@@ -17,10 +17,13 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
   | `expected_role` | `"power"` / `"gnd"` / `"analog"` / `"digital"` / `"clock"` | 严格匹配 `edge_semantic.role` |
   | `expected_direction` | `"source"` / `"load"` / `"bidirectional"` | 严格匹配 `edge_semantic.direction` |
   | `expected_level` | 任意电压字符串（`"5V"` / `"3V3"` / `"1V25"`） | 数值化比对（`"3.3V"` ≡ `"3V3"`） |
+  | `strict_value` + `value_pattern` | 正则 | `strict_value=true` 时按值硬过滤（去耦电容排除等）；默认 `value_pattern` 仅作评分软信号 |
+  | `pin_count_max` | 整数 | 元件引脚数上限（排除多脚 IC 被当成单管，如 16 脚 SW5001） |
+  | `symmetry` | `{"axis_signal": "sw"}` | 重复结构分组声明（`cg view --with-blocks` 输出 4 路对称组） |
 
   **严格模式**：声明了任一 `expected_*` 的基元，circuit 边必须存在 `edge_semantic` 且值匹配；否则该基元识别为零（不是报错，是无结果）。现有未声明的基元不受影响。
 
-  当前基元清单（24 个）：完整对照表（名称 / 用途 / 严格模式字段）见 [`primitives/__index_primitives.md`](primitives/__index_primitives.md)，按 ID 字典序排列。
+  当前基元清单（27 个）：完整对照表（名称 / 用途 / 严格模式字段）见 [`primitives/__index_primitives.md`](primitives/__index_primitives.md)，按 ID 字典序排列。
   - 基元网名匹配：模板 `name_pattern` 之外，matcher 还查一份按 `signal.id` 键控的默认 fallback 表，让 Protel/Altium 自动命名（如 `NetR97_1`、`USB_5V`、`NetC82_1`）无需改任何 `.json` 也能命中。用户 pattern 命中时旁路 fallback。
   - 基元组件 `type` 支持字符串或字符串列表（列表 = 任一命中即匹配），用于同一拓扑多种封装/命名的器件（如集成桥堆可为 Diode / BridgeRectifier / Unknown）。
   - 基元引脚支持 `"optional": true`：matcher 按引脚子集枚举变体分别匹配（诱导子图语义在变体内仍严格），用于可接地可不接地的屏蔽脚——如 4 脚晶振的 GND 脚（`crystal-with-load-caps` 的 X1 第 4 脚）；可选引脚数控制在 1-2 个以免变体爆炸。
@@ -35,6 +38,13 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
 - 通信上下文（`cg view --with-comm`）：检测 I2C / UART / SPI / PWM 总线
 - 功能块上下文（`cg view --with-blocks`）：列出覆盖 ego 图元件的 FunctionalBlock（含置信度与得分），回答"这个元件属于哪个功能电路"
 - 识别结果可质疑（可选键，向后兼容）：net 带 `classification: {source: "name_heuristic", confidence: high|medium}`（NetClassifier 名称启发式的出处）；`power_context.confidence` 区分 deep path=high / 直连source=medium / 仅轨线=low；`blocks[].source` 透传 manual|rule|imported
+- 拓扑匹配**候选集预筛 + component↔net join 枚举器**：每模板信号先按 `name_pattern`（+内置 fallback）预筛候选网，元件按 `type` / `strict_value`+`value_pattern` / `pin_count_max` 预筛；非严格引脚模式的模板改用 join 回溯枚举（与 VF2 同构语义），T268 全模板匹配 40s+ → 0.3s。匹配数超阈值（默认 7 组）的模板按器件集合去重、保留分数最高的组，其余降级为候选（`TOPOLOGY_MATCH_FLOOD` 警告透出）
+- 重复结构分组（`cg view --with-blocks` 的 `symmetry_groups` 段）：基元 JSON 声明 `"symmetry": {"axis_signal": "sw"}` 后，同模板多块归为一组（分组键=功能子结构而非整网），每实例列出位号 / 边界网 / 轴网差异件（测试点、额外电容）。T268 实测：rc-snubber / bootstrap-cap 各成 SW1–SW4 四路组
+- **IR 解析缓存**：网表 sha256 + enricher 版本 + 基元库 hash 为键，缓存于 `<repo>/.cg-cache/`（已 gitignore，CLI `--cache-dir` 可改、`--no-cache` 可关）。冷启动 ~0.9s，同网表重复查询 ~0.25s；命中时 `warnings` 一并恢复
+- 透出管线警告：JSON 顶层恒有 `warnings` 数组（view 内超 5 条折叠 `(+N more)`），stderr 打一行摘要；`TOPOLOGY_MATCH_ABORTED` / `TRUNCATED` / `FLOOD` 均可被下游看见
+- 紧凑查询（`cg query`，见快速开始）：`--conn` / `--comp` / `--net` / `--find` / `--all [--type]`，`--format text|json`
+- 知识库反查：`cg kb lookup <型号> --usage-in <网表>`（型号→本板位号/所在网）；`cg kb search --pin <名>`（引脚功能名→型号列表）
+- `cg view` 输出截断：高 degree 网（`--max-members`，默认 20）折叠为完整条目元件 + `(+N more)`（degree 保留真值）；focal 低 degree 网邻居给完整条目，rail/多跳到达的元件降为 `{"id"}` stub；nets 段只列视图相关网。T268 `cg view Q5 --with-blocks` 28.8KB → ~11K 字符
 - 生成 cg-graph JSON（v2.1）：含 `part_number`、`circuit.rails`、每条 net 带 `degree`
 - 生成单个元件的 ego-subgraph 视图（默认 2 hops，可调；高扇出轨线不下钻）
 - 导出 yEd 兼容 GraphML
@@ -77,6 +87,11 @@ cg view R100 fixtures/protel/FX-T268-V6-10米-5065.NET --with-blocks
 
 # 同时附加供电 + 通信 + 功能块上下文
 cg view U2 fixtures/protel/FX-T268-V6-10米-5065.NET --with-all
+
+# 紧凑单问查询：C9 每个引脚所在网络及同网元件（高 degree 网折叠 (+N more)）
+cg query fixtures/protel/FX-T268-V6-10米-5065.NET --conn C9
+# 按参数值 / 型号模糊检索；--net / --comp / --all [--type] 同理，--format json 可接 jq
+cg query fixtures/protel/FX-T268-V6-10米-5065.NET --find 4.7nf
 ```
 
 > **Protel .NET 编码自动识别**：解析器按 `UTF-8 → GBK → Latin-1` 顺序回退，无需 `--encoding` 参数。中文本地化 Altium Designer 导出的 GBK 网表（如 `fixtures/protel/M4-V8.03.NET`）也能直接 `cg view` 解析。
@@ -195,6 +210,11 @@ cg kb resolve fixtures/protel/FX-T268-V6-10米-5065.NET
 
 # 数据库统计
 cg kb stats
+
+# 反查：型号 → 本板用量 / 位号 / 所在网络
+cg kb lookup SW5001 --usage-in fixtures/protel/FX-T268-V6-10米-5065.NET
+# 反查：引脚功能名 → 含该引脚的型号列表
+cg kb search --pin SW2
 ```
 
 > **⚠️ Import 网络副作用**：`cg kb import {protel,kicad}` 会在每个识别为 IC 的元件上自动调用 **chip_resolver**：

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+import circuit_graph.knowledge.db as db_mod
 from circuit_graph.enrichers.pin_resolver import PinNameResolver
 from circuit_graph.ir import CircuitIR, CircuitMeta, Component, DeviceKind, Pin
 from circuit_graph.knowledge import chip_resolver as chip_resolver_mod
@@ -49,7 +50,6 @@ def test_init_db_creates_schema(tmp_path: Path) -> None:
 
 def test_default_database_path_resolves(tmp_path: Path, monkeypatch) -> None:
     # Patch the module-level default so we do not pollute the real file.
-    import circuit_graph.knowledge.db as db_mod
 
     monkeypatch.setattr(db_mod, "_DEFAULT_DB_PATH", tmp_path / "default.db")
     db = ComponentDatabase.default()
@@ -697,7 +697,6 @@ def _fake_batch_result(packages: dict[str, str]) -> list:
 
 def test_auto_resolve_ics_match_writes_to_board(monkeypatch, tmp_path: Path) -> None:
     """Package match path: JLCPCB result merges into the board component."""
-    import circuit_graph.knowledge.db as db_mod
 
     db = ComponentDatabase.open(tmp_path / "kb.db")
     # Pre-create the board-level row to simulate a previous netlist import.
@@ -733,7 +732,6 @@ def test_auto_resolve_ics_match_writes_to_board(monkeypatch, tmp_path: Path) -> 
 
 def test_auto_resolve_ics_mismatch_creates_variant(monkeypatch, tmp_path: Path) -> None:
     """Package mismatch path: JLCPCB result lands in an independent variant row."""
-    import circuit_graph.knowledge.db as db_mod
 
     db = ComponentDatabase.open(tmp_path / "kb.db")
     db._upsert_component("MM32F0144", package="LQFP-48", pin_count=48)
@@ -776,7 +774,6 @@ def test_auto_resolve_ics_mismatch_creates_variant(monkeypatch, tmp_path: Path) 
 
 def test_auto_resolve_ics_mismatch_idempotent(monkeypatch, tmp_path: Path) -> None:
     """Re-running the resolver on a known mismatch must not duplicate variants."""
-    import circuit_graph.knowledge.db as db_mod
 
     db = ComponentDatabase.open(tmp_path / "kb.db")
     db._upsert_component("MM32F0144", package="LQFP-48", pin_count=48)
@@ -796,7 +793,6 @@ def test_auto_resolve_ics_mismatch_idempotent(monkeypatch, tmp_path: Path) -> No
 
 def test_auto_resolve_ics_match_qfn_dimensions(monkeypatch, tmp_path: Path) -> None:
     """QFN-26 board ↔ QFN-26(4x4) JLCPCB result must match (dimension-suffixed)."""
-    import circuit_graph.knowledge.db as db_mod
 
     db = ComponentDatabase.open(tmp_path / "kb.db")
     db._upsert_component("SW5001", package="QFN-26", pin_count=26)
@@ -817,7 +813,6 @@ def test_auto_resolve_ics_match_qfn_dimensions(monkeypatch, tmp_path: Path) -> N
 
 def test_auto_resolve_ics_stage5_datasheet_pdf(monkeypatch, tmp_path: Path) -> None:
     """Stage 5 PDF datasheet fallback resolves parts not handled by Stage 4."""
-    import circuit_graph.knowledge.db as db_mod
 
     # Create a fake datasheet directory with a JW5065.pdf
     ds_dir = tmp_path / "datasheets"
@@ -875,7 +870,6 @@ def test_auto_resolve_ics_stage5_skips_when_already_resolved(
     monkeypatch, tmp_path: Path,
 ) -> None:
     """Stage 5 must not overwrite components already resolved by Stage 4."""
-    import circuit_graph.knowledge.db as db_mod
 
     ds_dir = tmp_path / "datasheets"
     ds_dir.mkdir()
