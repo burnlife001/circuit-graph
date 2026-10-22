@@ -25,6 +25,7 @@ class TopologyRecognizer:
     priority: int = 30
     requires: list[str] | None = None
     primitives_dir: Path | str | None = None
+    timeout_seconds: float | None = None
     warnings: list[str] = field(default_factory=list, repr=False)
 
     def can_enrich(self, ir: CircuitIR) -> bool:
@@ -43,11 +44,13 @@ class TopologyRecognizer:
         component_map = {c.id: c for c in ir.components}
         net_map = {n.id: n for n in ir.nets}
 
+        timeout = self.timeout_seconds if self.timeout_seconds is not None else 2.0
+
         for template in templates:
             # Check if template requires strict pin matching
             strict_mode = getattr(template, "strict_pin_matching", False)
             matcher = Vf2TopologyMatcher(ir, ignore_pin_numbers=not strict_mode)
-            result = matcher.find_matches(template, timeout_seconds=2.0)
+            result = matcher.find_matches(template, timeout_seconds=timeout)
 
             if result.aborted:
                 self.warnings.append(f"TOPOLOGY_MATCH_ABORTED: {template.id} — {result.message}")

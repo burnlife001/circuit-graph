@@ -75,5 +75,8 @@ def run_enrichers(ir: CircuitIR, enrichers: list[Enricher]) -> EnricherResult:
 
         ir = result
         completed.add(e.name)
+        # Surface enricher-level warnings (e.g. TopologyRecognizer's
+        # TOPOLOGY_MATCH_ABORTED) — previously dropped at this layer.
+        warnings.extend(getattr(e, "warnings", None) or [])
 
     return EnricherResult(ir=ir, warnings=warnings)

@@ -62,9 +62,17 @@ def export() -> None:
 @export.command(name="graphml")
 @click.argument("file", type=click.Path(exists=True, path_type=Path))
 @click.option("-o", "--output", type=click.Path(path_type=Path), default=DEFAULT_GRAPHML_FILE)
-def export_graphml(file: Path, output: Path) -> None:
+@click.option(
+    "--topology-timeout",
+    type=float,
+    default=None,
+    help="Per-template topology match timeout in seconds (default: recognizer built-in).",
+)
+def export_graphml(file: Path, output: Path, topology_timeout: float | None) -> None:
     """Export the circuit graph to GraphML."""
-    ir = _parse_and_enrich(file)
+    warnings: list[str] = []
+    ir = _parse_and_enrich(file, warnings_out=warnings, topology_timeout=topology_timeout)
+    _emit_warnings_summary(warnings)
     write_graphml(ir, output)
     click.echo(f"Wrote GraphML to {output}")
 
@@ -73,11 +81,27 @@ def export_graphml(file: Path, output: Path) -> None:
 @click.argument("file", type=click.Path(exists=True, path_type=Path))
 @click.option("-o", "--output", type=click.Path(path_type=Path), default=DEFAULT_GRAPH_FILE)
 @click.option("--pretty", is_flag=True, help="Indent the JSON for humans (~2x larger).")
-def export_graph(file: Path, output: Path, pretty: bool) -> None:
+@click.option(
+    "--topology-timeout",
+    type=float,
+    default=None,
+    help="Per-template topology match timeout in seconds (default: recognizer built-in).",
+)
+def export_graph(file: Path, output: Path, pretty: bool, topology_timeout: float | None) -> None:
     """Generate the cg-graph JSON view of the circuit."""
-    ir = _parse_and_enrich(file)
+    warnings: list[str] = []
+    ir = _parse_and_enrich(file, warnings_out=warnings, topology_timeout=topology_timeout)
+    _emit_warnings_summary(warnings)
     write_cg_graph(ir, output, pretty=pretty)
     click.echo(f"Wrote cg-graph JSON to {output}")
+
+
+def _emit_warnings_summary(warnings: list[str]) -> None:
+    """Print a one-line warnings summary to stderr (full list when non-empty)."""
+    if warnings:
+        click.echo(f"warnings: {len(warnings)} — {'; '.join(warnings)}", err=True)
+    else:
+        click.echo("warnings: 0", err=True)
 
 
 
@@ -471,15 +495,24 @@ def sim(
 # Shared helpers
 
 
-def _parse_and_enrich(file: Path) -> CircuitIR:
+def _parse_and_enrich(
+    file: Path,
+    *,
+    warnings_out: list[str] | None = None,
+    topology_timeout: float | None = None,
+) -> CircuitIR:
     """Parse the netlist and run the standard enricher pipeline.
 
     This is the single source of truth for "fresh IR from a file" — every
     CLI command routes through it so that downstream consumers always see
     normalised values, classified nets and recognised topology blocks.
+
+    When ``warnings_out`` is given, the pipeline's warnings (dependency
+    misses, skipped enrichers, and enricher-level warnings such as
+    ``TOPOLOGY_MATCH_ABORTED``) are appended to it.
     """
     ir = parse_netlist(ParserInput(source_id=str(file), file_path=str(file)))
-    ir = run_enrichers(
+    result = run_enrichers(
         ir,
         [
             MultiUnitSplitter(),
@@ -487,10 +520,12 @@ def _parse_and_enrich(file: Path) -> CircuitIR:
             NetClassifier(),
             PinNameResolver(),
             EdgeSemanticEnricher(),
-            TopologyRecognizer(),
+            TopologyRecognizer(timeout_seconds=topology_timeout),
         ],
-    ).ir
-    return ir
+    )
+    if warnings_out is not None:
+        warnings_out.extend(result.warnings)
+    return result.ir
 
 
 

@@ -40,6 +40,12 @@ from circuit_graph.knowledge.db import ComponentDatabase
     is_flag=True,
     help="Shorthand for --with-power --with-comm --with-blocks.",
 )
+@click.option(
+    "--topology-timeout",
+    type=float,
+    default=None,
+    help="Per-template topology match timeout in seconds (default: recognizer built-in).",
+)
 def view(
     designator: str,
     file: Path,
@@ -49,6 +55,7 @@ def view(
     with_comm: bool,
     with_blocks: bool,
     with_all: bool,
+    topology_timeout: float | None,
 ) -> None:
     """Output a scoped ego-subgraph for a single component.
 
@@ -61,17 +68,25 @@ def view(
         with_comm = True
         with_blocks = True
 
-    ir = _parse_and_enrich(file)
+    warnings: list[str] = []
+    ir = _parse_and_enrich(file, warnings_out=warnings, topology_timeout=topology_timeout)
+    if warnings:
+        click.echo(
+            f"warnings: {len(warnings)} — {'; '.join(warnings)}",
+            err=True,
+        )
     designator = _canonical_designator(ir, designator)
     db = ComponentDatabase.default()
     result = view_component(ir, designator, hops=hops, db=db)
     if result is None:
-        payload = {"error": _not_found_message(ir, designator)}
+        payload = {"error": _not_found_message(ir, designator), "warnings": warnings}
         sys.stdout.buffer.write(
             json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
         )
         sys.stdout.buffer.write(b"\n")
         sys.exit(1)
+
+    result["warnings"] = warnings
 
     if with_power:
         ctx = _build_power_context(ir, designator)

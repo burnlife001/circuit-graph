@@ -208,6 +208,40 @@ def test_enricher_dependency_missing():
     assert any("ENRICH_DEPENDENCY_MISSING" in w for w in result.warnings)
 
 
+def test_run_enrichers_surfaces_enricher_level_warnings():
+    """Enricher-level warnings (e.g. TopologyRecognizer's TOPOLOGY_MATCH_ABORTED)
+    must reach run_enrichers' result, not be dropped at the pipeline layer."""
+
+    class _WarningEnricher:
+        name = "WarningEnricher"
+        priority = 10
+        requires = None
+        warnings = ["ENRICHER_LEVEL: something happened"]
+
+        def can_enrich(self, ir):
+            return True
+
+        def enrich(self, ir):
+            return ir
+
+    result = run_enrichers(_sample_ir(), [_WarningEnricher()])
+    assert "ENRICHER_LEVEL: something happened" in result.warnings
+
+
+def test_topology_recognizer_timeout_warning_surfaces():
+    """A near-zero timeout must produce TOPOLOGY_MATCH_ABORTED in the pipeline."""
+    fixture = FIXTURE_DIR / "FX-T268-V6-10米-5065.NET"
+    if not fixture.exists():
+        pytest.skip(f"Fixture not found: {fixture}")
+
+    ir = ProtelNetParser().parse(ParserInput(file_path=str(fixture)))
+    result = run_enrichers(
+        ir,
+        [ValueNormalizer(), NetClassifier(), TopologyRecognizer(timeout_seconds=1e-9)],
+    )
+    assert any("TOPOLOGY_MATCH_ABORTED" in w for w in result.warnings)
+
+
 def test_enricher_skips_when_can_enrich_false():
     ir = _sample_ir()
     nets = [Net(id=n.id, name=n.name, type=NetType.SIGNAL) for n in ir.nets]
