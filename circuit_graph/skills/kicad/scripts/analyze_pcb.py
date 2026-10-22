@@ -376,17 +376,17 @@ def _arc_length_3pt(sx: float, sy: float, mx: float, my: float,
                     ex: float, ey: float) -> float:
     """Compute arc length from three points (start, mid, end) on a circle."""
     # EQ-044: arc = R × θ from circumcircle (3-point arc length)
-    D = 2.0 * (sx * (my - ey) + mx * (ey - sy) + ex * (sy - my))
-    if abs(D) < 1e-10:
+    denom = 2.0 * (sx * (my - ey) + mx * (ey - sy) + ex * (sy - my))
+    if abs(denom) < 1e-10:
         # Collinear — treat as straight line
         return math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2)
 
     ss = sx * sx + sy * sy
     ms = mx * mx + my * my
     es = ex * ex + ey * ey
-    ux = (ss * (my - ey) + ms * (ey - sy) + es * (sy - my)) / D
-    uy = (ss * (ex - mx) + ms * (sx - ex) + es * (mx - sx)) / D
-    R = math.sqrt((sx - ux) ** 2 + (sy - uy) ** 2)
+    ux = (ss * (my - ey) + ms * (ey - sy) + es * (sy - my)) / denom
+    uy = (ss * (ex - mx) + ms * (sx - ex) + es * (mx - sx)) / denom
+    radius = math.sqrt((sx - ux) ** 2 + (sy - uy) ** 2)
 
     a_s = math.atan2(sy - uy, sx - ux)
     a_m = math.atan2(my - uy, mx - ux)
@@ -409,7 +409,7 @@ def _arc_length_3pt(sx: float, sy: float, mx: float, my: float,
         arc_angle = 2.0 * math.pi - ne
     else:
         arc_angle = 2.0 * math.pi  # full circle edge case
-    return R * arc_angle
+    return radius * arc_angle
 
 
 def extract_layers(root: list) -> list[dict]:
@@ -449,13 +449,13 @@ def extract_setup(root: list) -> dict:
     stackup = find_first(setup_node, "stackup")
     if stackup:
         stack_layers = []
-        _NUMERIC_STACKUP_KEYS = {"thickness", "epsilon_r", "loss_tangent"}
+        _numeric_stackup_keys = {"thickness", "epsilon_r", "loss_tangent"}
         for layer in find_all(stackup, "layer"):
             layer_info = {"name": layer[1] if len(layer) > 1 else ""}
             for item in layer[2:]:
                 if isinstance(item, list) and len(item) >= 2:
                     key, val = item[0], item[1]
-                    if key in _NUMERIC_STACKUP_KEYS:
+                    if key in _numeric_stackup_keys:
                         try:
                             val = float(val)
                         except (ValueError, TypeError):
@@ -728,7 +728,7 @@ def extract_footprints(root: list) -> list[dict]:
                 pad_info["net_number"] = _net_id(pad_net[1])
 
             if pad_layers and len(pad_layers) > 1:
-                pad_info["layers"] = [l for l in pad_layers[1:] if isinstance(l, str)]
+                pad_info["layers"] = [layer for layer in pad_layers[1:] if isinstance(layer, str)]
 
             # Pin function and type (from schematic, carried into PCB)
             pinfunc = get_value(pad, "pinfunction")
@@ -920,11 +920,11 @@ def extract_tracks(root: list) -> dict:
     # Layer distribution
     layer_dist = {}
     for seg in segments:
-        l = seg["layer"]
-        layer_dist[l] = layer_dist.get(l, 0) + 1
+        layer = seg["layer"]
+        layer_dist[layer] = layer_dist.get(layer, 0) + 1
     for arc in arcs:
-        l = arc["layer"]
-        layer_dist[l] = layer_dist.get(l, 0) + 1
+        layer = arc["layer"]
+        layer_dist[layer] = layer_dist.get(layer, 0) + 1
 
     return {
         "segment_count": len(segments),
@@ -973,7 +973,7 @@ def extract_vias(root: list) -> dict:
         if net and not net.lstrip("-").isdigit():
             via_info["_net_name"] = net
         if layers_node and len(layers_node) > 1:
-            via_info["layers"] = [l for l in layers_node[1:] if isinstance(l, str)]
+            via_info["layers"] = [layer for layer in layers_node[1:] if isinstance(layer, str)]
         # Free (unanchored) vias — typically stitching or thermal
         if get_value(via, "free") == "yes":
             via_info["free"] = True
@@ -1116,7 +1116,7 @@ def extract_zones(root: list) -> tuple[list[dict], ZoneFills]:
 
         zone_layers = []
         if layers_node and len(layers_node) > 1:
-            zone_layers = [l for l in layers_node[1:] if isinstance(l, str)]
+            zone_layers = [layer for layer in layers_node[1:] if isinstance(layer, str)]
         elif layer:
             zone_layers = [layer]
 
@@ -1300,7 +1300,8 @@ def extract_board_outline(root: list) -> dict:
             #   3π/2. Crossings extend the bbox to ±r.
             # Source: Standard computational geometry. Circumscribed circle
             #   from 3 points:
-            #   https://en.wikipedia.org/wiki/Circumscribed_circle#Circumscribed_circles_of_triangles
+            #
+            # https://en.wikipedia.org/wiki/Circumscribed_circle#Circumscribed_circles_of_triangles
             #   Arc bbox via cardinal-crossing test is a well-known CAD/CAM
             #   technique.
             # Arc: include start/end plus any cardinal extrema the arc passes through
@@ -1310,13 +1311,13 @@ def extract_board_outline(root: list) -> dict:
             all_x.extend([sx, ex])
             all_y.extend([sy, ey])
             # Compute center and radius from 3 points
-            D = 2.0 * (sx * (my - ey) + mx * (ey - sy) + ex * (sy - my))
-            if abs(D) > 1e-10:
+            denom = 2.0 * (sx * (my - ey) + mx * (ey - sy) + ex * (sy - my))
+            if abs(denom) > 1e-10:
                 ss = sx * sx + sy * sy
                 ms = mx * mx + my * my
                 es = ex * ex + ey * ey
-                ucx = (ss * (my - ey) + ms * (ey - sy) + es * (sy - my)) / D
-                ucy = (ss * (ex - mx) + ms * (sx - ex) + es * (mx - sx)) / D
+                ucx = (ss * (my - ey) + ms * (ey - sy) + es * (sy - my)) / denom
+                ucy = (ss * (ex - mx) + ms * (sx - ex) + es * (mx - sx)) / denom
                 r = math.sqrt((sx - ucx) ** 2 + (sy - ucy) ** 2)
                 # Find which cardinal angles the arc sweeps through
                 a_s = math.atan2(sy - ucy, sx - ucx)
@@ -1424,12 +1425,14 @@ def analyze_connectivity(footprints: list[dict], tracks: dict, vias: dict,
                 "confidence": "deterministic",
                 "evidence_source": "topology",
                 "summary": f"Unrouted net {net_name} ({len(pads)} pads)",
-                "description": f"Net {net_name} has {len(pads)} pads but no routing (tracks, vias, or zones).",
+                "description": f"Net {net_name} has {len(pads)} pads but no routing (tracks, vias, "
+                    f"or zones).",
                 "components": comp_refs,
                 "nets": [net_name],
                 "pins": [],
                 "recommendation": f"Route net {net_name} to connect {len(pads)} pads",
-                "report_context": {"section": "Connectivity", "impact": "functionality", "standard_ref": ""},
+                "report_context": {"section": "Connectivity", "impact": "functionality",
+                                   "standard_ref": ""},
             })
 
     return {
@@ -1509,10 +1512,10 @@ def _build_routing_graph(segments, arcs, vias_list):
         Dict mapping net_id → {nodes: set, edges: dict[node → [(neighbor, length_mm, width_mm)]]}
     """
     # EQ-045: d = √(Δx²+Δy²) (routing graph edge weight)
-    SNAP = 0.001  # Coordinate snapping precision (mm)
+    snap = 0.001  # Coordinate snapping precision (mm)
 
     def _snap(x, y):
-        return (round(x / SNAP) * SNAP, round(y / SNAP) * SNAP)
+        return (round(x / snap) * snap, round(y / snap) * snap)
 
     graphs = {}  # net_id → {"edges": defaultdict(list)}
 
@@ -1758,7 +1761,7 @@ def analyze_return_path_continuity(tracks, net_names, zones, zone_fills,
             continue
         net_segments.setdefault(net, []).append(seg)
 
-    SAMPLE_INTERVAL = 2.0  # mm between sample points
+    sample_interval = 2.0  # mm between sample points
 
     for net_id, segs in net_segments.items():
         net_name = net_names.get(net_id, f"net_{net_id}")
@@ -1780,7 +1783,7 @@ def analyze_return_path_continuity(tracks, net_names, zones, zone_fills,
                 continue
 
             # Sample along the trace
-            n_samples = max(2, int(length / SAMPLE_INTERVAL) + 1)
+            n_samples = max(2, int(length / sample_interval) + 1)
             for k in range(n_samples):
                 t = k / max(n_samples - 1, 1)
                 px = x1 + t * dx
@@ -1811,7 +1814,8 @@ def analyze_return_path_continuity(tracks, net_names, zones, zone_fills,
                     "samples_checked": total_samples,
                     "samples_with_reference_plane": total_samples - gap_samples,
                     "reference_plane_coverage_pct": coverage_pct,
-                    "gap_note": f"{gap_samples} of {total_samples} sample points lack reference plane on opposite layer",
+                    "gap_note": f"{gap_samples} of {total_samples} sample points lack reference "
+                        f"plane on opposite layer",
                 })
 
     # Sort by coverage (worst first)
@@ -2049,7 +2053,9 @@ def _microstrip_impedance(width_mm, height_mm, thickness_mm, epsilon_r):
         z0 = (60 / math.sqrt(er)) * math.log(8 * h / w_eff + w_eff / (4 * h))
     else:
         # EQ-024: Z₀ = 120π/(√εr(w/h+1.393+0.667ln(w/h+1.444))) (Wheeler wide)
-        z0 = (120 * math.pi) / (math.sqrt(er) * (w_eff / h + 1.393 + 0.667 * math.log(w_eff / h + 1.444)))
+        z0 = (120 * math.pi) / (
+            math.sqrt(er) * (w_eff / h + 1.393 + 0.667 * math.log(w_eff / h + 1.444))
+        )
     return z0
 
 
@@ -2201,16 +2207,16 @@ def analyze_net_lengths(tracks: dict, vias: dict,
                 if len(via_layers) >= 2 and len(layer_heights) > 2:
                     # Via connects between first and last of its layers;
                     # stub = total board thickness - span between connected layers
-                    all_cu = [l["name"] for l in stackup if l.get("type") == "copper"]
+                    all_cu = [layer["name"] for layer in stackup if layer.get("type") == "copper"]
                     if len(all_cu) > 2:
                         try:
-                            top_idx = all_cu.index(via_layers[0])
+                            _top_idx = all_cu.index(via_layers[0])
                             bot_idx = all_cu.index(via_layers[-1])
                             # Stub = layers below the bottom connected layer
                             stub_layers = all_cu[bot_idx + 1:]
                             if stub_layers:
-                                stub_mm = sum(layer_heights.get(l, (0.2, 4.5, 0.035))[0]
-                                              for l in stub_layers)
+                                stub_mm = sum(layer_heights.get(layer, (0.2, 4.5, 0.035))[0]
+                                              for layer in stub_layers)
                                 via_entry["stub_length_mm"] = round(stub_mm, 3)
                         except ValueError:
                             pass
@@ -2344,8 +2350,13 @@ def analyze_trace_proximity(tracks: dict, net_names: dict[int, str],
     # Count shared cells per net pair (signal nets only)
     pair_counts: dict[tuple[str, int, int], int] = {}
     for (_layer, _gx, _gy), nets in grid.items():
-        signal = sorted(n for n in nets
-                        if not (is_power_net_name(net_names.get(n, "")) or is_ground_name(net_names.get(n, ""))))
+        signal = sorted(
+            n for n in nets
+            if not (
+                is_power_net_name(net_names.get(n, ""))
+                or is_ground_name(net_names.get(n, ""))
+            )
+        )
         if len(signal) < 2:
             continue
         for i in range(len(signal)):
@@ -2550,7 +2561,7 @@ def _find_thermal_pads(fp: dict) -> list[dict]:
         if p.get("type") != "smd":
             continue
         pad_layers = p.get("layers", [])
-        if not any(l.endswith(".Cu") or l == "*.Cu" for l in pad_layers):
+        if not any(layer.endswith(".Cu") or layer == "*.Cu" for layer in pad_layers):
             continue
         w = p.get("width", p.get("size_x", 0))
         h = p.get("height", p.get("size_y", 0))
@@ -2625,7 +2636,6 @@ def analyze_thermal_vias(footprints: list[dict], vias: dict,
     - Overall via distribution across layers
     """
     # EQ-055: density = count / area_cm² (thermal via density)
-    zone_vias: dict[int, dict] = {}  # net_num -> via stats within zone
     # For each zone, count vias on the same net within the zone outline
     # (approximate: use bounding box of zone outline)
     zone_bounds: list[dict] = []
@@ -3110,7 +3120,8 @@ def extract_silkscreen(root: list, footprints: list[dict]) -> dict:
                         is_hidden = False
                         if effects:
                             for child in effects:
-                                if child == "hide" or (isinstance(child, list) and child[0] == "hide"):
+                                if child == "hide" or (isinstance(child,
+                                                                  list) and child[0] == "hide"):
                                     is_hidden = True
                                     break
                         if not is_hidden:
@@ -3176,7 +3187,6 @@ def extract_silkscreen(root: list, footprints: list[dict]) -> dict:
     # Combine all visible silk text for checking
     all_silk_text = [t["text"] for t in board_texts]
     all_silk_text.extend(t["text"] for t in user_silk_texts)
-    all_silk_upper = " ".join(t.upper() for t in all_silk_text)
 
     documentation_warnings = []
 
@@ -3279,7 +3289,8 @@ def extract_silkscreen(root: list, footprints: list[dict]) -> dict:
             "type": "missing_switch_labels",
             "severity": "warning",
             "components": switches_without_labels,
-            "message": f"Switches without function labels on silkscreen: {switches_without_labels}. "
+            "message": f"Switches without function labels on silkscreen: "
+                f"{switches_without_labels}. "
                        "Add ON/OFF, RESET, BOOT, or function description near each switch.",
         })
 
@@ -3298,7 +3309,8 @@ def extract_silkscreen(root: list, footprints: list[dict]) -> dict:
             "type": "missing_connector_labels",
             "severity": "suggestion",
             "components": connectors_without_labels,
-            "message": f"Connectors (3+ pins) without silkscreen labels: {connectors_without_labels}. "
+            "message": f"Connectors (3+ pins) without silkscreen labels: "
+                f"{connectors_without_labels}. "
                        "Consider adding pin names, signal names, or connector function labels.",
         })
 
@@ -3342,7 +3354,8 @@ def extract_silkscreen(root: list, footprints: list[dict]) -> dict:
         "copper_weight": any(k in _fab_all_text for k in
                              ("1oz", "2oz", "1 oz", "2 oz", "copper weight", "35um", "70um")),
         "solder_mask": any(k in _fab_all_text for k in
-                           ("solder mask", "soldermask", "mask color", "green", "black", "white", "blue")),
+                           ("solder mask", "soldermask", "mask color", "green", "black", "white",
+                            "blue")),
         "material": any(k in _fab_all_text for k in
                         ("fr4", "fr-4", "rogers", "isola", "material")),
     }
@@ -3350,7 +3363,9 @@ def extract_silkscreen(root: list, footprints: list[dict]) -> dict:
     result["fab_notes_completeness"] = {
         "checks": _fab_notes_checklist,
         "missing": _fab_missing,
-        "completeness_pct": round(sum(_fab_notes_checklist.values()) / len(_fab_notes_checklist) * 100),
+        "completeness_pct": round(
+            sum(_fab_notes_checklist.values()) / len(_fab_notes_checklist) * 100
+        ),
         "status": "pass" if not _fab_missing else "warning",
     }
 
@@ -3359,7 +3374,9 @@ def extract_silkscreen(root: list, footprints: list[dict]) -> dict:
     _silk_checks = {
         "revision_marking": has_revision,
         "board_name": has_board_name,
-        "ref_designators_visible": (refs_visible / _total_refs >= 0.9) if _total_refs > 0 else False,
+        "ref_designators_visible": (
+            (refs_visible / _total_refs >= 0.9) if _total_refs > 0 else False
+        ),
         "connector_labels": len(connectors_without_labels) == 0,
         "polarity_markers": not any(
             w["type"] == "polarity_reminder" for w in documentation_warnings
@@ -3450,13 +3467,18 @@ def analyze_placement(footprints: list[dict], outline: dict) -> dict:
                     "severity": severity,
                     "confidence": "deterministic",
                     "evidence_source": "topology",
-                    "summary": f"Courtyard overlap between {fp_a['reference']} and {fp_b['reference']} ({overlap_mm2}mm\u00b2){rf_note}",
-                    "description": f"Components {fp_a['reference']} and {fp_b['reference']} have overlapping courtyards on {fp_a['layer']} ({overlap_mm2}mm\u00b2 overlap area).",
+                    "summary": f"Courtyard overlap between {fp_a['reference']} and "
+                        f"{fp_b['reference']} ({overlap_mm2}mm\u00b2){rf_note}",
+                    "description": f"Components {fp_a['reference']} and {fp_b['reference']} have "
+                        f"overlapping courtyards on {fp_a['layer']} ({overlap_mm2}mm\u00b2 overlap "
+                            f"area).",
                     "components": [fp_a["reference"], fp_b["reference"]],
                     "nets": [],
                     "pins": [],
-                    "recommendation": f"Resolve courtyard overlap between {fp_a['reference']} and {fp_b['reference']} — move components apart or adjust courtyard geometry",
-                    "report_context": {"section": "Placement", "impact": "assembly", "standard_ref": ""},
+                    "recommendation": f"Resolve courtyard overlap between {fp_a['reference']} and "
+                        f"{fp_b['reference']} — move components apart or adjust courtyard geometry",
+                    "report_context": {"section": "Placement", "impact": "assembly",
+                                       "standard_ref": ""},
                 })
 
     overlaps.sort(key=lambda o: o["overlap_mm2"], reverse=True)
@@ -3515,12 +3537,16 @@ def analyze_placement(footprints: list[dict], outline: dict) -> dict:
                     "confidence": "deterministic",
                     "evidence_source": "topology",
                     "summary": f"{fp['reference']} is {clearance}mm from board edge{rf_suffix}",
-                    "description": f"Component {fp['reference']} on {fp['layer']} is only {clearance}mm from the board edge, risking damage during depaneling or handling.",
+                    "description": f"Component {fp['reference']} on {fp['layer']} is only "
+                        f"{clearance}mm from the board edge, risking damage during depaneling or "
+                            f"handling.",
                     "components": [fp["reference"]],
                     "nets": [],
                     "pins": [],
-                    "recommendation": f"Move {fp['reference']} further from board edge (currently {clearance}mm, recommend >= 1.0mm)",
-                    "report_context": {"section": "Placement", "impact": "manufacturability", "standard_ref": ""},
+                    "recommendation": f"Move {fp['reference']} further from board edge (currently "
+                        f"{clearance}mm, recommend >= 1.0mm)",
+                    "report_context": {"section": "Placement", "impact": "manufacturability",
+                                       "standard_ref": ""},
                 })
 
     edge_close.sort(key=lambda e: e["edge_clearance_mm"])
@@ -3625,7 +3651,7 @@ def compute_statistics(footprints: list[dict], tracks: dict, vias: dict,
     # EQ-059: d = √(w²+h²) (board diagonal)
     # Resolve copper layer names from declarations
     if layers:
-        copper_layer_names = {l["name"] for l in layers if "Cu" in l["name"]}
+        copper_layer_names = {layer["name"] for layer in layers if "Cu" in layer["name"]}
     else:
         copper_layer_names = None
     # F.Cu/B.Cu names are invariant across all KiCad versions (5-9)
@@ -3651,15 +3677,15 @@ def compute_statistics(footprints: list[dict], tracks: dict, vias: dict,
     for seg in tracks.get("segments", []):
         all_used_layers.add(seg.get("layer", ""))
     for via in vias.get("vias", []):
-        for l in via.get("layers", []):
-            all_used_layers.add(l)
+        for layer in via.get("layers", []):
+            all_used_layers.add(layer)
     for zone in zones:
-        for l in zone.get("layers", []):
-            all_used_layers.add(l)
+        for layer in zone.get("layers", []):
+            all_used_layers.add(layer)
     if copper_layer_names:
         copper_layers = all_used_layers & copper_layer_names
     else:
-        copper_layers = {l for l in all_used_layers if "Cu" in l}
+        copper_layers = {layer for layer in all_used_layers if "Cu" in layer}
 
     return {
         "footprint_count": len(footprints),
@@ -3673,9 +3699,17 @@ def compute_statistics(footprints: list[dict], tracks: dict, vias: dict,
         "via_count": vias["count"],
         "zone_count": len(zones),
         "total_track_length_mm": round(total_length, 2),
-        "board_width_mm": outline["bounding_box"]["width"] if outline.get("bounding_box") else None,
-        "board_height_mm": outline["bounding_box"]["height"] if outline.get("bounding_box") else None,
-        "board_area_mm2": round(outline["bounding_box"]["width"] * outline["bounding_box"]["height"], 1) if outline.get("bounding_box") else None,
+        "board_width_mm": (
+            outline["bounding_box"]["width"] if outline.get("bounding_box") else None
+        ),
+        "board_height_mm": (
+            outline["bounding_box"]["height"] if outline.get("bounding_box") else None
+        ),
+        "board_area_mm2": (
+            round(outline["bounding_box"]["width"] * outline["bounding_box"]["height"], 1)
+            if outline.get("bounding_box")
+            else None
+        ),
         "net_count": sum(1 for v in (net_names or {}).values() if v),
         "routing_complete": connectivity.get("routing_complete", False),
         "unrouted_net_count": connectivity.get("unrouted_count", 0),
@@ -3863,7 +3897,7 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
     # JLCPCB standard process limits (mm)
     # Source: JLCPCB capabilities page, verified 2025-01.
     # Canonical table in references/standards-compliance.md "Fab House Capabilities"
-    LIMITS_STD = {
+    limits_std = {
         "min_track_width": 0.127,      # 5 mil — JLCPCB standard tier
         "min_track_spacing": 0.127,     # 5 mil — JLCPCB standard tier
         "min_drill": 0.2,              # PTH drill — JLCPCB standard tier
@@ -3873,7 +3907,7 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
         "min_board_dim": 10.0,         # handling minimum
     }
     # JLCPCB advanced process limits (mm)
-    LIMITS_ADV = {
+    limits_adv = {
         "min_track_width": 0.1,        # 4 mil — JLCPCB advanced tier
         "min_track_spacing": 0.1,      # 4 mil — JLCPCB advanced tier
         "min_drill": 0.15,             # JLCPCB advanced tier
@@ -3882,7 +3916,7 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
 
     # IPC class thresholds (design quality ceiling)
     # Source: IPC-6012 Rev E, verified against industry guidelines
-    IPC_CLASS_LIMITS = {
+    ipc_class_limits = {
         1: {
             'min_annular_ring_via': 0.10,    # mm
             'min_annular_ring_pth': 0.10,    # mm
@@ -3905,7 +3939,7 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
     ipc_class = 2  # default
     if design_intent and design_intent.get('ipc_class') in (1, 2, 3):
         ipc_class = design_intent['ipc_class']
-    ipc_limits = IPC_CLASS_LIMITS[ipc_class]
+    ipc_limits = ipc_class_limits[ipc_class]
 
     # Build net name -> net class lookup for net-class-aware checks
     _net_class_lookup: dict[str, dict] = {}  # net_name -> class constraints
@@ -3936,7 +3970,7 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
         seg_net_name = seg.get("net_name", "")
         nc = _net_class_lookup.get(seg_net_name)
         if nc and nc.get('trace_width') is not None:
-            if w < LIMITS_ADV["min_track_width"]:
+            if w < limits_adv["min_track_width"]:
                 narrowest_non_class = min(narrowest_non_class, w)
         else:
             narrowest_non_class = min(narrowest_non_class, w)
@@ -3947,7 +3981,7 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
         arc_net_name = arc.get("net_name", "")
         nc = _net_class_lookup.get(arc_net_name)
         if nc and nc.get('trace_width') is not None:
-            if w < LIMITS_ADV["min_track_width"]:
+            if w < limits_adv["min_track_width"]:
                 narrowest_non_class = min(narrowest_non_class, w)
         else:
             narrowest_non_class = min(narrowest_non_class, w)
@@ -3960,53 +3994,61 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
                        if narrowest_non_class < float('inf')
                        else min_width)
 
-        if check_width < LIMITS_ADV["min_track_width"]:
+        if check_width < limits_adv["min_track_width"]:
             violations.append({
                 "parameter": "track_width",
                 "actual_mm": check_width,
-                "standard_limit_mm": LIMITS_STD["min_track_width"],
-                "advanced_limit_mm": LIMITS_ADV["min_track_width"],
+                "standard_limit_mm": limits_std["min_track_width"],
+                "advanced_limit_mm": limits_adv["min_track_width"],
                 "tier_required": "challenging",
                 "message": f"Track width {check_width}mm is below advanced "
                            f"process minimum "
-                           f"({LIMITS_ADV['min_track_width']}mm)",
+                           f"({limits_adv['min_track_width']}mm)",
                 "detector": "analyze_dfm",
                 "rule_id": "DFM-001",
                 "category": "dfm",
                 "severity": "error",
                 "confidence": "deterministic",
                 "evidence_source": "topology",
-                "summary": f"Track width {check_width}mm below advanced minimum ({LIMITS_ADV['min_track_width']}mm)",
-                "description": f"Track width {check_width}mm is below the advanced process minimum of {LIMITS_ADV['min_track_width']}mm, requiring a challenging fab tier.",
+                "summary": f"Track width {check_width}mm below advanced minimum "
+                    f"({limits_adv['min_track_width']}mm)",
+                "description": f"Track width {check_width}mm is below the advanced process minimum "
+                    f"of {limits_adv['min_track_width']}mm, requiring a challenging fab tier.",
                 "components": [],
                 "nets": [],
                 "pins": [],
-                "recommendation": f"Track width {check_width}mm is below advanced process minimum ({LIMITS_ADV['min_track_width']}mm)",
-                "report_context": {"section": "DFM", "impact": "manufacturability", "standard_ref": ""},
+                "recommendation": f"Track width {check_width}mm is below advanced process minimum "
+                    f"({limits_adv['min_track_width']}mm)",
+                "report_context": {"section": "DFM", "impact": "manufacturability",
+                                   "standard_ref": ""},
             })
-        elif check_width < LIMITS_STD["min_track_width"]:
+        elif check_width < limits_std["min_track_width"]:
             violations.append({
                 "parameter": "track_width",
                 "actual_mm": check_width,
-                "standard_limit_mm": LIMITS_STD["min_track_width"],
-                "advanced_limit_mm": LIMITS_ADV["min_track_width"],
+                "standard_limit_mm": limits_std["min_track_width"],
+                "advanced_limit_mm": limits_adv["min_track_width"],
                 "tier_required": "advanced",
                 "message": f"Track width {check_width}mm requires advanced "
                            f"process (standard minimum: "
-                           f"{LIMITS_STD['min_track_width']}mm)",
+                           f"{limits_std['min_track_width']}mm)",
                 "detector": "analyze_dfm",
                 "rule_id": "DFM-001",
                 "category": "dfm",
                 "severity": "warning",
                 "confidence": "deterministic",
                 "evidence_source": "topology",
-                "summary": f"Track width {check_width}mm requires advanced process (standard: {LIMITS_STD['min_track_width']}mm)",
-                "description": f"Track width {check_width}mm is below the standard process minimum of {LIMITS_STD['min_track_width']}mm, requiring an advanced fab tier.",
+                "summary": f"Track width {check_width}mm requires advanced process (standard: "
+                    f"{limits_std['min_track_width']}mm)",
+                "description": f"Track width {check_width}mm is below the standard process minimum "
+                    f"of {limits_std['min_track_width']}mm, requiring an advanced fab tier.",
                 "components": [],
                 "nets": [],
                 "pins": [],
-                "recommendation": f"Track width {check_width}mm requires advanced process (standard minimum: {LIMITS_STD['min_track_width']}mm)",
-                "report_context": {"section": "DFM", "impact": "manufacturability", "standard_ref": ""},
+                "recommendation": f"Track width {check_width}mm requires advanced process "
+                    f"(standard minimum: {limits_std['min_track_width']}mm)",
+                "report_context": {"section": "DFM", "impact": "manufacturability",
+                                   "standard_ref": ""},
             })
 
     # --- Track spacing analysis (approximate from segment proximity) ---
@@ -4042,53 +4084,65 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
 
         if min_spacing < float("inf"):
             metrics["approx_min_spacing_mm"] = round(min_spacing, 4)
-            if min_spacing < LIMITS_ADV["min_track_spacing"]:
+            if min_spacing < limits_adv["min_track_spacing"]:
                 violations.append({
                     "parameter": "track_spacing",
                     "actual_mm": round(min_spacing, 4),
-                    "standard_limit_mm": LIMITS_STD["min_track_spacing"],
-                    "advanced_limit_mm": LIMITS_ADV["min_track_spacing"],
+                    "standard_limit_mm": limits_std["min_track_spacing"],
+                    "advanced_limit_mm": limits_adv["min_track_spacing"],
                     "tier_required": "challenging",
                     "message": f"Approximate track spacing {round(min_spacing, 4)}mm is below "
-                               f"advanced process minimum ({LIMITS_ADV['min_track_spacing']}mm)",
-                    "note": "Spacing is approximate (endpoint-to-endpoint, not full segment geometry)",
+                               f"advanced process minimum ({limits_adv['min_track_spacing']}mm)",
+                    "note": "Spacing is approximate (endpoint-to-endpoint, not full segment "
+                        "geometry)",
                     "detector": "analyze_dfm",
                     "rule_id": "DFM-001",
                     "category": "dfm",
                     "severity": "error",
                     "confidence": "deterministic",
                     "evidence_source": "topology",
-                    "summary": f"Track spacing {round(min_spacing, 4)}mm below advanced minimum ({LIMITS_ADV['min_track_spacing']}mm)",
-                    "description": f"Approximate track spacing {round(min_spacing, 4)}mm is below the advanced process minimum of {LIMITS_ADV['min_track_spacing']}mm.",
+                    "summary": f"Track spacing {round(min_spacing, 4)}mm below advanced minimum "
+                        f"({limits_adv['min_track_spacing']}mm)",
+                    "description": f"Approximate track spacing {round(min_spacing, 4)}mm is below "
+                        f"the advanced process minimum of {limits_adv['min_track_spacing']}mm.",
                     "components": [],
                     "nets": [],
                     "pins": [],
-                    "recommendation": f"Approximate track spacing {round(min_spacing, 4)}mm is below advanced process minimum ({LIMITS_ADV['min_track_spacing']}mm)",
-                    "report_context": {"section": "DFM", "impact": "manufacturability", "standard_ref": ""},
+                    "recommendation": f"Approximate track spacing {round(min_spacing, 4)}mm is "
+                        f"below advanced process minimum ({limits_adv['min_track_spacing']}mm)",
+                    "report_context": {"section": "DFM", "impact": "manufacturability",
+                                       "standard_ref": ""},
                 })
-            elif min_spacing < LIMITS_STD["min_track_spacing"]:
+            elif min_spacing < limits_std["min_track_spacing"]:
                 violations.append({
                     "parameter": "track_spacing",
                     "actual_mm": round(min_spacing, 4),
-                    "standard_limit_mm": LIMITS_STD["min_track_spacing"],
-                    "advanced_limit_mm": LIMITS_ADV["min_track_spacing"],
+                    "standard_limit_mm": limits_std["min_track_spacing"],
+                    "advanced_limit_mm": limits_adv["min_track_spacing"],
                     "tier_required": "advanced",
                     "message": f"Approximate track spacing {round(min_spacing, 4)}mm requires "
-                               f"advanced process (standard: {LIMITS_STD['min_track_spacing']}mm)",
-                    "note": "Spacing is approximate (endpoint-to-endpoint, not full segment geometry)",
+                               f"advanced process (standard: {limits_std['min_track_spacing']}mm)",
+                    "note": "Spacing is approximate (endpoint-to-endpoint, not full segment "
+                        "geometry)",
                     "detector": "analyze_dfm",
                     "rule_id": "DFM-001",
                     "category": "dfm",
                     "severity": "warning",
                     "confidence": "deterministic",
                     "evidence_source": "topology",
-                    "summary": f"Track spacing {round(min_spacing, 4)}mm requires advanced process (standard: {LIMITS_STD['min_track_spacing']}mm)",
-                    "description": f"Approximate track spacing {round(min_spacing, 4)}mm requires an advanced fab tier (standard minimum: {LIMITS_STD['min_track_spacing']}mm).",
+                    "summary": f"Track spacing {round(min_spacing, 4)}mm requires advanced process "
+                        f"(standard: {limits_std['min_track_spacing']}mm)",
+                    "description": f"Approximate track spacing {round(min_spacing, 4)}mm requires "
+                        f"an advanced fab tier (standard minimum: "
+                            f"{limits_std['min_track_spacing']}mm).",
                     "components": [],
                     "nets": [],
                     "pins": [],
-                    "recommendation": f"Approximate track spacing {round(min_spacing, 4)}mm requires advanced process (standard: {LIMITS_STD['min_track_spacing']}mm)",
-                    "report_context": {"section": "DFM", "impact": "manufacturability", "standard_ref": ""},
+                    "recommendation": f"Approximate track spacing {round(min_spacing, 4)}mm "
+                        f"requires advanced process (standard: "
+                            f"{limits_std['min_track_spacing']}mm)",
+                    "report_context": {"section": "DFM", "impact": "manufacturability",
+                                       "standard_ref": ""},
                 })
 
     # --- Via drill analysis ---
@@ -4098,51 +4152,59 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
         if drills:
             min_drill = min(drills)
             metrics["min_drill_mm"] = min_drill
-            if min_drill < LIMITS_ADV["min_drill"]:
+            if min_drill < limits_adv["min_drill"]:
                 violations.append({
                     "parameter": "via_drill",
                     "actual_mm": min_drill,
-                    "standard_limit_mm": LIMITS_STD["min_drill"],
-                    "advanced_limit_mm": LIMITS_ADV["min_drill"],
+                    "standard_limit_mm": limits_std["min_drill"],
+                    "advanced_limit_mm": limits_adv["min_drill"],
                     "tier_required": "challenging",
                     "message": f"Via drill {min_drill}mm is below advanced process "
-                               f"minimum ({LIMITS_ADV['min_drill']}mm)",
+                               f"minimum ({limits_adv['min_drill']}mm)",
                     "detector": "analyze_dfm",
                     "rule_id": "DFM-001",
                     "category": "dfm",
                     "severity": "error",
                     "confidence": "deterministic",
                     "evidence_source": "topology",
-                    "summary": f"Via drill {min_drill}mm below advanced minimum ({LIMITS_ADV['min_drill']}mm)",
-                    "description": f"Via drill {min_drill}mm is below the advanced process minimum of {LIMITS_ADV['min_drill']}mm, requiring a challenging fab tier.",
+                    "summary": f"Via drill {min_drill}mm below advanced minimum "
+                        f"({limits_adv['min_drill']}mm)",
+                    "description": f"Via drill {min_drill}mm is below the advanced process minimum "
+                        f"of {limits_adv['min_drill']}mm, requiring a challenging fab tier.",
                     "components": [],
                     "nets": [],
                     "pins": [],
-                    "recommendation": f"Via drill {min_drill}mm is below advanced process minimum ({LIMITS_ADV['min_drill']}mm)",
-                    "report_context": {"section": "DFM", "impact": "manufacturability", "standard_ref": ""},
+                    "recommendation": f"Via drill {min_drill}mm is below advanced process minimum "
+                        f"({limits_adv['min_drill']}mm)",
+                    "report_context": {"section": "DFM", "impact": "manufacturability",
+                                       "standard_ref": ""},
                 })
-            elif min_drill < LIMITS_STD["min_drill"]:
+            elif min_drill < limits_std["min_drill"]:
                 violations.append({
                     "parameter": "via_drill",
                     "actual_mm": min_drill,
-                    "standard_limit_mm": LIMITS_STD["min_drill"],
-                    "advanced_limit_mm": LIMITS_ADV["min_drill"],
+                    "standard_limit_mm": limits_std["min_drill"],
+                    "advanced_limit_mm": limits_adv["min_drill"],
                     "tier_required": "advanced",
                     "message": f"Via drill {min_drill}mm requires advanced process "
-                               f"(standard: {LIMITS_STD['min_drill']}mm)",
+                               f"(standard: {limits_std['min_drill']}mm)",
                     "detector": "analyze_dfm",
                     "rule_id": "DFM-001",
                     "category": "dfm",
                     "severity": "warning",
                     "confidence": "deterministic",
                     "evidence_source": "topology",
-                    "summary": f"Via drill {min_drill}mm requires advanced process (standard: {LIMITS_STD['min_drill']}mm)",
-                    "description": f"Via drill {min_drill}mm is below the standard process minimum of {LIMITS_STD['min_drill']}mm, requiring an advanced fab tier.",
+                    "summary": f"Via drill {min_drill}mm requires advanced process (standard: "
+                        f"{limits_std['min_drill']}mm)",
+                    "description": f"Via drill {min_drill}mm is below the standard process minimum "
+                        f"of {limits_std['min_drill']}mm, requiring an advanced fab tier.",
                     "components": [],
                     "nets": [],
                     "pins": [],
-                    "recommendation": f"Via drill {min_drill}mm requires advanced process (standard: {LIMITS_STD['min_drill']}mm)",
-                    "report_context": {"section": "DFM", "impact": "manufacturability", "standard_ref": ""},
+                    "recommendation": f"Via drill {min_drill}mm requires advanced process "
+                        f"(standard: {limits_std['min_drill']}mm)",
+                    "report_context": {"section": "DFM", "impact": "manufacturability",
+                                       "standard_ref": ""},
                 })
 
     # --- Annular ring analysis ---
@@ -4156,51 +4218,61 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
         if rings:
             min_ring = min(rings)
             metrics["min_annular_ring_mm"] = min_ring
-            if min_ring < LIMITS_ADV["min_annular_ring"]:
+            if min_ring < limits_adv["min_annular_ring"]:
                 violations.append({
                     "parameter": "annular_ring",
                     "actual_mm": min_ring,
-                    "standard_limit_mm": LIMITS_STD["min_annular_ring"],
-                    "advanced_limit_mm": LIMITS_ADV["min_annular_ring"],
+                    "standard_limit_mm": limits_std["min_annular_ring"],
+                    "advanced_limit_mm": limits_adv["min_annular_ring"],
                     "tier_required": "challenging",
                     "message": f"Annular ring {min_ring}mm is below advanced process "
-                               f"minimum ({LIMITS_ADV['min_annular_ring']}mm)",
+                               f"minimum ({limits_adv['min_annular_ring']}mm)",
                     "detector": "analyze_dfm",
                     "rule_id": "DFM-001",
                     "category": "dfm",
                     "severity": "error",
                     "confidence": "deterministic",
                     "evidence_source": "topology",
-                    "summary": f"Annular ring {min_ring}mm below advanced minimum ({LIMITS_ADV['min_annular_ring']}mm)",
-                    "description": f"Annular ring {min_ring}mm is below the advanced process minimum of {LIMITS_ADV['min_annular_ring']}mm, requiring a challenging fab tier.",
+                    "summary": f"Annular ring {min_ring}mm below advanced minimum "
+                        f"({limits_adv['min_annular_ring']}mm)",
+                    "description": f"Annular ring {min_ring}mm is below the advanced process "
+                        f"minimum of {limits_adv['min_annular_ring']}mm, requiring a challenging "
+                            f"fab tier.",
                     "components": [],
                     "nets": [],
                     "pins": [],
-                    "recommendation": f"Annular ring {min_ring}mm is below advanced process minimum ({LIMITS_ADV['min_annular_ring']}mm)",
-                    "report_context": {"section": "DFM", "impact": "manufacturability", "standard_ref": ""},
+                    "recommendation": f"Annular ring {min_ring}mm is below advanced process "
+                        f"minimum ({limits_adv['min_annular_ring']}mm)",
+                    "report_context": {"section": "DFM", "impact": "manufacturability",
+                                       "standard_ref": ""},
                 })
-            elif min_ring < LIMITS_STD["min_annular_ring"]:
+            elif min_ring < limits_std["min_annular_ring"]:
                 violations.append({
                     "parameter": "annular_ring",
                     "actual_mm": min_ring,
-                    "standard_limit_mm": LIMITS_STD["min_annular_ring"],
-                    "advanced_limit_mm": LIMITS_ADV["min_annular_ring"],
+                    "standard_limit_mm": limits_std["min_annular_ring"],
+                    "advanced_limit_mm": limits_adv["min_annular_ring"],
                     "tier_required": "advanced",
                     "message": f"Annular ring {min_ring}mm requires advanced process "
-                               f"(standard: {LIMITS_STD['min_annular_ring']}mm)",
+                               f"(standard: {limits_std['min_annular_ring']}mm)",
                     "detector": "analyze_dfm",
                     "rule_id": "DFM-001",
                     "category": "dfm",
                     "severity": "warning",
                     "confidence": "deterministic",
                     "evidence_source": "topology",
-                    "summary": f"Annular ring {min_ring}mm requires advanced process (standard: {LIMITS_STD['min_annular_ring']}mm)",
-                    "description": f"Annular ring {min_ring}mm is below the standard process minimum of {LIMITS_STD['min_annular_ring']}mm, requiring an advanced fab tier.",
+                    "summary": f"Annular ring {min_ring}mm requires advanced process (standard: "
+                        f"{limits_std['min_annular_ring']}mm)",
+                    "description": f"Annular ring {min_ring}mm is below the standard process "
+                        f"minimum of {limits_std['min_annular_ring']}mm, requiring an advanced fab "
+                            f"tier.",
                     "components": [],
                     "nets": [],
                     "pins": [],
-                    "recommendation": f"Annular ring {min_ring}mm requires advanced process (standard: {LIMITS_STD['min_annular_ring']}mm)",
-                    "report_context": {"section": "DFM", "impact": "manufacturability", "standard_ref": ""},
+                    "recommendation": f"Annular ring {min_ring}mm requires advanced process "
+                        f"(standard: {limits_std['min_annular_ring']}mm)",
+                    "report_context": {"section": "DFM", "impact": "manufacturability",
+                                       "standard_ref": ""},
                 })
 
     # --- IPC class annular ring compliance ---
@@ -4222,13 +4294,17 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
                 "severity": "warning",
                 "confidence": "deterministic",
                 "evidence_source": "topology",
-                "summary": f"Via annular ring {min_ring}mm below IPC Class {ipc_class} minimum {ipc_min_via}mm",
-                "description": f"Via annular ring {min_ring}mm does not meet IPC Class {ipc_class} minimum of {ipc_min_via}mm.",
+                "summary": f"Via annular ring {min_ring}mm below IPC Class {ipc_class} minimum "
+                    f"{ipc_min_via}mm",
+                "description": f"Via annular ring {min_ring}mm does not meet IPC Class {ipc_class} "
+                    f"minimum of {ipc_min_via}mm.",
                 "components": [],
                 "nets": [],
                 "pins": [],
-                "recommendation": f"Increase via annular ring to at least {ipc_min_via}mm to meet IPC Class {ipc_class} requirements",
-                "report_context": {"section": "DFM", "impact": "compliance", "standard_ref": f"IPC-6012 Class {ipc_class}"},
+                "recommendation": f"Increase via annular ring to at least {ipc_min_via}mm to meet "
+                    f"IPC Class {ipc_class} requirements",
+                "report_context": {"section": "DFM", "impact": "compliance",
+                                   "standard_ref": f"IPC-6012 Class {ipc_class}"},
             })
 
     # Class 3: check for breakout (annular ring <= 0 means breakout)
@@ -4247,13 +4323,17 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
                 "severity": "warning",
                 "confidence": "deterministic",
                 "evidence_source": "topology",
-                "summary": f"{breakout_count} vias with annular ring breakout (IPC Class 3 violation)",
-                "description": f"{breakout_count} vias have annular ring breakout, which is not allowed for IPC Class 3.",
+                "summary": f"{breakout_count} vias with annular ring breakout (IPC Class 3 "
+                    f"violation)",
+                "description": f"{breakout_count} vias have annular ring breakout, which is not "
+                    f"allowed for IPC Class 3.",
                 "components": [],
                 "nets": [],
                 "pins": [],
-                "recommendation": "Increase via annular ring to eliminate breakout for IPC Class 3 compliance",
-                "report_context": {"section": "DFM", "impact": "compliance", "standard_ref": "IPC-6012 Class 3"},
+                "recommendation": "Increase via annular ring to eliminate breakout for IPC Class 3 "
+                    "compliance",
+                "report_context": {"section": "DFM", "impact": "compliance",
+                                   "standard_ref": "IPC-6012 Class 3"},
             })
 
     # Class 3: via-in-pad fill requirement
@@ -4274,12 +4354,15 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
                 "confidence": "deterministic",
                 "evidence_source": "topology",
                 "summary": f"{len(vip_vias)} via-in-pad instances require fill for IPC Class 3",
-                "description": f"{len(vip_vias)} via-in-pad instances detected; IPC Class 3 requires filled and plated-over via-in-pad.",
+                "description": f"{len(vip_vias)} via-in-pad instances detected; IPC Class 3 "
+                    f"requires filled and plated-over via-in-pad.",
                 "components": [],
                 "nets": [],
                 "pins": [],
-                "recommendation": "Ensure via-in-pad instances are filled and plated-over for IPC Class 3 compliance",
-                "report_context": {"section": "DFM", "impact": "compliance", "standard_ref": "IPC-6012 Class 3"},
+                "recommendation": "Ensure via-in-pad instances are filled and plated-over for IPC "
+                    "Class 3 compliance",
+                "report_context": {"section": "DFM", "impact": "compliance",
+                                   "standard_ref": "IPC-6012 Class 3"},
             })
 
     # --- Board dimensions assessment ---
@@ -4290,12 +4373,12 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
         metrics["board_width_mm"] = width
         metrics["board_height_mm"] = height
 
-        if width > LIMITS_STD["max_board_width"] or height > LIMITS_STD["max_board_height"]:
+        if width > limits_std["max_board_width"] or height > limits_std["max_board_height"]:
             violations.append({
                 "parameter": "board_size",
                 "actual_mm": [width, height],
-                "threshold_mm": [LIMITS_STD["max_board_width"],
-                                 LIMITS_STD["max_board_height"]],
+                "threshold_mm": [limits_std["max_board_width"],
+                                 limits_std["max_board_height"]],
                 "tier_required": "standard",
                 "message": f"Board size {width}x{height}mm exceeds 100x100mm — "
                            f"higher fabrication pricing tier at JLCPCB",
@@ -4306,19 +4389,21 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
                 "confidence": "deterministic",
                 "evidence_source": "topology",
                 "summary": f"Board size {width}x{height}mm exceeds 100x100mm pricing threshold",
-                "description": f"Board size {width}x{height}mm exceeds the 100x100mm threshold, resulting in higher fabrication pricing at JLCPCB.",
+                "description": f"Board size {width}x{height}mm exceeds the 100x100mm threshold, "
+                    f"resulting in higher fabrication pricing at JLCPCB.",
                 "components": [],
                 "nets": [],
                 "pins": [],
-                "recommendation": f"Board size {width}x{height}mm exceeds 100x100mm — higher fabrication pricing tier at JLCPCB",
+                "recommendation": f"Board size {width}x{height}mm exceeds 100x100mm — higher "
+                    f"fabrication pricing tier at JLCPCB",
                 "report_context": {"section": "DFM", "impact": "cost", "standard_ref": ""},
             })
 
-        if width < LIMITS_STD["min_board_dim"] and height < LIMITS_STD["min_board_dim"]:
+        if width < limits_std["min_board_dim"] and height < limits_std["min_board_dim"]:
             violations.append({
                 "parameter": "board_size_small",
                 "actual_mm": [width, height],
-                "threshold_mm": LIMITS_STD["min_board_dim"],
+                "threshold_mm": limits_std["min_board_dim"],
                 "tier_required": "standard",
                 "message": f"Board size {width}x{height}mm is very small — "
                            f"may have handling concerns during fabrication",
@@ -4329,12 +4414,15 @@ def analyze_dfm(footprints: list[dict], tracks: dict, vias: dict,
                 "confidence": "deterministic",
                 "evidence_source": "topology",
                 "summary": f"Board size {width}x{height}mm is very small — handling concerns",
-                "description": f"Board size {width}x{height}mm is below the minimum dimension threshold, which may cause handling issues during fabrication.",
+                "description": f"Board size {width}x{height}mm is below the minimum dimension "
+                    f"threshold, which may cause handling issues during fabrication.",
                 "components": [],
                 "nets": [],
                 "pins": [],
-                "recommendation": f"Board size {width}x{height}mm is very small — may have handling concerns during fabrication",
-                "report_context": {"section": "DFM", "impact": "manufacturability", "standard_ref": ""},
+                "recommendation": f"Board size {width}x{height}mm is very small — may have "
+                    f"handling concerns during fabrication",
+                "report_context": {"section": "DFM", "impact": "manufacturability",
+                                   "standard_ref": ""},
             })
 
     # --- Determine overall DFM tier ---
@@ -4757,7 +4845,8 @@ def analyze_tombstoning_risk(footprints: list[dict], tracks: dict,
                 "confidence": "deterministic",
                 "evidence_source": "topology",
                 "summary": f"{fp['reference']} ({sp['package']}) tombstoning risk: {risk_level}",
-                "description": f"{fp['reference']} ({sp['package']}, {fp.get('value', '')}) has {risk_level} tombstoning risk due to thermal asymmetry between pads.",
+                "description": f"{fp['reference']} ({sp['package']}, {fp.get('value', '')}) has "
+                    f"{risk_level} tombstoning risk due to thermal asymmetry between pads.",
                 "components": [fp["reference"]],
                 "nets": [],
                 "pins": [],
@@ -5097,7 +5186,10 @@ def analyze_thermal_pad_vias(footprints: list[dict], vias: dict,
             entry["severity"] = "warning" if adequacy in ("none", "insufficient") else "info"
             entry["confidence"] = "deterministic"
             entry["evidence_source"] = "topology"
-            entry["summary"] = f"Thermal vias: {ref} {adequacy} ({strict_via_count}/{recommended_min} min)"
+            entry["summary"] = (
+                f"Thermal vias: {ref} {adequacy} "
+                f"({strict_via_count}/{recommended_min} min)"
+            )
             entry["description"] = (
                 f"Thermal pad on {ref} pad {pad_num}: {adequacy} "
                 f"({strict_via_count} vias, {recommended_min} recommended)."
@@ -5107,7 +5199,8 @@ def analyze_thermal_pad_vias(footprints: list[dict], vias: dict,
             entry["pins"] = []
             rec = []
             if adequacy in ("none", "insufficient"):
-                rec.append(f"Add thermal vias under {ref} (need {recommended_min}, have {strict_via_count}).")
+                rec.append(f"Add thermal vias under {ref} (need {recommended_min}, have "
+                    f"{strict_via_count}).")
             if entry.get("tenting_note"):
                 rec.append(entry["tenting_note"])
             entry["recommendation"] = " ".join(rec)
@@ -5414,7 +5507,8 @@ def _compute_switching_loop_areas(footprints: list, schematic_data: dict) -> lis
 
         ic_pos = fp_pos.get(ref)
         ind_pos = fp_pos.get(inductor_ref)
-        cap_ref = input_caps[0].get('ref', '') if isinstance(input_caps[0], dict) else str(input_caps[0])
+        cap_ref = input_caps[0].get('ref', '') if isinstance(input_caps[0],
+                                                             dict) else str(input_caps[0])
         cap_pos = fp_pos.get(cap_ref)
 
         if not ic_pos or not ind_pos or not cap_pos:
@@ -5540,12 +5634,15 @@ def analyze_fiducials(footprints: list[dict]) -> dict:
             "confidence": "deterministic",
             "evidence_source": "topology",
             "summary": summary,
-            "description": f"{side} has {count} fiducial(s) but {smd_count} SMD components. Assembly machines need >= 3 fiducials for accurate placement.",
+            "description": f"{side} has {count} fiducial(s) but {smd_count} SMD components. "
+                f"Assembly machines need >= 3 fiducials for accurate placement.",
             "components": fids,
             "nets": [],
             "pins": [],
-            "recommendation": "Add fiducial markers for pick-and-place alignment (3 per side with SMD).",
-            "report_context": {"section": "Assembly", "impact": "Pick-and-place alignment", "standard_ref": "IPC-7351"},
+            "recommendation": "Add fiducial markers for pick-and-place alignment (3 per side with "
+                "SMD).",
+            "report_context": {"section": "Assembly", "impact": "Pick-and-place alignment",
+                               "standard_ref": "IPC-7351"},
         })
 
     return {"findings": findings}
@@ -5588,7 +5685,8 @@ def analyze_test_point_coverage(footprints: list[dict], net_names: dict) -> dict
         "total_signal_nets": total,
         "nets_with_test_points": covered,
         "coverage_pct": round(pct, 1),
-        "test_point_count": len([fp for fp in footprints if fp.get("reference", "").upper().startswith("TP")]),
+        "test_point_count": len([fp for fp in footprints if fp.get("reference",
+                                                                   "").upper().startswith("TP")]),
         "detector": "analyze_test_point_coverage",
         "rule_id": "TE-001",
         "category": "testability",
@@ -5600,8 +5698,10 @@ def analyze_test_point_coverage(footprints: list[dict], net_names: dict) -> dict
         "components": [],
         "nets": [],
         "pins": [],
-        "recommendation": "Add test points to improve ICT/flying probe coverage." if pct < 95 else "",
-        "report_context": {"section": "Testability", "impact": "ICT accessibility", "standard_ref": ""},
+        "recommendation": "Add test points to improve ICT/flying probe "
+            "coverage." if pct < 95 else "",
+        "report_context": {"section": "Testability", "impact": "ICT accessibility",
+                           "standard_ref": ""},
     }
 
     return finding
@@ -5656,13 +5756,16 @@ def analyze_orientation_consistency(footprints: list[dict]) -> list[dict]:
             "severity": "info",
             "confidence": "heuristic",
             "evidence_source": "topology",
-            "summary": f"Orientation: {len(deviators)} passives on {side} deviate from {majority_angle} deg majority",
-            "description": f"{len(deviators)} of {len(components)} passives on {side} are not at the majority {majority_angle} deg orientation.",
+            "summary": f"Orientation: {len(deviators)} passives on {side} deviate from "
+                f"{majority_angle} deg majority",
+            "description": f"{len(deviators)} of {len(components)} passives on {side} are not at "
+                f"the majority {majority_angle} deg orientation.",
             "components": [ref for ref, _ in deviators[:20]],
             "nets": [],
             "pins": [],
             "recommendation": "Align passive component orientations for consistent pick-and-place.",
-            "report_context": {"section": "Assembly", "impact": "Pick-and-place efficiency", "standard_ref": ""},
+            "report_context": {"section": "Assembly", "impact": "Pick-and-place efficiency",
+                               "standard_ref": ""},
         })
 
     return findings
@@ -5722,12 +5825,14 @@ def analyze_silkscreen_pad_overlaps(footprints: list[dict], board_texts: list[di
                         "confidence": "heuristic",
                         "evidence_source": "topology",
                         "summary": f"Silkscreen overlaps pad on {ref} ({tlayer})",
-                        "description": f"Silkscreen text on {tlayer} overlaps an exposed SMD pad on {ref}.",
+                        "description": f"Silkscreen text on {tlayer} overlaps an exposed SMD pad "
+                            f"on {ref}.",
                         "components": [ref],
                         "nets": [],
                         "pins": [],
                         "recommendation": f"Move silkscreen text away from exposed pads on {ref}.",
-                        "report_context": {"section": "DFM", "impact": "Solder paste/solder joint interference", "standard_ref": ""},
+                        "report_context": {"section": "DFM", "impact": "Solder paste/solder joint "
+                            "interference", "standard_ref": ""},
                     })
 
     return findings
@@ -5769,9 +5874,9 @@ def analyze_via_in_pad(footprints: list[dict], vias: dict, thermal_pad_refs: set
         for ref, pad_num, net, x1, y1, x2, y2 in smd_pads:
             if x1 <= vx <= x2 and y1 <= vy <= y2:
                 # Check tenting
-                via_layers = via.get("layers", [])
                 # A via is tented if it has solder mask coverage (heuristic: look for F.Mask/B.Mask)
-                # KiCad doesn't export tenting directly in kicad_pcb; approximate from remove_unused_layers
+                #  KiCad doesn't export tenting directly in kicad_pcb; approximate from
+                # remove_unused_layers
                 tented = via.get("remove_unused_layers", False)
                 severity = "info" if tented else "warning"
                 findings.append({
@@ -5786,13 +5891,21 @@ def analyze_via_in_pad(footprints: list[dict], vias: dict, thermal_pad_refs: set
                     "severity": severity,
                     "confidence": "heuristic",
                     "evidence_source": "topology",
-                    "summary": f"Via in pad: {ref}:{pad_num} ({'tented' if tented else 'untented'})",
-                    "description": f"Via at ({round(vx, 2)}, {round(vy, 2)}) inside SMD pad {ref}:{pad_num}. {'Tented.' if tented else 'Not tented — solder may wick through.'}",
+                    "summary": f"Via in pad: {ref}:{pad_num} "
+                        f"({'tented' if tented else 'untented'})",
+                    "description": f"Via at ({round(vx, 2)}, {round(vy, 2)}) inside SMD pad "
+                        f"{ref}:{pad_num}. "
+                            f"{'Tented.' if tented else 'Not tented — solder may wick through.'}",
                     "components": [ref],
                     "nets": [net] if net else [],
                     "pins": [],
-                    "recommendation": "" if tented else f"Fill and cap via in {ref}:{pad_num} or tent with solder mask.",
-                    "report_context": {"section": "DFM", "impact": "Solder wicking risk" if not tented else "", "standard_ref": ""},
+                    "recommendation": "" if tented else f"Fill and cap via in {ref}:{pad_num} or "
+                        f"tent with solder mask.",
+                    "report_context": {
+                        "section": "DFM",
+                        "impact": "Solder wicking risk" if not tented else "",
+                        "standard_ref": "",
+                    },
                 })
                 break  # One finding per via
 
@@ -5861,13 +5974,18 @@ def analyze_board_edge_via_clearance(vias: dict, board_outline: dict) -> list[di
                 "severity": "warning",
                 "confidence": "deterministic",
                 "evidence_source": "topology",
-                "summary": f"Via at ({round(vx, 1)}, {round(vy, 1)}) is {round(min_dist, 2)}mm from board edge",
-                "description": f"Via at ({round(vx, 2)}, {round(vy, 2)}) is only {round(min_dist, 3)}mm from the board edge. Minimum recommended is {threshold_mm}mm.",
+                "summary": f"Via at ({round(vx, 1)}, {round(vy, 1)}) is {round(min_dist, 2)}mm "
+                    f"from board edge",
+                "description": f"Via at ({round(vx, 2)}, {round(vy, 2)}) is only "
+                    f"{round(min_dist, 3)}mm from the board edge. Minimum recommended is "
+                        f"{threshold_mm}mm.",
                 "components": [],
                 "nets": [],
                 "pins": [],
-                "recommendation": f"Move via at least {threshold_mm}mm from board edge to prevent damage during depanelization.",
-                "report_context": {"section": "DFM", "impact": "Via damage during routing/depanelization", "standard_ref": ""},
+                "recommendation": f"Move via at least {threshold_mm}mm from board edge to prevent "
+                    f"damage during depanelization.",
+                "report_context": {"section": "DFM", "impact": "Via damage during "
+                    "routing/depanelization", "standard_ref": ""},
             })
 
     return findings[:50]  # Cap at 50 findings
@@ -5898,7 +6016,8 @@ def analyze_keepout_violations(footprints: list[dict], vias: dict,
                 fx = fp.get("x", 0)
                 fy = fp.get("y", 0)
                 fp_layer = fp.get("layer", "")
-                if not any(l in kz_layers or l == "*" or "*.Cu" in kz_layers for l in [fp_layer]):
+                if not any(layer in kz_layers or layer == "*" or "*.Cu" in kz_layers
+                           for layer in [fp_layer]):
                     continue
                 if kx1 <= fx <= kx2 and ky1 <= fy <= ky2:
                     findings.append({
@@ -5911,13 +6030,16 @@ def analyze_keepout_violations(footprints: list[dict], vias: dict,
                         "severity": "error",
                         "confidence": "heuristic",
                         "evidence_source": "topology",
-                        "summary": f"Keepout violation: {ref} inside keepout zone{' ' + kz_name if kz_name != 'unnamed' else ''}",
-                        "description": f"Component {ref} center is inside keepout zone {kz_name} (bbox check).",
+                        "summary": f"Keepout violation: {ref} inside keepout "
+                            f"zone{' ' + kz_name if kz_name != 'unnamed' else ''}",
+                        "description": f"Component {ref} center is inside keepout zone {kz_name} "
+                            f"(bbox check).",
                         "components": [ref],
                         "nets": [],
                         "pins": [],
                         "recommendation": f"Move {ref} outside the keepout zone.",
-                        "report_context": {"section": "Placement", "impact": "Design rule violation", "standard_ref": ""},
+                        "report_context": {"section": "Placement",
+                                           "impact": "Design rule violation", "standard_ref": ""},
                     })
 
         # Check vias
@@ -5938,13 +6060,16 @@ def analyze_keepout_violations(footprints: list[dict], vias: dict,
                         "severity": "error",
                         "confidence": "heuristic",
                         "evidence_source": "topology",
-                        "summary": f"Keepout violation: via at ({round(vx, 1)}, {round(vy, 1)}) inside keepout{' ' + kz_name if kz_name != 'unnamed' else ''}",
-                        "description": f"Via at ({round(vx, 2)}, {round(vy, 2)}) is inside keepout zone {kz_name} (bbox check).",
+                        "summary": f"Keepout violation: via at ({round(vx, 1)}, {round(vy, 1)}) "
+                            f"inside keepout{' ' + kz_name if kz_name != 'unnamed' else ''}",
+                        "description": f"Via at ({round(vx, 2)}, {round(vy, 2)}) is inside keepout "
+                            f"zone {kz_name} (bbox check).",
                         "components": [],
                         "nets": [],
                         "pins": [],
                         "recommendation": "Move via outside the keepout zone.",
-                        "report_context": {"section": "Placement", "impact": "Design rule violation", "standard_ref": ""},
+                        "report_context": {"section": "Placement",
+                                           "impact": "Design rule violation", "standard_ref": ""},
                     })
 
     return findings[:50]
@@ -6001,7 +6126,8 @@ def analyze_pcb(path: str, *, proximity: bool = False,
     # Connectivity analysis (zone-aware)
     connectivity = analyze_connectivity(footprints, tracks, vias, net_names, zones)
 
-    stats = compute_statistics(footprints, tracks, vias, zones, outline, connectivity, net_names, layers=layers)
+    stats = compute_statistics(footprints, tracks, vias, zones, outline, connectivity, net_names,
+                               layers=layers)
 
     version = get_value(root, "version") or "unknown"
     generator_version = get_value(root, "generator_version") or "unknown"
@@ -6314,12 +6440,12 @@ def analyze_pcb(path: str, *, proximity: bool = False,
     findings = []
 
     # Simple list sections (entries have rule_id from Batch 7 migration)
-    _FINDING_LIST_KEYS = [
+    _finding_list_keys = [
         'tombstoning_risk', 'thermal_pad_vias', 'orientation_consistency',
         'silkscreen_pad_overlaps', 'via_in_pad_issues',
         'board_edge_via_clearance', 'keepout_violations',
     ]
-    for key in _FINDING_LIST_KEYS:
+    for key in _finding_list_keys:
         data = result.pop(key, None)
         if isinstance(data, list):
             findings.extend(data)
@@ -6415,15 +6541,23 @@ def _get_schema():
     return {
         "analyzer_type": "string — always 'pcb'",
         "schema_version": "string — semver (currently '1.3.0')",
-        "summary": {"total_findings": "int", "by_severity": {"error": "int", "warning": "int", "info": "int"}},
+        "summary": {"total_findings": "int", "by_severity": {"error": "int", "warning": "int",
+                                                             "info": "int"}},
         "trust_summary": {
             "total_findings": "int",
             "trust_level": "string — 'high' | 'mixed' | 'low'",
             "by_confidence": "{deterministic: int, heuristic: int, datasheet-backed: int}",
-            "by_evidence_source": "{datasheet|topology|heuristic_rule|symbol_footprint|bom|geometry|api_lookup: int}",
+            "by_evidence_source": (
+                "{datasheet|topology|heuristic_rule|symbol_footprint|"
+                "bom|geometry|api_lookup: int}"
+            ),
             "provenance_coverage_pct": "float",
         },
-        "findings": "[{detector, rule_id, severity, confidence, evidence_source, summary, category, components, nets, pins, recommendation, ...}] — flat list of all findings",
+        "findings": (
+            "[{detector, rule_id, severity, confidence, evidence_source, summary, "
+            "category, components, nets, pins, recommendation, ...}] — "
+            "flat list of all findings"
+        ),
         "file": "string — input file path",
         "kicad_version": "string", "file_version": "string",
         "statistics": {
@@ -6444,23 +6578,50 @@ def _get_schema():
             "segments": "[{x1, y1, x2, y2: float, layer}]",
         },
         "component_groups": "{prefix: {count: int, type, examples: [ref]}}",
-        "footprints": "[{reference, value, library (lib:footprint path), footprint (alias of library), layer, x: float, y: float, angle: float, type: smd|through_hole|mixed, mpn, manufacturer, description, exclude_from_bom: bool, exclude_from_pos: bool, dnp: bool, pad_nets: {pad_number: {net: string, pin: string}}, connected_nets: [string]}]",
+        "footprints": (
+            "[{reference, value, library (lib:footprint path), footprint (alias of "
+            "library), layer, x: float, y: float, angle: float, "
+            "type: smd|through_hole|mixed, mpn, manufacturer, description, "
+            "exclude_from_bom: bool, exclude_from_pos: bool, dnp: bool, "
+            "pad_nets: {pad_number: {net: string, pin: string}}, "
+            "connected_nets: [string]}]"
+        ),
         "tracks": {
             "segment_count": "int", "arc_count": "int",
             "width_distribution": "{width_mm_str: count}",
             "layer_distribution": "{layer_name: count}",
-            "_with_full_flag": "segments: [{x1, y1, x2, y2, width: float, layer, net: int}], arcs: [{x1, y1, x2, y2, mid_x, mid_y, width: float, layer}]",
+            "_with_full_flag": "segments: [{x1, y1, x2, y2, width: float, layer, net: int}], arcs: "
+                "[{x1, y1, x2, y2, mid_x, mid_y, width: float, layer}]",
         },
         "vias": {
             "count": "int", "size_distribution": "{size_str: count}",
-            "_analysis": "via_in_pad: [ref], via_fanout: {ref: {via_count, fanout_traces}}, via_current: [warning]",
-            "_with_full_flag": "vias: [{x, y: float, layers: [string], size, drill: float, net: int|null, type: 'through|blind|buried|micro'}]",
+            "_analysis": "via_in_pad: [ref], via_fanout: {ref: {via_count, fanout_traces}}, "
+                "via_current: [warning]",
+            "_with_full_flag": "vias: "
+                "[{x, y: float, layers: [string], size, drill: float, "
+                "net: int|null, type: 'through|blind|buried|micro'}]",
         },
-        "zones": "[{net: int (net ID), net_name: string (net name), priority: int, layers: [string], bounding_box, island_count: int, thermal_bridging, filled: bool, is_keepout: bool (opt), keepout: {tracks, vias, pads, copperpour, footprints} (opt)}]",
-        "keepout_zones": "[{name, layers: [string], restrictions: {tracks, vias, pads, copperpour, footprints}, bounding_box: [min_x, min_y, max_x, max_y], area_mm2: float, nearby_components: [string]}]",
-        "connectivity": {"routing_complete": "bool", "unrouted_count": "int", "unconnected_pads": "[{reference, pad, expected_net}]"},
-        "net_lengths": "{net_name: {track_length_mm: float, via_count: int, layer_transitions: int}}",
-        "_optional_sections": "power_net_routing, decoupling_placement, ground_domains, current_capacity, thermal_analysis, placement_analysis, trace_proximity (--proximity), dfm, tombstoning_risk, thermal_pad_vias, copper_presence",
+        "zones": (
+            "[{net: int (net ID), net_name: string (net name), priority: int, "
+            "layers: [string], bounding_box, island_count: int, thermal_bridging, "
+            "filled: bool, is_keepout: bool (opt), "
+            "keepout: {tracks, vias, pads, copperpour, footprints} (opt)}]"
+        ),
+        "keepout_zones": (
+            "[{name, layers: [string], "
+            "restrictions: {tracks, vias, pads, copperpour, footprints}, "
+            "bounding_box: [min_x, min_y, max_x, max_y], area_mm2: float, "
+            "nearby_components: [string]}]"
+        ),
+        "connectivity": {"routing_complete": "bool", "unrouted_count": "int",
+                         "unconnected_pads": "[{reference, pad, expected_net}]"},
+        "net_lengths": (
+            "{net_name: {track_length_mm: float, via_count: int, "
+            "layer_transitions: int}}"
+        ),
+        "_optional_sections": "power_net_routing, decoupling_placement, ground_domains, "
+            "current_capacity, thermal_analysis, placement_analysis, trace_proximity "
+                "(--proximity), dfm, tombstoning_risk, thermal_pad_vias, copper_presence",
     }
 
 
@@ -6492,7 +6653,8 @@ def main():
                         choices=['designer', 'reviewer', 'manager'],
                         help='Audience level for summaries and --text output')
     parser.add_argument('--return-path-radius-mm', type=float, default=0.5,
-                        help='Radius (mm) for copper-presence in return-path analysis (default: 0.5)')
+                        help='Radius (mm) for copper-presence in return-path analysis (default: '
+                            '0.5)')
     parser.add_argument('--gp001-debug', action='store_true',
                         help='Emit per-sample diagnostic JSON to analysis dir')
     args = parser.parse_args()
@@ -6667,7 +6829,8 @@ def main():
                     source_hashes=source_hashes,
                     scripts={"pcb": f"analyze_pcb.py {os.path.basename(args.pcb)}"},
                 )
-                print(f"Analysis cached: {os.path.join(analysis_dir, run_id, 'pcb.json')}", file=sys.stderr)
+                print(f"Analysis cached: "
+                    f"{os.path.join(analysis_dir, run_id, 'pcb.json')}", file=sys.stderr)
             else:
                 overwrite_current(analysis_dir, tmp_dir, source_hashes=source_hashes)
                 print("Analysis cache updated (current run)", file=sys.stderr)
