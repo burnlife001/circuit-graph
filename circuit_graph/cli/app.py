@@ -619,4 +619,5 @@ if __name__ == "__main__":
 from circuit_graph.cli import erc as _erc  # noqa: E402,F401
 from circuit_graph.cli import init as _init  # noqa: E402,F401
 from circuit_graph.cli import kb as _kb  # noqa: E402,F401
+from circuit_graph.cli import query as _query  # noqa: E402,F401
 from circuit_graph.cli import view as _view  # noqa: E402,F401
