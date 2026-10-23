@@ -60,19 +60,80 @@ def test_r2_is_current_shunt(ir) -> None:
     assert r is not None
     assert r.rule == "shunt"
     assert "电流采样" in r.title
+    assert "低边" in r.title
+    assert r.confidence == "high"
 
 
 @pytest.mark.skipif(not FIXTURE.exists(), reason=f"Fixture not found: {FIXTURE}")
-def test_r96_gnd_cgnd_bridge_is_shunt_without_crash(ir) -> None:
-    """R96（0.05R，GND↔CGND 跨接）曾因 CGND 被并入 GND 触发 StopIteration。
+def test_r96_gnd_cgnd_bridge_senses_via_r102(ir) -> None:
+    """R96（0.05R，GND↔CGND 跨接）双端地族：必须探到采样触碰才断言采样。
 
-    修复后（todolist crash.md T1/T2）：CGND 不再算 GND，对端可找到；即便
-    双端都是地网络，shunt 规则也必须回退为串联分流器而不是崩溃。
+    实测拓扑：CGND 是 Q7/SW5001 的功率地岛，回流电流全部经 R96 回 GND；
+    U7 LM321 的 IN+ 经 R102 触碰 CGND（×101 放大后经 R101 送 AIN10）。
+    曾因 CGND 被并入 GND 触发 StopIteration（todolist crash.md T1/T2）。
     """
     r = infer_role(ir, "R96", _provider)
     assert r is not None
     assert r.rule == "shunt"
     assert "电流采样" in r.title
+    assert "低边回流采样" in r.title
+    assert r.confidence == "high"
+    ev = "；".join(r.evidence)
+    assert "采样触碰" in ev
+    assert "U7" in ev and "R102" in ev
+    assert r.data["sense_tap"] == "U7:1 via R102"
+    assert r.data["ohms"] == pytest.approx(0.05)
+
+
+def test_shunt_ground_bridge_without_tap_is_honest_medium(tmp_path) -> None:
+    """双端地族且无采样触碰：必须报"地桥"并降置信度，不许断言采样。"""
+    netlist = "\n".join(
+        [
+            "[",
+            "R1",
+            "1206W",
+            "0.05R%1",
+            "",
+            "",
+            "",
+            "]",
+            "[",
+            "U1",
+            "SOT23-5",
+            "LM321",
+            "",
+            "",
+            "",
+            "]",
+            "[",
+            "C1",
+            "0402C",
+            "100N",
+            "",
+            "",
+            "",
+            "]",
+            "(",
+            "GND",
+            "R1-1",
+            "U1-2",
+            ")",
+            "(",
+            "CGND",
+            "R1-2",
+            "C1-1",
+            ")",
+        ]
+    )
+    p = tmp_path / "mini.NET"
+    p.write_text(netlist, encoding="utf-8")
+    mini_ir = _parse_and_enrich(p, use_cache=False)
+    r = infer_role(mini_ir, "R1", _provider)
+    assert r is not None
+    assert r.rule == "shunt"
+    assert "跨接" in r.title
+    assert r.confidence == "medium"
+    assert r.data["sense_tap"] is None
 
 
 @pytest.mark.skipif(not FIXTURE.exists(), reason=f"Fixture not found: {FIXTURE}")

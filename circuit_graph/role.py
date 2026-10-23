@@ -4,6 +4,7 @@
 用一组有序拓扑规则对焦点元件做功能定性：
 
 - opamp_feedback  运放反馈电阻 / 增益设定电阻（含增益计算）
+- shunt           毫欧电流采样（低边 / 地桥 / 串联）
 - divider         分压电阻（含分压比）
 - pull_up/down    上拉 / 下拉电阻
 - series_drive    IC 输出 → MOSFET 栅极驱动电阻
@@ -18,6 +19,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -41,6 +43,11 @@ _CAP_UNIT = {"pf": 1e-12, "nf": 1e-9, "µf": 1e-6, "uf": 1e-6}
 _INPUT_CATS = {"input", "gpio", "comm", "clock"}
 # 上/下拉判定中，对端网络允许的最大成员数（大网基本是电源/总线，不是信号节点）
 _PULL_MAX_DEGREE = 6
+# role 规则里的"扩展地族"：_classify_net 刻意不把 CGND/VSS 归入 GND（b6ec2ce），
+# 但毫欧电阻跨接它们与 GND 时就是回流路径，shunt 语义里需按地对待。
+_GROUND_NAME_EXT_RE = re.compile(r"^(CGND|VSS)")
+# 采样触碰认可的 IC 引脚类别；unknown 刻意排除（无 pinout 的 IC 引脚到处都是）
+_SENSE_INPUT_CATS = {"input", "noninv_input", "inv_input"}
 
 
 @dataclass
@@ -457,39 +464,150 @@ def _rule_divider(board: _Board, pin_nets: list[str | None]) -> RoleResult | Non
     return None
 
 
+def _is_ground_family(board: _Board, net_id: str | None) -> bool:
+    """地族网络：NetType.GND，或 CGND/VSS 等按名字补充识别的地（不动 _classify_net）。"""
+    if net_id is None:
+        return False
+    if board.net_kind(net_id) is NetType.GND:
+        return True
+    return bool(_GROUND_NAME_EXT_RE.match(board.net_name(net_id).upper()))
+
+
+def _probeable_ground_ends(board: _Board, pin_nets: list[str | None]) -> list[str]:
+    """双端地族时可探采样触碰的地端：扩展地族、但不是全局参考地（GND/PGND/…）。
+
+    全局参考地网上到处是运放基准分压（如 R97 挂 U7 IN-），探它必误报。
+    """
+    return [
+        n
+        for n in pin_nets
+        if n is not None
+        and _is_ground_family(board, n)
+        and _classify_net(board.net_name(n))[0] is not NetType.GND
+    ]
+
+
+def _shunt_sense_tap(
+    board: _Board, net_id: str, focal_id: str
+) -> tuple[Component, str, Component | None] | None:
+    """在 net_id 上找采样触碰：直连 IC 输入脚，或经 1 个非焦点电阻到输入脚。
+
+    返回 (ic, 引脚号, 经过的电阻或 None)；找不到返回 None。
+    """
+    for ic, pins in board.ics_on_net(net_id):
+        for pn in pins:
+            if board.pin_category(ic, pn) in _SENSE_INPUT_CATS:
+                return ic, pn, None
+    for r in _resistors_on(board, net_id, focal_id):
+        others = {
+            board.net_of_pin(p.id)
+            for p in r.pins
+            if board.net_of_pin(p.id) not in (None, net_id)
+        }
+        for other in sorted(others):
+            if _is_ground_family(board, other):
+                continue  # 桥到另一个地网不是采样触碰
+            for ic, pins in board.ics_on_net(other):
+                for pn in pins:
+                    if board.pin_category(ic, pn) in _SENSE_INPUT_CATS:
+                        return ic, pn, r
+    return None
+
+
 def _rule_shunt(board: _Board, pin_nets: list[str | None]) -> RoleResult | None:
-    """毫欧级电阻 = 电流采样分流器（不该被上/下拉规则抢走）。"""
+    """毫欧级电阻 = 电流采样（不该被上/下拉规则抢走）。
+
+    - 低边：一端地族、另一端非地 —— 电流经它回地，压降供采样。
+    - 双端地族：地桥或低边回流采样，探到采样触碰才断言采样，否则按地桥报 medium。
+    - 串联：两端都非地族 —— 串在电流路径里。
+    """
     if board.focal.device_kind.value != "Resistor":
         return None
     r = _resistance_ohms(board.focal)
     if r is None or r > 0.1:
         return None
-    to_gnd = any(board.net_kind(n) is NetType.GND for n in pin_nets)
-    if to_gnd:
-        # 对端可能也全是地网络（如 GND↔PGND 桥接、GND↔CGND 等电位跨接），
-        # 此时找不到"非 GND"对端 —— 回退为串联分流器展示，绝不抛 StopIteration。
-        other = next(
-            (n for n in pin_nets if board.net_kind(n) is not NetType.GND), None
-        )
-        if other is None:
-            title = "电流采样电阻（串联分流器，双端接地）"
-            ev_net = " ↔ ".join(_net_label(board, n) for n in pin_nets)
-        else:
-            title = "电流采样电阻（对地分流器）"
+    ev_net = " ↔ ".join(_net_label(board, n) for n in pin_nets)
+    ground_ends = [n for n in pin_nets if _is_ground_family(board, n)]
+    data: dict[str, object] = {"ohms": r}
+
+    if len(ground_ends) == 1:
+        # 经典低边采样：结构已定，采样电路未必在网表里可见（sense line 常不画全）
+        i = pin_nets.index(ground_ends[0])
+        other = pin_nets[1 - i]
+        if other is not None:
             ev_net = f"{_net_label(board, other)} ↔ GND"
-    else:
-        title = "电流采样电阻（串联分流器）"
-        ev_net = " ↔ ".join(_net_label(board, n) for n in pin_nets)
+        return RoleResult(
+            rule="shunt",
+            title="电流采样电阻（低边，对地）",
+            summary=(
+                f"毫欧级阻值({board.value_text(board.focal)})把回流电流转成压降供采样，"
+                "损耗可忽略"
+            ),
+            evidence=[
+                f"{board.focal.id} {board.value_text(board.focal)}：{ev_net}",
+                "未发现采样触碰（如确为电流采样需人工确认）",
+            ],
+            confidence="high",
+            data=data,
+        )
+
+    if len(ground_ends) == 2:
+        for net_id in _probeable_ground_ends(board, pin_nets):
+            tap = _shunt_sense_tap(board, net_id, board.focal.id)
+            if tap is None:
+                continue
+            ic, pn, via = tap
+            pname = board.pin_name(ic, pn)
+            ptxt = f"({pname})" if pname else ""
+            if via is not None:
+                tap_line = (
+                    f"采样触碰：{ic.id} pin{pn}{ptxt} ← {via.id} ← "
+                    f"{board.net_name(net_id)}"
+                )
+                data["sense_tap"] = f"{ic.id}:{pn} via {via.id}"
+            else:
+                tap_line = (
+                    f"采样触碰：{ic.id} pin{pn}{ptxt} 直连 {board.net_name(net_id)}"
+                )
+                data["sense_tap"] = f"{ic.id}:{pn} direct"
+            return RoleResult(
+                rule="shunt",
+                title="电流采样电阻（低边回流采样）",
+                summary=(
+                    f"回流电流全部经 {board.focal.id}，"
+                    f"压降被采样电路（{ic.id}）读取，损耗可忽略"
+                ),
+                evidence=[
+                    f"{board.focal.id} {board.value_text(board.focal)}：{ev_net}",
+                    tap_line,
+                ],
+                confidence="high",
+                data=data,
+            )
+        bridge = " ↔ ".join(board.net_name(n) for n in pin_nets if n is not None)
+        data["sense_tap"] = None
+        return RoleResult(
+            rule="shunt",
+            title=f"毫欧地桥电阻（{bridge} 跨接）",
+            summary=(
+                f"毫欧级阻值({board.value_text(board.focal)})跨接两个地网络；"
+                "未发现采样电路触碰，若确为电流采样需人工确认"
+            ),
+            evidence=[f"{board.focal.id} {board.value_text(board.focal)}：{ev_net}"],
+            confidence="medium",
+            data=data,
+        )
+
     return RoleResult(
         rule="shunt",
-        title=title,
+        title="电流采样电阻（串联）",
         summary=(
-            f"毫欧级阻值({board.value_text(board.focal)})把电流转成压降供采样，"
+            f"毫欧级阻值({board.value_text(board.focal)})串在电流路径里把电流转成压降，"
             "损耗可忽略"
         ),
         evidence=[f"{board.focal.id} {board.value_text(board.focal)}：{ev_net}"],
         confidence="high",
-        data={"ohms": r},
+        data=data,
     )
 
 

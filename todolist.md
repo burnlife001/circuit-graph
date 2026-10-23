@@ -37,3 +37,19 @@
 2. `pytest` 全绿（含新增 2 组用例）
 3. 现有 fixtures 全量跑 `cg role` 与修复前 diff：除 R96 由 crash→正常输出外，其余元件结论不变
 4. `CGND` 不再被分类为 `NetType.GND`；`GND`/`PGND` 分类保持不变
+
+---
+
+## 后续（2026-10-23）：R96 采样触碰探查 —— 从"不崩溃"到"给对结论"
+
+- [x] **T4 `_rule_shunt` 三案重写**（`circuit_graph/role.py`）
+  - 双端地族（含 CGND/VSS 扩展地族，不动 `_classify_net`）不再盲目断言采样：
+    - 探到采样触碰（直连 IC 输入脚，或经 1 个非焦点电阻到输入脚）→「电流采样电阻（低边回流采样）」high，evidence 给 `采样触碰：U7 pin1(+) ← R102 ← CGND`，data 带 `sense_tap`
+    - 无触碰 →「毫欧地桥电阻（… 跨接）」medium，summary 注明需人工确认
+  - 探侧只探非 GND 名的地族端（R97 挂 U7 IN- 在 GND 上，探 GND 必误报）；1 跳时跳过对端也是地族的邻居网
+  - 单端地族保持经典低边（high），evidence 补"未发现采样触碰"诚实行；title 全部清除"分流器"字样
+  - 依赖 `pin_category` 对裸 `+`/`-` 的特判（LM321 KB 引脚名）——KB 缺失时诚实落 medium，不是回归
+- [x] **T5 测试与验证**
+  - `test_r96_gnd_cgnd_bridge_senses_via_r102`：断言 title/采样触碰/sense_tap="U7:1 via R102"/confidence=high
+  - `test_r2_is_current_shunt` 补低边+high 断言；新增 `test_shunt_ground_bridge_without_tap_is_honest_medium`（内联 mini .NET，无触碰→medium）
+  - 全量 697 passed / 4 skipped；`cg role R96` 实测输出低边回流采样 + 采样触碰证据链
