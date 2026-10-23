@@ -22,7 +22,9 @@ from circuit_graph.ir import CircuitIR, ir_from_dict, ir_to_dict
 
 # Bump when the enricher pipeline semantics change (new enricher, changed
 # defaults, new warnings worth surfacing).  Part of the cache key.
-ENRICHER_VERSION = "2"
+# v3: NetClassifier 不再把 CGND 并入 GND（crash.md T1），EdgeSemanticEnricher
+#     对 UNKNOWN 地网按名字回退 role=gnd —— 旧缓存里的 CGND 分类已过时。
+ENRICHER_VERSION = "3"
 
 _DEFAULT_CACHE_DIR = Path(__file__).resolve().parent.parent / ".cg-cache"
 

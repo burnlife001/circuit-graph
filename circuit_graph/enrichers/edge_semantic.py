@@ -97,7 +97,12 @@ def _classify_direction(
     return "bidirectional"
 
 
-def _classify_role(net_type: NetType | None) -> str:
+_GND_FAMILY_RE = re.compile(
+    r"^(GND|PGND|AGND|DGND|SGND|CGND)", re.IGNORECASE
+)
+
+
+def _classify_role(net_type: NetType | None, net_name: str | None = None) -> str:
     if net_type is NetType.POWER:
         return "power"
     if net_type is NetType.GND:
@@ -106,6 +111,11 @@ def _classify_role(net_type: NetType | None) -> str:
         return "analog"
     if net_type is NetType.CLOCK:
         return "clock"
+    # NetClassifier 不再把 CGND 并入 NetType.GND（todolist crash.md T1：避免
+    # GND↔CGND 桥接电阻被规则引擎误判），但 CGND 语义上仍是地 —— 按名字回退，
+    # 让 expected_role=gnd 的模板（rc-snubber 等）能继续匹配。
+    if net_name is not None and _GND_FAMILY_RE.match(net_name):
+        return "gnd"
     # SIGNAL / UNKNOWN — most consumer signals are digital.
     return "digital"
 
@@ -172,7 +182,7 @@ class EdgeSemanticEnricher:
             net_name = net.name if net is not None else conn.net_id
 
             direction = _classify_direction(pin_name, device_kind, net_type)
-            role = _classify_role(net_type)
+            role = _classify_role(net_type, net_name)
             level = _extract_level(net_name) if role in {"power", "gnd"} else None
 
             new_meta = dict(conn.metadata or {})

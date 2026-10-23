@@ -63,6 +63,19 @@ def test_r2_is_current_shunt(ir) -> None:
 
 
 @pytest.mark.skipif(not FIXTURE.exists(), reason=f"Fixture not found: {FIXTURE}")
+def test_r96_gnd_cgnd_bridge_is_shunt_without_crash(ir) -> None:
+    """R96（0.05R，GND↔CGND 跨接）曾因 CGND 被并入 GND 触发 StopIteration。
+
+    修复后（todolist crash.md T1/T2）：CGND 不再算 GND，对端可找到；即便
+    双端都是地网络，shunt 规则也必须回退为串联分流器而不是崩溃。
+    """
+    r = infer_role(ir, "R96", _provider)
+    assert r is not None
+    assert r.rule == "shunt"
+    assert "电流采样" in r.title
+
+
+@pytest.mark.skipif(not FIXTURE.exists(), reason=f"Fixture not found: {FIXTURE}")
 def test_r24_is_pulldown_without_kb_pinout(ir) -> None:
     """U2 无 KB pinout：靠拓扑 + 未知类别放宽仍可定性下拉。"""
     r = infer_role(ir, "R24", _provider)

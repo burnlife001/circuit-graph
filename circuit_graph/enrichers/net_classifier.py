@@ -65,7 +65,9 @@ def _classify_net(name: str) -> tuple[NetType, str | None]:
     """
     upper = name.upper()
 
-    if re.match(r"^(C?GND|PGND|AGND|DGND|SGND)", upper):
+    # 不把 CGND 并入 GND：板级设计中 CGND（机壳地/共模地）常与 GND 是独立 net，
+    # 误并入会让双地网络间的毫欧桥接电阻（GND↔CGND）在 role 规则里失去对端。
+    if re.match(r"^(GND|PGND|AGND|DGND|SGND)", upper):
         return NetType.GND, "high"
     if re.search(r"\d+\.?\d*V", upper) or re.search(r"VBUS|VCC|VDD|VEE|VBAT|VIN", upper):
         return NetType.POWER, "high"

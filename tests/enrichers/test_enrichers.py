@@ -171,20 +171,28 @@ def test_enricher_pipeline_preserves_top_level_metadata():
     assert result.ir.metadata == {"_unknown_fields": {"future": 1}}
 
 
-def test_net_classifier_treats_cgnd_as_gnd():
-    """CGND (chassis / common ground) is a ground net, not digital/unknown.
+def test_net_classifier_gnd_family():
+    """GND 家族分类：GND/PGND 保持 GND；CGND 不再并入 GND（todolist crash.md T1）。
 
-    Without this, R96 (GND<->CGND bridge) on the T268 fixture never reaches
-    primitives that accept gnd-role nets (e.g. current-shunt-monitor).
+    CGND 是机壳地/共模地，板级设计中与 GND 常为独立 net。误并入 GND 会让
+    GND↔CGND 桥接电阻在 role 规则里失去对端，曾导致 R96 的 StopIteration 崩溃。
     """
     ir = CircuitIR(
         meta={"source": "test", "format": "manual"},
         components=[],
-        nets=[Net(id="N1", name="CGND")],
+        nets=[
+            Net(id="N1", name="CGND"),
+            Net(id="N2", name="GND"),
+            Net(id="N3", name="PGND"),
+        ],
         connections=[],
     )
     result = run_enrichers(ir, [NetClassifier()])
-    assert result.ir.nets[0].type == NetType.GND
+    types = {n.name: n.type for n in result.ir.nets}
+    assert types["CGND"] != NetType.GND
+    assert types["CGND"] == NetType.UNKNOWN
+    assert types["GND"] == NetType.GND
+    assert types["PGND"] == NetType.GND
 
 
 def test_topology_recognizer_cc_pull_down():

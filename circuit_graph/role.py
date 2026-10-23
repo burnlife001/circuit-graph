@@ -466,9 +466,17 @@ def _rule_shunt(board: _Board, pin_nets: list[str | None]) -> RoleResult | None:
         return None
     to_gnd = any(board.net_kind(n) is NetType.GND for n in pin_nets)
     if to_gnd:
-        other = next(n for n in pin_nets if board.net_kind(n) is not NetType.GND)
-        title = "电流采样电阻（对地分流器）"
-        ev_net = f"{_net_label(board, other)} ↔ GND"
+        # 对端可能也全是地网络（如 GND↔PGND 桥接、GND↔CGND 等电位跨接），
+        # 此时找不到"非 GND"对端 —— 回退为串联分流器展示，绝不抛 StopIteration。
+        other = next(
+            (n for n in pin_nets if board.net_kind(n) is not NetType.GND), None
+        )
+        if other is None:
+            title = "电流采样电阻（串联分流器，双端接地）"
+            ev_net = " ↔ ".join(_net_label(board, n) for n in pin_nets)
+        else:
+            title = "电流采样电阻（对地分流器）"
+            ev_net = f"{_net_label(board, other)} ↔ GND"
     else:
         title = "电流采样电阻（串联分流器）"
         ev_net = " ↔ ".join(_net_label(board, n) for n in pin_nets)
