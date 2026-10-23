@@ -43,7 +43,7 @@ Python 迁移版电路理解平台，保持原有 TypeScript IR 语义，以 cg-
 - **IR 解析缓存**：网表 sha256 + enricher 版本 + 基元库 hash 为键，缓存于 `<repo>/.cg-cache/`（已 gitignore，CLI `--cache-dir` 可改、`--no-cache` 可关）。冷启动 ~0.9s，同网表重复查询 ~0.25s；命中时 `warnings` 一并恢复
 - 透出管线警告：JSON 顶层恒有 `warnings` 数组（view 内超 5 条折叠 `(+N more)`），stderr 打一行摘要；`TOPOLOGY_MATCH_ABORTED` / `TRUNCATED` / `FLOOD` 均可被下游看见
 - 紧凑查询（`cg query`，见快速开始）：`--conn` / `--comp` / `--net` / `--find` / `--all [--type]`，`--format text|json`
-- 作用定性（`cg role <位号> <网表>`，见快速开始）：规则引擎把「--conn → 追另一端 → kb pinout → 拓扑推理」合成一条命令，答案前置输出功能定性（反馈电阻含增益、RC 滤波含 fc、分压含比例、shunt/上下拉/去耦/耦合等）；KB 无 pinout 的 IC 自动降级为拓扑级结论，全部未命中时输出连接摘要兜底。引擎在 `circuit_graph/role.py`，纯函数可单测。shunt 细分三案：低边（一端地族，high）、低边回流采样（双端地族且探到采样触碰——直连或经 1 电阻的 IC 输入脚，evidence 给 `采样触碰` 行、data 带 `sense_tap`）、毫欧地桥（双端地族且无触碰，medium 待人工确认）；探侧只探非 GND 名的地族端，避免运放基准分压误报
+- 作用定性（`cg role <位号> <网表>`，见快速开始）：规则引擎把「--conn → 追另一端 → kb pinout → 拓扑推理」合成一条命令，答案前置输出功能定性（反馈电阻含增益、RC 滤波含 fc、分压含比例、shunt/上下拉/去耦/耦合等）；KB 无 pinout 的 IC 自动降级为拓扑级结论，全部未命中时输出连接摘要兜底。引擎在 `circuit_graph/role.py`，纯函数可单测。毫欧电阻会先探测采样电路：探到报「电流采样」并给出触碰证据，探不到报「毫欧地桥」并提示需人工确认
 - 知识库反查：`cg kb lookup <型号> --usage-in <网表>`（型号→本板位号/所在网）；`cg kb search --pin <名>`（引脚功能名→型号列表）
 - `cg view` 输出截断：高 degree 网（`--max-members`，默认 20）折叠为完整条目元件 + `(+N more)`（degree 保留真值）；focal 低 degree 网邻居给完整条目，rail/多跳到达的元件降为 `{"id"}` stub；nets 段只列视图相关网。T268 `cg view Q5 --with-blocks` 28.8KB → ~11K 字符
 - 生成 cg-graph JSON（v2.1）：含 `part_number`、`circuit.rails`、每条 net 带 `degree`
