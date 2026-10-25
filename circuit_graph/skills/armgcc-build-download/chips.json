@@ -1,0 +1,12 @@
+{
+  "G0001": {
+    "description": "MM32G0001A1TC (Cortex-M0+, 16KB Flash / 2KB RAM) — QP-nano mini board",
+    "target": "MM32G0001A1TC",
+    "pack": "D:/Keil_v5/Packs/MindMotion/MM32G0001_DFP/1.0.1",
+    "mcpu": "cortex-m0plus",
+    "startup": "startup_mm32g0001_gcc.S",
+    "linker_script": "MM32G0001.ld",
+    "flash_kb": 16,
+    "ram_kb": 2
+  }
+}

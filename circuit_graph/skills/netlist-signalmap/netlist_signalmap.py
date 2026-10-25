@@ -23,12 +23,7 @@ netlist_signalmap.py — 从 DXP/Altium 网表(.NET)提取 MCU 各引脚的真�
   5. 引脚未出现在任何网络                      -> 留空(悬空/NC), 依据列注 JSON 芯片功能
   6. 仍无法判定                                -> 保留 NetXxx_n, 依据列列出该网络全部连接点
 """
-import argparse
-import glob
-import json
-import os
-import re
-import sys
+import sys, os, re, json, glob, argparse
 
 POWER_RAILS = {"GND", "PGND", "CGND", "AGND", "DGND", "VBAT", "VBAK",
                "VDD", "VDDA", "VSS", "VSSA"}
@@ -209,11 +204,7 @@ def main():
             if cls(d) in ("R", "L") and len(comp_pins.get(d, ())) == 2:
                 other = next(x for x in comp_pins[d] if x != p)
                 adj = node2net.get((d, other))
-                if (
-                    adj
-                    and not adj.startswith("Net")
-                    and norm(adj) not in {norm(x) for x in POWER_RAILS}
-                ):
+                if adj and not adj.startswith("Net") and norm(adj) not in {norm(x) for x in POWER_RAILS}:
                     out.append((adj, d))
         return out
 
@@ -223,9 +214,7 @@ def main():
         chipfn = ci.get("name", "")
         net = pin2net.get(pin)
         if net is None:
-            board, src = "", (
-                "NC(芯片未引出)" if chipfn == "NC" else f"悬空/未连接(芯片功能 {chipfn})"
-            )
+            board, src = "", ("NC(芯片未引出)" if chipfn == "NC" else f"悬空/未连接(芯片功能 {chipfn})")
         elif not net.startswith("Net"):
             board, src = net, "网表网络标签"
         else:
@@ -263,10 +252,8 @@ def main():
     text = "\n".join(buf) + "\n"
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
-    sys.stderr.write(
-        f"[ok] MCU={desig} chip={j.get('chip_name')} package={package} 待确认={n_warn}\n"
-        f"[ok] 输出 -> {out}\n"
-    )
+    sys.stderr.write(f"[ok] MCU={desig} chip={j.get('chip_name')} package={package} 待确认={n_warn}\n"
+                     f"[ok] 输出 -> {out}\n")
     print(text)
 
 

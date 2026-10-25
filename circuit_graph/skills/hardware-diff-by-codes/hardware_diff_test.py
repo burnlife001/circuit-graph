@@ -8,8 +8,9 @@ classifies pin differences, and emits a Markdown report.
 
 import re
 import sys
-from collections import defaultdict
+import os
 from pathlib import Path
+from collections import defaultdict
 
 RESET = {
     'CRL': 0x44444444,
@@ -161,10 +162,7 @@ def parse_writes(root, files):
             line = line.strip()
             if not line:
                 continue
-            m = re.search(
-                r'MODIFY_REG\s*\(\s*\(?\s*(RCC|GPIO[A-D])\s*->\s*(\w+)\s*\)?\s*,\s*([^,]+)\s*,\s*([^)]+)\)',
-                line,
-            )
+            m = re.search(r'MODIFY_REG\s*\(\s*\(?\s*(RCC|GPIO[A-D])\s*->\s*(\w+)\s*\)?\s*,\s*([^,]+)\s*,\s*([^)]+)\)', line)
             if m:
                 port, reg, clear, setv = m.groups()
                 try:
@@ -388,19 +386,13 @@ def main():
     lines.append(f"## Hardware Comparison: {Path(root_a).name} vs {Path(root_b).name}\n")
     lines.append("### Identity")
     lines.append(f"- MCU: {mcu_a}")
-    lines.append(
-        "- Clock: HSI 48MHz (inferred from TIM14 PSC=0/ARR=4799 and "
-        "USART2 BRR=48000000/115200)\n"
-    )
+    lines.append("- Clock: HSI 48MHz (inferred from TIM14 PSC=0/ARR=4799 and USART2 BRR=48000000/115200)\n")
 
     lines.append("### Pin-by-pin register comparison")
     lines.append("| Port.Pin | CR A | CR B | AF A | AF B | ODR A | ODR B | Classification |")
     lines.append("|----------|------|------|------|------|-------|-------|----------------|")
     for r in rows:
-        lines.append(
-            f"| {r['pin']} | {r['cr_a']} | {r['cr_b']} | {r['af_a']} | {r['af_b']} | "
-            f"{r['odr_a']} | {r['odr_b']} | {r['class']} |"
-        )
+        lines.append(f"| {r['pin']} | {r['cr_a']} | {r['cr_b']} | {r['af_a']} | {r['af_b']} | {r['odr_a']} | {r['odr_b']} | {r['class']} |")
     lines.append("")
 
     lines.append("### RCC bus comparison")
@@ -419,10 +411,7 @@ def main():
     if hw_pins:
         lines.append("**Hardware different:**")
         for r in hw_pins:
-            lines.append(
-                f"- {r['pin']}: {r['cr_a']} (AF={r['af_a']}) vs "
-                f"{r['cr_b']} (AF={r['af_b']})"
-            )
+            lines.append(f"- {r['pin']}: {r['cr_a']} (AF={r['af_a']}) vs {r['cr_b']} (AF={r['af_b']})")
     else:
         lines.append("**Hardware different:** none detected.")
     lines.append("")

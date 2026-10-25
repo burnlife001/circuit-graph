@@ -16,22 +16,12 @@ netlist_pin_infer.py — 为 netlist-signalmap 中"无法确定信号名"的 MCU
                               [--shared-docs DIR] [--out U2_pin_infer.md]
 输出既写文件也打到 stdout,便于直接喂给 LLM 解读。
 """
-import argparse
-import os
-import re as _re
-import sys
+import sys, os, argparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from netlist_signalmap import (
-    chip_pinmap,
-    find_shared_docs,
-    is_signal_name,
-    load_chip_jsons,
-    norm,
-    parse_netlist,
-    pick_chip,
-    pick_mcu,
-    pick_package,
+    parse_netlist, find_shared_docs, load_chip_jsons,
+    pick_mcu, pick_chip, pick_package, chip_pinmap, norm, is_signal_name,
 )
 
 
@@ -44,9 +34,8 @@ def build_comp_pins(nets):
     return cp
 
 
-_POWER = _re.compile(
-    r"^(GND|PGND|AGND|DGND|[+-]?\d+V\d*|V(DD|SS|CC|BAT|BUS|IN|OUT|REF)\w*)$", _re.I
-)
+import re as _re
+_POWER = _re.compile(r"^(GND|PGND|AGND|DGND|[+-]?\d+V\d*|V(DD|SS|CC|BAT|BUS|IN|OUT|REF)\w*)$", _re.I)
 
 
 def is_power(net):

@@ -11,8 +11,10 @@ Reads edge events (RLE) rather than per-sample data.
 
 from __future__ import annotations
 
+import io
 import re
 import struct
+import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path

@@ -26,6 +26,7 @@ from pathlib import Path
 
 from _config import APPDATA_ATK
 
+
 STATE_PATH = APPDATA_ATK / "skill_state.json"
 
 

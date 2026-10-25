@@ -27,12 +27,7 @@ netlist_signalmap.py — 从 DXP/Altium 网表(.NET)提取 MCU 各引脚的真�
   5. 引脚未出现在任何网络                      -> 标记为 NC(悬空/未连接), 无需确认
   6. 其余无法判定                              -> 保留 NetXxx_n 并标注必须拓扑推断
 """
-import argparse
-import glob
-import json
-import os
-import re
-import sys
+import sys, os, re, json, glob, argparse
 
 
 def norm(s):
@@ -189,8 +184,7 @@ GPIO_DEFINE_RE = re.compile(
 
 def scan_source_identifiers(source_root):
     """
-    扫描 source_root 下所有 .c/.h, 返回 dict[(port_letter, pin_number)] =
-    [(name, rel_path, line), ...]
+    扫描 source_root 下所有 .c/.h, 返回 dict[(port_letter, pin_number)] = [(name, rel_path, line), ...]
     目前主要捕获 `#define NAME GPIOx->REG.Pn` 形式的宏定义。
     过滤掉与引脚名本身完全相同的宏(如 PA9 = GPIOA->...P9),避免无信息冗余。
     """
