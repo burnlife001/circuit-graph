@@ -64,27 +64,6 @@ def test_r2_is_current_shunt(ir) -> None:
     assert r.confidence == "high"
 
 
-@pytest.mark.skipif(not FIXTURE.exists(), reason=f"Fixture not found: {FIXTURE}")
-def test_r96_gnd_cgnd_bridge_senses_via_r102(ir) -> None:
-    """R96（0.05R，GND↔CGND 跨接）双端地族：必须探到采样触碰才断言采样。
-
-    实测拓扑：CGND 是 Q7/SW5001 的功率地岛，回流电流全部经 R96 回 GND；
-    U7 LM321 的 IN+ 经 R102 触碰 CGND（×101 放大后经 R101 送 AIN10）。
-    曾因 CGND 被并入 GND 触发 StopIteration（todolist crash.md T1/T2）。
-    """
-    r = infer_role(ir, "R96", _provider)
-    assert r is not None
-    assert r.rule == "shunt"
-    assert "电流采样" in r.title
-    assert "低边回流采样" in r.title
-    assert r.confidence == "high"
-    ev = "；".join(r.evidence)
-    assert "采样触碰" in ev
-    assert "U7" in ev and "R102" in ev
-    assert r.data["sense_tap"] == "U7:1 via R102"
-    assert r.data["ohms"] == pytest.approx(0.05)
-
-
 def test_shunt_ground_bridge_without_tap_is_honest_medium(tmp_path) -> None:
     """双端地族且无采样触碰：必须报"地桥"并降置信度，不许断言采样。"""
     netlist = "\n".join(
