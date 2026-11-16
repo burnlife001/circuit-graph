@@ -1179,7 +1179,9 @@ def write_auto_primitive(
     target = auto_template_path(primitives_dir, draft["id"])
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        json.dumps(draft, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        json.dumps(draft, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
     )
     return target
 
