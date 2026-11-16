@@ -1,0 +1,42 @@
+{
+  "$schema": "./schema.json",
+  "id": "npn-low-side-switch",
+  "name": "NPN 低边开关",
+  "description": "NPN 三极管集电极接负载，发射极接地，基极通过电阻接控制信号。IR 的 DeviceKind 没有 BJT，未知器件（type=Unknown）一律走本模板；晶振（32768HZ / 12MHz 这类频率值）同样是 Unknown + 三脚（第三脚悬空按 GND 处理），会被误当成低边开关，故用 strict_value 把纯频率值挡在外面。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "load_net", "type": "net", "name_pattern": ".*", "required": true
+    },
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "expected_role": "gnd",
+      "required": true
+    },
+    {
+      "id": "ctrl", "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "digital",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "Q1", "type": "Unknown", "required": true, "pin_count_max": 6,
+      "strict_value": true,
+      "value_pattern": "^(?!\\s*\\d+(?:\\.\\d+)?\\s*(?:GHZ|MHZ|KHZ|HZ)\\s*$).*",
+      "pins": [
+        {"number": "C", "net": "load_net"},
+        {"number": "E", "net": "gnd"},
+        {"number": "B", "net": "ctrl"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.30, "naming": 0.20, "parametric": 0.10, "type": 0.40},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

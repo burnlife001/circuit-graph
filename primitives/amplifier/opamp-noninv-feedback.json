@@ -1,0 +1,37 @@
+{
+  "$schema": "./schema.json",
+  "id": "opamp-noninv-feedback",
+  "name": "同相反馈对（负反馈放大器）",
+  "description": "同相放大器的反馈电阻对：Rf 跨运放输出与反相端，Rg 反相端到地；同相增益 = 1 + Rf/Rg。",
+  "role": "amplifier",
+  "version": "0.2.0",
+  "signals": [
+    {"id": "out", "type": "net", "name_pattern": ".*",
+     "expected_pin_category": "output", "required": true},
+    {"id": "inv", "type": "net", "name_pattern": ".*",
+     "expected_pin_category": "inv_input", "required": true},
+    {"id": "gnd", "type": "net", "name_pattern": "^(GND|CGND|PGND|AGND|DGND|VSS)$", "required": true}
+  ],
+  "components": [
+    {
+      "id": "Rf", "type": "Resistor", "required": true,
+      "title": "运放反馈电阻（Rf，同相反馈对）",
+      "pins": [
+        {"number": "1", "net": "out"},
+        {"number": "2", "net": "inv"}
+      ]
+    },
+    {
+      "id": "Rg", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "inv"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 2, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.45, "naming": 0.05, "parametric": 0.20, "type": 0.30},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

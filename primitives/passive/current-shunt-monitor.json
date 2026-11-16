@@ -1,0 +1,66 @@
+{
+  "$schema": "./schema.json",
+  "id": "current-shunt-monitor",
+  "name": "电流采样电阻",
+  "description": "小阻值精密电阻串联在电源路径中，两端压降反映电流；常配合电流检测放大器使用。",
+  "role": "power",
+  "version": "0.3.0",
+  "signals": [
+    {
+      "id": "pwr_in",
+      "type": "net",
+      "name_pattern": ".*",
+      "expected_role": [
+        "power",
+        "gnd"
+      ],
+      "required": true
+    },
+    {
+      "id": "pwr_out",
+      "type": "net",
+      "name_pattern": ".*",
+      "expected_role": [
+        "power",
+        "gnd"
+      ],
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "R_shunt",
+      "type": "Resistor",
+      "required": true,
+      "value_pattern": "^(?!0+(?:\\.0+)?(?:m?[RΩ](?![\\d_-])|$))(?!0R0+(?!\\d))(?!R0+(?!\\d))(?:0+(?:\\.0+)?m?[RΩ][-_][A-Za-z0-9]+|0\\.\\d+(?:[RΩ]|$)|0R\\d{1,2}|1(?:\\.0+)?[RΩ](?![\\d.])|R0\\d{1,2}(?!\\d)|R[1-9]\\d{0,2}(?!\\d)|\\d+(?:\\.\\d+)?m[ΩR]|m[ΩR])",
+      "strict_value": true,
+      "pins": [
+        {
+          "number": "1",
+          "net": "pwr_in"
+        },
+        {
+          "number": "2",
+          "net": "pwr_out"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.2,
+      "naming": 0.2,
+      "parametric": 0.4,
+      "type": 0.2
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.55,
+      "low": 0.0
+    }
+  }
+}

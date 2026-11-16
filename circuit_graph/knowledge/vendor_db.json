@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "description": "Component part-number prefix knowledge for circuit-graph. Keys are case-insensitive uppercase prefixes. Values describe the manufacturer, category, and typical topology of devices that share the prefix. Edit this file freely; the CLI supports --reload-knowledge for live refresh.",
+  "entries": {
+    "JW": {
+      "manufacturer": "Joulwatt",
+      "category": "dcdc",
+      "subcategory": "buck",
+      "typical_topology": "synchronous_buck",
+      "evidence": {
+        "pin_count_min": 6,
+        "requires": ["input_cap", "inductor", "output_cap"],
+        "output_net_pattern": "SW"
+      }
+    },
+    "HT": {
+      "manufacturer": "Holtek",
+      "category": "ldo",
+      "subcategory": "linear_regulator",
+      "typical_topology": "ldo",
+      "evidence": {
+        "pin_count_min": 3,
+        "requires": ["input_cap", "output_cap"],
+        "output_net_pattern": "VOUT"
+      }
+    },
+    "PE": {
+      "manufacturer": "PowerExpert",
+      "category": "mosfet_pair",
+      "subcategory": "n_and_p_pair",
+      "typical_topology": "complementary_mosfet",
+      "evidence": {
+        "pin_count_min": 6,
+        "requires": ["gate_resistor", "source_to_load"]
+      }
+    },
+    "TP": {
+      "manufacturer": "TouchPadIC",
+      "category": "touch_ic",
+      "subcategory": "capacitive_touch",
+      "typical_topology": "touch_controller",
+      "evidence": {
+        "pin_count_min": 6,
+        "requires": ["sense_pad"]
+      }
+    }
+  }
+}

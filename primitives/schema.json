@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "circuit-graph topology primitive",
+  "type": "object",
+  "required": ["id", "name", "signals", "components"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "role": {"type": "string"},
+    "version": {"type": "string"},
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "name_pattern"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"type": "string", "enum": ["net"]},
+          "name_pattern": {"type": "string"},
+          "required": {"type": "boolean", "default": true},
+          "expected_role": {
+            "oneOf": [
+              {"type": ["string", "null"], "enum": ["power", "gnd", "analog", "digital", "clock", null]},
+              {"type": "array", "items": {"type": "string", "enum": ["power", "gnd", "analog", "digital", "clock"]}, "minItems": 1}
+            ]
+          },
+          "expected_direction": {
+            "type": ["string", "null"],
+            "enum": ["source", "load", "bidirectional", null]
+          },
+          "expected_level": {"type": ["string", "null"]},
+          "expected_ic_pin": {
+            "description": "要求该 net 是否接到 IC 引脚：required=至少一个 IC 引脚落在该网上；forbidden=该网不得接任何 IC 引脚。用于区分拓扑相同但语义不同的电路（如\"信号源→分压→MCU ADC 采样\" vs \"运放反馈网络\"）。",
+            "oneOf": [{"type": ["string", "null"], "enum": ["required", "forbidden", null]}]
+          },
+          "expected_connector_pin": {
+            "description": "要求该 net 是否接到连接器引脚：required=至少一个连接器引脚落在该网上；forbidden=该网不得接任何连接器引脚。用于区分\"串口线限流电阻→连接器\"与\"IC→浮空网\"这类拓扑相同但语义不同的电路。",
+            "oneOf": [{"type": ["string", "null"], "enum": ["required", "forbidden", null]}]
+          },
+          "expected_pin_category": {
+            "description": "要求该 net 上至少有一个 IC 引脚的 category 匹配（从 KB pinout + chip_resolver 推断）。用于区分拓扑相同但语义不同的电路（如运放反馈对 vs 电阻分压器）。",
+            "oneOf": [
+              {"type": ["string", "null"], "enum": ["power_in", "power_out", "ground", "input", "output", "inv_input", "noninv_input", "gpio", "comm", "clock", "nc", "unknown", null]},
+              {"type": "array", "items": {"type": "string", "enum": ["power_in", "power_out", "ground", "input", "output", "inv_input", "noninv_input", "gpio", "comm", "clock", "nc", "unknown"]}, "minItems": 1}
+            ]
+          },
+          "pin_category_fallback": {
+            "description": "true 时 expected_pin_category 仅作为网名不匹配时的补充证据（网名 OR 类别）；缺省 false 保持网名与类别都必需的严格防误判语义。",
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "pins"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {
+            "oneOf": [
+              {"type": "string"},
+              {"type": "array", "items": {"type": "string"}, "minItems": 1}
+            ]
+          },
+          "required": {"type": "boolean", "default": true},
+          "value_pattern": {"type": ["string", "null"]},
+          "pin_count_max": {"type": ["integer", "null"], "minimum": 1},
+          "strict_value": {"type": "boolean", "default": false},
+          "pins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["number", "net"],
+              "properties": {
+                "number": {"type": ["string", "integer"]},
+                "net": {"type": "string"},
+                "optional": {"type": "boolean", "default": false}
+              }
+            }
+          }
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "properties": {
+        "min_components": {"type": "integer", "minimum": 1},
+        "exact_component_count": {"type": "boolean"}
+      }
+    },
+    "symmetry": {
+      "type": "object",
+      "description": "重复结构分组声明：多块同模板实例按 axis_signal 所在网络归为一组，并列出轴网上的差异件",
+      "properties": {
+        "axis_signal": {"type": "string"},
+        "include_axis_extras": {"type": "boolean", "default": true}
+      },
+      "required": ["axis_signal"],
+      "additionalProperties": false
+    },
+    "scoring": {
+      "type": "object",
+      "properties": {
+        "weights": {"type": "object"},
+        "thresholds": {"type": "object"}
+      }
+    }
+  }
+}

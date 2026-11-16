@@ -1,0 +1,16 @@
+{
+  "files": {
+    "standard-parts.json": {
+      "sha256": "6117156c4b3173555ca888dbb3cbb1c958b9166915ad2a3c546bcd978ae01a85",
+      "bytes": 65918,
+      "source_path": ".agents/skills/easyeda-agent/references/standard-parts.json"
+    },
+    "symbol-pins.json": {
+      "sha256": "b51b334257137eebb321bdf0e4552cfd4f97c7870befe8e04683caa3eea0b678",
+      "bytes": 38651,
+      "source_path": ".agents/skills/easyeda-agent/references/symbol-pins.json"
+    }
+  },
+  "source_repo": "E:/__electric/__workspace/stacking/easyeda-agent",
+  "source_commit": "af76cd7ea73cd9789a68782cb4ad18d921fd0074"
+}

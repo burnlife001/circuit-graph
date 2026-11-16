@@ -1,0 +1,115 @@
+{
+  "$schema": "./schema.json",
+  "id": "detector-amp-sampling",
+  "name": "二极管检波带通 ADC 采样",
+  "description": "二极管对开关节点信号整流，经 RC 低通（保持）和 RC 高通（耦合）构成带通滤波，配合分压偏置提供 MCU ADC 直流偏置点，再经输出 RC 低通送入 ADC。用于开关电源输出电压采样、信号幅度检测。",
+  "role": "analog",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "sw_node", "type": "net",
+      "name_pattern": "^(VBAK|VBUS|VIN|VSW|SW|BOOST|BUCK|VOUT|VDMO).*",
+      "required": true
+    },
+    {
+      "id": "mid", "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "peak_node", "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "sample_node", "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "adc_out", "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "ref_high", "type": "net",
+      "name_pattern": "^(VDD|VDDA|VDA|VDB|VREF|VCC|5V\\d*|3V\\d*|USB_5V|\\+?\\d+(\\.\\d+)?V)$",
+      "required": true
+    },
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|CGND|PGND|AGND|DGND|VSS)$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "D_rect", "type": "Diode", "required": true,
+      "pins": [
+        {"number": "A", "net": "sw_node"},
+        {"number": "K", "net": "mid"}
+      ]
+    },
+    {
+      "id": "R_series", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "mid"},
+        {"number": "2", "net": "peak_node"}
+      ]
+    },
+    {
+      "id": "C_hold", "type": "Capacitor", "required": true,
+      "pins": [
+        {"number": "1", "net": "peak_node"},
+        {"number": "2", "net": "gnd"}
+      ]
+    },
+    {
+      "id": "R_bleed", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "peak_node"},
+        {"number": "2", "net": "gnd"}
+      ]
+    },
+    {
+      "id": "C_couple", "type": "Capacitor", "required": true,
+      "pins": [
+        {"number": "1", "net": "peak_node"},
+        {"number": "2", "net": "sample_node"}
+      ]
+    },
+    {
+      "id": "R_bias_hi", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "sample_node"},
+        {"number": "2", "net": "ref_high"}
+      ]
+    },
+    {
+      "id": "R_bias_lo", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "sample_node"},
+        {"number": "2", "net": "gnd"}
+      ]
+    },
+    {
+      "id": "R_lp", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "sample_node"},
+        {"number": "2", "net": "adc_out"}
+      ]
+    },
+    {
+      "id": "C_lp", "type": "Capacitor", "required": true,
+      "pins": [
+        {"number": "1", "net": "adc_out"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 9, "exact_component_count": false},
+  "scoring": {
+    "weights": {"structural": 0.40, "naming": 0.25, "parametric": 0.10, "type": 0.25},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

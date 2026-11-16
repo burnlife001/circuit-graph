@@ -1,0 +1,104 @@
+{
+  "$schema": "./schema.json",
+  "id": "peak-envelope-detector",
+  "name": "峰值包络检波采样电路",
+  "description": "开关二极管对开关节点/高频方波整流，经串联限流电阻对保持电容充电形成峰值包络；并由上拉/泄放电阻构成放电回路，输出送往 MCU ADC 做电压监测。典型用于开关电源升压相、VBUS 过压采样。",
+  "role": "analog",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "sw_node",
+      "type": "net",
+      "name_pattern": "^(VBAK|VBUS|VIN|VSW|SW|BOOST|BUCK|VOUT|VDMO).*",
+      "required": true
+    },
+    {
+      "id": "mid",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "peak_node",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "ref_high",
+      "type": "net",
+      "name_pattern": "^(VDD|VDDA|VDA|VDB|VREF|VCC|5V|3V3|3\\.3V|5V1|5V2).*",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS|CGND)$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "D_rect",
+      "type": "Diode",
+      "required": true,
+      "pins": [
+        {"number": "A", "net": "sw_node"},
+        {"number": "K", "net": "mid"}
+      ]
+    },
+    {
+      "id": "R_series",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "mid"},
+        {"number": "2", "net": "peak_node"}
+      ]
+    },
+    {
+      "id": "R_pull",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "peak_node"},
+        {"number": "2", "net": "ref_high"}
+      ]
+    },
+    {
+      "id": "R_bleed",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "peak_node"},
+        {"number": "2", "net": "gnd"}
+      ]
+    },
+    {
+      "id": "C_hold",
+      "type": "Capacitor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "peak_node"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 5,
+    "exact_component_count": false
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.40,
+      "naming": 0.20,
+      "parametric": 0.15,
+      "type": 0.25
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.55,
+      "low": 0.0
+    }
+  }
+}

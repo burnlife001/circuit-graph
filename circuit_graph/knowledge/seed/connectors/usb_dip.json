@@ -1,0 +1,12 @@
+{
+  "connector_type": "USB_4PIN_DIP",
+  "description": "USB-A receptacle, 8-pin footprint with 4 signal pins and 4 shield/mount tabs",
+  "package": "USB-A",
+  "pin_count": 4,
+  "pins": [
+    {"number": "1", "name": "VBUS",   "pin_type": "power_in"},
+    {"number": "2", "name": "D-",     "pin_type": "comm"},
+    {"number": "3", "name": "D+",     "pin_type": "comm"},
+    {"number": "4", "name": "GND",    "pin_type": "ground"}
+  ]
+}

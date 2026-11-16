@@ -1,0 +1,50 @@
+{
+  "$schema": "./schema.json",
+  "id": "rc-snubber-series",
+  "name": "RC 吸收网络（R+C 串联到地）",
+  "description": "开关节点经小阻值电阻串联小容量电容到地的 snubber：R 限制充放电峰值电流并阻尼谐振，C 吸收高频振铃，常用于 MOSFET/开关节点 EMI 抑制。",
+  "role": "switch",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "sw", "type": "net",
+      "name_pattern": "^SW\\d+$",
+      "required": true
+    },
+    {
+      "id": "snub_mid", "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|CGND|PGND|AGND|DGND)$",
+      "expected_role": "gnd",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "R_snub", "type": "Resistor", "required": true,
+      "value_pattern": "^\\d+(\\.\\d+)?\\s*(R|Ω)(/NC)?$",
+      "pins": [
+        {"number": "1", "net": "sw"},
+        {"number": "2", "net": "snub_mid"}
+      ]
+    },
+    {
+      "id": "C_snub", "type": "Capacitor", "required": true,
+      "value_pattern": "^\\d+(\\.\\d+)?\\s*[np][Ff]",
+      "pins": [
+        {"number": "1", "net": "snub_mid"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 2, "exact_component_count": true},
+  "symmetry": {"axis_signal": "sw", "include_axis_extras": true},
+  "scoring": {
+    "weights": {"structural": 0.35, "naming": 0.20, "parametric": 0.25, "type": 0.20},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

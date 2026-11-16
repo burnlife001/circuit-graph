@@ -1,0 +1,63 @@
+{
+  "$schema": "./schema.json",
+  "id": "serial-line-current-limit",
+  "name": "串口线限流保护电阻",
+  "description": "限流保护容错电阻：串在 MCU 串口线（RXD/TXD）与连接器之间，限制总线电流，并对误接/静电冲击做容错保护。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "sig",
+      "type": "net",
+      "name_pattern": "^(RXD|TXD|RX|TX|URXD|UTXD|RXD_.*|TXD_.*|.*_RXD|.*_TXD|.*_RX|.*_TX|.*UART.*)$",
+      "expected_role": "digital",
+      "expected_ic_pin": "required",
+      "required": true
+    },
+    {
+      "id": "conn",
+      "type": "net",
+      "name_pattern": ".*",
+      "expected_ic_pin": "forbidden",
+      "expected_connector_pin": "required",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "R_lim",
+      "type": "Resistor",
+      "required": true,
+      "strict_value": true,
+      "value_pattern": "^(1[0-9]{2}|2[0-9]{2}|3[0-9]{2}|4[0-9]{2}|5[0-9]{2}|6[0-9]{2})\\s*([RrΩ]|OHM)?$",
+      "title": "限流保护容错电阻",
+      "pins": [
+        {
+          "number": "1",
+          "net": "sig"
+        },
+        {
+          "number": "2",
+          "net": "conn"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.30,
+      "naming": 0.30,
+      "parametric": 0.20,
+      "type": 0.20
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.55,
+      "low": 0.0
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "./schema.json",
+  "id": "pmos-high-side-switch",
+  "name": "PMOS 高边开关",
+  "description": "PMOS 源极接电源，漏极接负载，栅极接控制信号（通常需拉低导通）。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "vcc", "type": "net",
+      "name_pattern": "^(VCC|VDD|VBUS|\\+?\\d+\\.?\\d*V|\\+?\\d+V\\d+).*",
+      "expected_role": "power",
+      "required": true
+    },
+    {"id": "load_net", "type": "net", "name_pattern": ".*", "required": true},
+    {
+      "id": "ctrl", "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "digital",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "Q1", "type": "Mosfet", "required": true, "pin_count_max": 6,
+      "pins": [
+        {"number": "S", "net": "vcc"},
+        {"number": "D", "net": "load_net"},
+        {"number": "G", "net": "ctrl"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.30, "naming": 0.20, "parametric": 0.10, "type": 0.40},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

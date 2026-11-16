@@ -1,0 +1,78 @@
+{
+  "LM358": {
+    "description": "Dual op-amp, single supply",
+    "units": {
+      "A": {
+        "type": "power",
+        "pins": {"V+": "8", "V-": "4"}
+      },
+      "B": {
+        "type": "opamp",
+        "pins": {"OUT": "1", "IN-": "2", "IN+": "3"}
+      },
+      "C": {
+        "type": "opamp",
+        "pins": {"OUT": "7", "IN-": "6", "IN+": "5"}
+      }
+    }
+  },
+  "TL072": {
+    "description": "Dual JFET op-amp",
+    "units": {
+      "A": {
+        "type": "opamp",
+        "pins": {"OUT": "1", "IN-": "2", "IN+": "3"}
+      },
+      "B": {
+        "type": "opamp",
+        "pins": {"OUT": "7", "IN-": "6", "IN+": "5"}
+      },
+      "C": {
+        "type": "power",
+        "pins": {"V+": "8", "V-": "4"}
+      }
+    }
+  },
+  "LM324": {
+    "description": "Quad op-amp, single supply",
+    "units": {
+      "A": {
+        "type": "opamp",
+        "pins": {"OUT": "1", "IN-": "2", "IN+": "3"}
+      },
+      "B": {
+        "type": "opamp",
+        "pins": {"OUT": "7", "IN-": "6", "IN+": "5"}
+      },
+      "C": {
+        "type": "opamp",
+        "pins": {"OUT": "8", "IN-": "9", "IN+": "10"}
+      },
+      "D": {
+        "type": "opamp",
+        "pins": {"OUT": "14", "IN-": "13", "IN+": "12"}
+      },
+      "E": {
+        "type": "power",
+        "pins": {"V+": "4", "V-": "11"}
+      }
+    }
+  },
+  "LM393": {
+    "description": "Dual comparator, open-collector output",
+    "units": {
+      "A": {
+        "type": "comparator",
+        "pins": {"OUT": "1", "IN-": "2", "IN+": "3"}
+      },
+      "B": {
+        "type": "comparator",
+        "pins": {"OUT": "7", "IN-": "6", "IN+": "5"}
+      },
+      "C": {
+        "type": "power",
+        "pins": {"V+": "8", "V-": "4"}
+      }
+    }
+  }
+}

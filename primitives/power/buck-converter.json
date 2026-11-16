@@ -1,0 +1,101 @@
+{
+  "$schema": "./schema.json",
+  "id": "buck-converter",
+  "name": "同步降压变换器",
+  "description": "同步降压变换器 IC：VIN 输入，SW 经电感/电容滤波输出，FB 做输出电压反馈，GND 接地，BST 为高侧驱动自举节点，EN 使能。靠引脚角色（非物理引脚号）区分同类拓扑的其它 IC（如运放）。",
+  "role": "regulator",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "vin",
+      "type": "net",
+      "name_pattern": ".*",
+      "expected_pin_category": "power_in",
+      "required": true
+    },
+    {
+      "id": "sw",
+      "type": "net",
+      "name_pattern": ".*",
+      "expected_pin_category": "power_out",
+      "required": true
+    },
+    {
+      "id": "fb",
+      "type": "net",
+      "name_pattern": ".*",
+      "expected_pin_category": "input",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "required": true
+    },
+    {
+      "id": "bst",
+      "type": "net",
+      "name_pattern": ".*",
+      "expected_pin_category": "power_out",
+      "required": true
+    },
+    {
+      "id": "en",
+      "type": "net",
+      "name_pattern": ".*",
+      "expected_pin_category": "input",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "dcdc",
+      "type": "IC",
+      "required": true,
+      "pins": [
+        {
+          "number": "VIN",
+          "net": "vin"
+        },
+        {
+          "number": "SW",
+          "net": "sw"
+        },
+        {
+          "number": "FB",
+          "net": "fb"
+        },
+        {
+          "number": "GND",
+          "net": "gnd"
+        },
+        {
+          "number": "BST",
+          "net": "bst"
+        },
+        {
+          "number": "EN",
+          "net": "en"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.35,
+      "naming": 0.25,
+      "parametric": 0.2,
+      "type": 0.2
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

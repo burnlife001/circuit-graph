@@ -1,0 +1,37 @@
+{
+  "$schema": "./schema.json",
+  "id": "bridge-rectifier",
+  "name": "桥式整流器",
+  "description": "4 个二极管组成全波整流桥：2 个 AC 输入，1 个 DC+ 输出，1 个 DC- 输出（通常接地）。",
+  "role": "power",
+  "version": "0.1.0",
+  "signals": [
+    {"id": "ac1",     "type": "net", "name_pattern": "^(AC\\d*|AC_L|AC_N|L|N)$", "required": true},
+    {"id": "ac2",     "type": "net", "name_pattern": "^(AC\\d*|AC_L|AC_N|L|N)$", "required": true},
+    {"id": "dc_plus", "type": "net", "name_pattern": "(VDC|\\+V|DC\\+|VOUT|VBUS|\\+DC|^\\d+V).*", "required": true},
+    {"id": "dc_minus","type": "net", "name_pattern": "^(GND|PGND|VSS|DC\\-)$", "required": true}
+  ],
+  "components": [
+    {
+      "id": "D1", "type": "Diode", "required": true,
+      "pins": [{"number": "A", "net": "ac1"}, {"number": "K", "net": "dc_plus"}]
+    },
+    {
+      "id": "D2", "type": "Diode", "required": true,
+      "pins": [{"number": "A", "net": "ac2"}, {"number": "K", "net": "dc_plus"}]
+    },
+    {
+      "id": "D3", "type": "Diode", "required": true,
+      "pins": [{"number": "A", "net": "dc_minus"}, {"number": "K", "net": "ac1"}]
+    },
+    {
+      "id": "D4", "type": "Diode", "required": true,
+      "pins": [{"number": "A", "net": "dc_minus"}, {"number": "K", "net": "ac2"}]
+    }
+  ],
+  "constraints": {"min_components": 4, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.40, "naming": 0.30, "parametric": 0.10, "type": 0.20},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

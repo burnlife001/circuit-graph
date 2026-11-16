@@ -1,0 +1,37 @@
+{
+  "$schema": "./schema.json",
+  "id": "tvs-protection",
+  "name": "TVS 保护二极管",
+  "description": "TVS 二极管跨接在被保护信号/电源与地之间，过压时击穿钳位。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "protected", "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "power",
+      "required": true
+    },
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "expected_role": "gnd",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "D_tvs", "type": "Diode", "required": true,
+      "value_pattern": "(SMBJ|SMCJ|P6KE|TVS|ESD)",
+      "pins": [
+        {"number": "A", "net": "gnd"},
+        {"number": "K", "net": "protected"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.20, "naming": 0.20, "parametric": 0.40, "type": 0.20},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

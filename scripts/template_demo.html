@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>模式层模板工作台</title>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --bg-alt: #1a1a1a;
+      --bg-hover: #252525;
+      --border: #2a2a2a;
+      --text: #c8c8c8;
+      --text-dim: #6a6a6a;
+      --text-bright: #e8e8e8;
+      --accent: #3b82f6;
+      --accent-bg: #1e3a5f;
+      --mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-family: system-ui, sans-serif;
+      color-scheme: dark;
+    }
+    body { margin: 0; padding: 0 1rem 2rem; background: var(--bg); color: var(--text); }
+  .layer-banner { background: #111; color: var(--text-bright); border-bottom: 1px solid var(--border);
+    padding: 0.5rem 1rem; position: sticky; top: 0; z-index: 10; display: flex;
+    justify-content: space-between; align-items: center; }
+  .layer-banner strong { letter-spacing: 0.05em; }
+  .tabs { display: flex; gap: 0.5rem; margin: 1rem 0; flex-wrap: wrap; }
+  .tabs button { padding: 0.4rem 0.9rem; border: 1px solid var(--border); background: var(--bg-alt);
+    color: var(--text); cursor: pointer; border-radius: 4px; }
+  .tabs button:hover { background: var(--bg-hover); }
+  .tabs button.active { background: var(--accent-bg); color: #fff; border-color: var(--accent); }
+  .panel { display: none; background: var(--bg-alt); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem; }
+    .panel.active { display: block; }
+    h2, h3 { color: var(--text-bright); }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 0.35rem 0.5rem; text-align: left; }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover { background: var(--bg-hover); }
+    pre { background: #000; color: #dcdcdc; padding: 0.75rem; overflow: auto; font-size: 12px;
+      border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .warn { color: #f87171; font-size: 13px; }
+    label { display: block; margin: 0.4rem 0; font-size: 14px; }
+    input, select, textarea { width: 100%; max-width: 32rem; padding: 0.3rem; background: var(--bg);
+      color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: none; }
+    input[type="checkbox"] { width: auto; accent-color: var(--accent); }
+    button { padding: 0.4rem 0.9rem; border: 1px solid var(--border); background: var(--bg-alt);
+      color: var(--text); border-radius: 4px; cursor: pointer; }
+    button:hover { background: var(--bg-hover); }
+    .slot-row { border: 1px solid var(--border); background: var(--bg); padding: 0.5rem;
+      margin: 0.5rem 0; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="layer-banner">
+    <div><strong>模式层 · 只读</strong> — 写入仅 primitives/**/*.json（保存需显式开启）</div>
+    <span id="status">就绪</span>
+  </div>
+
+  <div class="tabs">
+    <button type="button" data-tab="list" class="active">模板列表</button>
+    <button type="button" data-tab="detail">模板详情</button>
+    <button type="button" data-tab="replay">板级回放</button>
+    <button type="button" data-tab="draft">板驱动草稿</button>
+    <button type="button" data-tab="save">校验 / 保存</button>
+  </div>
+
+  <section id="panel-list" class="panel active">
+    <h2>模板列表</h2>
+    <table id="prim-table"><thead><tr><th>id</th><th>name</th><th>version</th><th>成员</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section id="panel-detail" class="panel">
+    <h2>模板详情</h2>
+    <p id="detail-meta"></p>
+    <div class="grid">
+      <div><h3>Signals</h3><pre id="detail-signals"></pre></div>
+      <div><h3>Components</h3><pre id="detail-components"></pre></div>
+    </div>
+    <h3>Constraints / Scoring</h3>
+    <pre id="detail-constraints"></pre>
+    <h3>原始 JSON</h3>
+    <pre id="detail-raw"></pre>
+  </section>
+
+  <section id="panel-replay" class="panel">
+    <h2>板级回放</h2>
+    <label>Fixture <select id="board-select"></select></label>
+    <label>限定模板（可选）<input id="replay-template" placeholder="jw5065-buck" /></label>
+    <button type="button" id="btn-match">运行回放</button>
+    <pre id="replay-out"></pre>
+  </section>
+
+  <section id="panel-draft" class="panel">
+    <h2>板驱动草稿</h2>
+    <label>板 <select id="draft-board"></select></label>
+    <label>芯片位号 <input id="draft-chip" value="U4" /></label>
+    <button type="button" id="btn-load-chip">加载引脚 / 邻接</button>
+    <div class="grid">
+      <div><h3>KB 引脚表</h3><pre id="draft-pinout"></pre></div>
+      <div><h3>引脚 → 同网元件</h3><pre id="draft-conn"></pre></div>
+    </div>
+    <h3>槽位（链编辑器）</h3>
+    <div id="slots"></div>
+    <button type="button" id="btn-add-slot">+ 槽位</button>
+    <h3>共享中间网</h3>
+    <div id="shared-signals"></div>
+    <button type="button" id="btn-add-shared">+ 共享 signal</button>
+    <button type="button" id="btn-draft">生成草稿 JSON</button>
+    <button type="button" id="btn-download-draft">下载草稿</button>
+    <pre id="draft-out"></pre>
+  </section>
+
+  <section id="panel-save" class="panel">
+    <h2>校验与保存</h2>
+    <p class="warn">默认只读。保存前需 schema + 可选 fixture 回放；保存后请手跑 pytest。</p>
+    <label>相对路径（primitives/ 下）<input id="save-file" placeholder="power/draft-xxx.json" /></label>
+    <label>自检板 <select id="validate-board"></select></label>
+    <label><input type="checkbox" id="enable-write" /> enable_write（允许写盘）</label>
+    <label><input type="checkbox" id="confirm-version" /> confirm_unchanged_version</label>
+    <textarea id="save-json" rows="14" placeholder="粘贴模板 JSON"></textarea>
+    <button type="button" id="btn-validate">POST /api/validate</button>
+    <button type="button" id="btn-save">POST /api/save</button>
+    <button type="button" id="btn-reindex">POST /api/index/rebuild</button>
+    <pre id="save-out"></pre>
+  </section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const status = (t) => { $("status").textContent = t; };
+
+let currentRaw = null;
+let lastDraft = null;
+let connData = null;
+const fileById = {};
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+function showTab(name) {
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $(`panel-${name}`).classList.add("active");
+}
+
+document.querySelectorAll(".tabs button").forEach(b => {
+  b.addEventListener("click", () => showTab(b.dataset.tab));
+});
+
+function fillBoardSelects(boards) {
+  ["board-select", "draft-board", "validate-board"].forEach(id => {
+    const sel = $(id);
+    sel.innerHTML = boards.map(b => `<option value="${b}">${b}</option>`).join("");
+  });
+}
+
+async function loadPrimitives() {
+  const rows = await api("/api/primitives");
+  const tb = $("prim-table").querySelector("tbody");
+  tb.innerHTML = "";
+  rows.forEach(row => {
+    fileById[row.id] = row.file;
+    const tr = document.createElement("tr");
+    tr.className = "clickable";
+    tr.innerHTML = `<td>${row.id}</td><td>${row.name}</td><td>${row.version}</td><td>${row.member_count}</td>`;
+    tr.onclick = () => openPrimitive(row.id);
+    tb.appendChild(tr);
+  });
+}
+
+async function openPrimitive(id) {
+  status("加载 " + id);
+  const data = await api(`/api/primitives/${id}`);
+  currentRaw = data.raw;
+  $("detail-meta").textContent = `${data.raw.id} · v${data.raw.version} · ${data.raw.name}`;
+  $("detail-signals").textContent = JSON.stringify(data.render.signals, null, 2);
+  $("detail-components").textContent = JSON.stringify(data.render.components, null, 2);
+  $("detail-constraints").textContent = JSON.stringify({
+    constraints: data.render.constraints,
+    scoring: data.render.scoring,
+    symmetry: data.render.symmetry
+  }, null, 2);
+  $("detail-raw").textContent = JSON.stringify(data.raw, null, 2);
+  $("save-json").value = JSON.stringify(data.raw, null, 2);
+  $("save-file").value = fileById[id] || "";
+  showTab("detail");
+  status("就绪");
+}
+
+async function loadBoards() {
+  const boards = await api("/api/boards");
+  fillBoardSelects(boards);
+}
+
+$("btn-match").onclick = async () => {
+  const board = $("board-select").value;
+  const tid = $("replay-template").value.trim();
+  let url = `/api/match?board=${encodeURIComponent(board)}`;
+  if (tid) url += `&template_id=${encodeURIComponent(tid)}`;
+  $("replay-out").textContent = "…";
+  try {
+    const data = await api(url);
+    $("replay-out").textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    $("replay-out").textContent = e.message;
+  }
+};
+
+function slotTemplate() {
+  return { designator: "", member_id: "", title: "", value_type: "any", optional_group: "", required: false };
+}
+
+function renderSlots() {
+  const root = $("slots");
+  root.innerHTML = "";
+  (window._slots || []).forEach((s, i) => {
+    const div = document.createElement("div");
+    div.className = "slot-row";
+    div.innerHTML = `
+      <label>位号 <input data-i="${i}" data-k="designator" value="${s.designator||""}"></label>
+      <label>成员 id <input data-i="${i}" data-k="member_id" value="${s.member_id||""}" placeholder="C_bst"></label>
+      <label>用途 title <input data-i="${i}" data-k="title" value="${s.title||""}"></label>
+      <label>值类型
+        <select data-i="${i}" data-k="value_type">
+          <option value="any">任意</option>
+          <option value="zero_ohm_jumper">0Ω 跳线</option>
+          <option value="bootstrap_resistor_1_2ohm">自举 1–2Ω</option>
+          <option value="cap_nf">nF 电容</option>
+        </select>
+      </label>
+      <label>optional_group <input data-i="${i}" data-k="optional_group" value="${s.optional_group||""}"></label>
+      <label><input type="checkbox" data-i="${i}" data-k="required" ${s.required?"checked":""}> required</label>
+      <button type="button" data-rm="${i}">删除</button>`;
+    div.querySelectorAll("input,select").forEach(el => {
+      el.addEventListener("change", () => {
+        const k = el.dataset.k;
+        window._slots[i][k] = el.type === "checkbox" ? el.checked : el.value;
+      });
+    });
+    div.querySelector("select[data-k=value_type]").value = s.value_type || "any";
+    div.querySelector(`button[data-rm]`).onclick = () => {
+      window._slots.splice(i, 1); renderSlots();
+    };
+    root.appendChild(div);
+  });
+}
+
+window._slots = [ { designator: "C70", member_id: "C_bst", title: "自举电容", value_type: "cap_nf" } ];
+window._shared = [ { id: "bst_mid", net_names: ["NetC70_2"] } ];
+
+function renderShared() {
+  const root = $("shared-signals");
+  root.innerHTML = "";
+  window._shared.forEach((s, i) => {
+    const div = document.createElement("div");
+    div.className = "slot-row";
+    div.innerHTML = `
+      <label>signal id <input data-i="${i}" data-k="id" value="${s.id||""}"></label>
+      <label>网名（逗号分隔）<input data-i="${i}" data-k="net_names" value="${(s.net_names||[]).join(",")}"></label>
+      <button type="button" data-rm="${i}">删除</button>`;
+    div.querySelectorAll("input").forEach(el => {
+      el.addEventListener("change", () => {
+        const k = el.dataset.k;
+        window._shared[i][k] = k === "net_names" ? el.value.split(",").map(x => x.trim()).filter(Boolean) : el.value;
+      });
+    });
+    div.querySelector("button").onclick = () => { window._shared.splice(i,1); renderShared(); };
+    root.appendChild(div);
+  });
+}
+
+$("btn-add-slot").onclick = () => { window._slots.push(slotTemplate()); renderSlots(); };
+$("btn-add-shared").onclick = () => { window._shared.push({ id: "", net_names: [] }); renderShared(); };
+
+$("btn-load-chip").onclick = async () => {
+  const board = $("draft-board").value;
+  const chip = $("draft-chip").value.trim();
+  try {
+    const pinout = await api(`/api/boards/${encodeURIComponent(board)}/pinout/${encodeURIComponent(chip)}`);
+    $("draft-pinout").textContent = JSON.stringify(pinout, null, 2);
+    connData = await api(`/api/boards/${encodeURIComponent(board)}/conn/${encodeURIComponent(chip)}`);
+    $("draft-conn").textContent = JSON.stringify(connData, null, 2);
+  } catch (e) {
+    $("draft-pinout").textContent = e.message;
+  }
+};
+
+$("btn-draft").onclick = async () => {
+  const payload = {
+    board: $("draft-board").value,
+    chip: $("draft-chip").value.trim(),
+    function: "JW5065 草稿",
+    slots: window._slots,
+    shared_signals: window._shared,
+    chip_slot: { member_id: "dcdc", required: true },
+    id: "draft-jw5065-u4-c70",
+    role: "regulator"
+  };
+  try {
+    const data = await api("/api/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    lastDraft = data.draft;
+    $("draft-out").textContent = JSON.stringify(data, null, 2);
+    $("save-json").value = JSON.stringify(data.draft, null, 2);
+  } catch (e) {
+    $("draft-out").textContent = e.message;
+  }
+};
+
+$("btn-download-draft").onclick = () => {
+  if (!lastDraft) return;
+  const blob = new Blob([JSON.stringify(lastDraft, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (lastDraft.id || "draft") + ".json";
+  a.click();
+};
+
+$("btn-validate").onclick = async () => {
+  const doc = JSON.parse($("save-json").value);
+  const body = { template: doc, board: $("validate-board").value };
+  try {
+    $("save-out").textContent = JSON.stringify(await api("/api/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), null, 2);
+  } catch (e) { $("save-out").textContent = e.message; }
+};
+
+$("btn-save").onclick = async () => {
+  const doc = JSON.parse($("save-json").value);
+  const body = {
+    template: doc,
+    file: $("save-file").value.trim(),
+    board: $("validate-board").value,
+    enable_write: $("enable-write").checked,
+    confirm_unchanged_version: $("confirm-version").checked
+  };
+  try {
+    $("save-out").textContent = JSON.stringify(await api("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), null, 2);
+  } catch (e) { $("save-out").textContent = e.message; }
+};
+
+$("btn-reindex").onclick = async () => {
+  try {
+    $("save-out").textContent = JSON.stringify(await api("/api/index/rebuild", { method: "POST" }), null, 2);
+  } catch (e) { $("save-out").textContent = e.message; }
+};
+
+(async () => {
+  renderSlots();
+  renderShared();
+  await loadBoards();
+  await loadPrimitives();
+  const fx = "FX-T268-V6-10米-5065.NET";
+  ["board-select","draft-board","validate-board"].forEach(id => {
+    const sel = $(id);
+    for (const o of sel.options) { if (o.value === fx) sel.value = fx; }
+  });
+})();
+</script>
+</body>
+</html>
