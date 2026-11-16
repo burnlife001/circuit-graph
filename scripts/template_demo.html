@@ -50,8 +50,6 @@
     button { padding: 0.4rem 0.9rem; border: 1px solid var(--border); background: var(--bg-alt);
       color: var(--text); border-radius: 4px; cursor: pointer; }
     button:hover { background: var(--bg-hover); }
-    .slot-row { border: 1px solid var(--border); background: var(--bg); padding: 0.5rem;
-      margin: 0.5rem 0; border-radius: 4px; }
     /* datasheet 对比 tab */
     .cmp-top { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
     .cmp-top label { margin: 0; }
@@ -59,6 +57,7 @@
     .cmp-status { color: var(--text-dim); font-size: 13px; margin: 0.6rem 0 0; }
     .cmp-status.err { color: #f87171; }
     .cmp-status.ok { color: #86efac; }
+    .cmp-status.review { color: #f59e0b; }
     .cmp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.6rem; }
     @media (max-width: 1100px) { .cmp-cols { grid-template-columns: 1fr; } }
     .cmp-pager { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; }
@@ -134,20 +133,22 @@
 
   <section id="panel-draft" class="panel">
     <h2>板驱动草稿</h2>
+    <p class="cmp-status">只读证据 + 自动候选：选板与芯片位号即可出草稿，无需手填任何内部字段。</p>
     <label>板 <select id="draft-board"></select></label>
     <label>芯片位号 <input id="draft-chip" value="U4" /></label>
     <button type="button" id="btn-load-chip">加载引脚 / 邻接</button>
+    <button type="button" id="btn-draft-auto">自动生成草稿</button>
+    <p id="draft-state" class="cmp-status">未生成。</p>
     <div class="grid">
       <div><h3>KB 引脚表</h3><pre id="draft-pinout"></pre></div>
       <div><h3>引脚 → 同网元件</h3><pre id="draft-conn"></pre></div>
     </div>
-    <h3>槽位（链编辑器）</h3>
-    <div id="slots"></div>
-    <button type="button" id="btn-add-slot">+ 槽位</button>
-    <h3>共享中间网</h3>
-    <div id="shared-signals"></div>
-    <button type="button" id="btn-add-shared">+ 共享 signal</button>
-    <button type="button" id="btn-draft">生成草稿 JSON</button>
+    <h3>草稿成员（自动推导）</h3>
+    <table id="draft-table">
+      <thead><tr><th>成员 id</th><th>类型</th><th>引脚 → signal</th><th>required</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" id="btn-draft-to-save">送入校验/保存</button>
     <button type="button" id="btn-download-draft">下载草稿</button>
     <pre id="draft-out"></pre>
   </section>
@@ -292,71 +293,22 @@ $("btn-match").onclick = async () => {
   }
 };
 
-function slotTemplate() {
-  return { designator: "", member_id: "", title: "", value_type: "any", optional_group: "", required: false };
+function draftState(text, kind) {
+  const el = $("draft-state");
+  el.textContent = text;
+  el.className = "cmp-status" + (kind ? " " + kind : "");
 }
 
-function renderSlots() {
-  const root = $("slots");
-  root.innerHTML = "";
-  (window._slots || []).forEach((s, i) => {
-    const div = document.createElement("div");
-    div.className = "slot-row";
-    div.innerHTML = `
-      <label>位号 <input data-i="${i}" data-k="designator" value="${s.designator||""}"></label>
-      <label>成员 id <input data-i="${i}" data-k="member_id" value="${s.member_id||""}" placeholder="C_bst"></label>
-      <label>用途 title <input data-i="${i}" data-k="title" value="${s.title||""}"></label>
-      <label>值类型
-        <select data-i="${i}" data-k="value_type">
-          <option value="any">任意</option>
-          <option value="zero_ohm_jumper">0Ω 跳线</option>
-          <option value="bootstrap_resistor_1_2ohm">自举 1–2Ω</option>
-          <option value="cap_nf">nF 电容</option>
-        </select>
-      </label>
-      <label>optional_group <input data-i="${i}" data-k="optional_group" value="${s.optional_group||""}"></label>
-      <label><input type="checkbox" data-i="${i}" data-k="required" ${s.required?"checked":""}> required</label>
-      <button type="button" data-rm="${i}">删除</button>`;
-    div.querySelectorAll("input,select").forEach(el => {
-      el.addEventListener("change", () => {
-        const k = el.dataset.k;
-        window._slots[i][k] = el.type === "checkbox" ? el.checked : el.value;
-      });
-    });
-    div.querySelector("select[data-k=value_type]").value = s.value_type || "any";
-    div.querySelector(`button[data-rm]`).onclick = () => {
-      window._slots.splice(i, 1); renderSlots();
-    };
-    root.appendChild(div);
+function renderDraftTable(draft) {
+  const tb = $("draft-table").querySelector("tbody");
+  tb.innerHTML = "";
+  (draft.components || []).forEach(c => {
+    const tr = document.createElement("tr");
+    const pins = (c.pins || []).map(p => `${p.number}→${p.net}`).join("  ");
+    tr.innerHTML = `<td>${c.id}</td><td>${c.type}</td><td>${pins}</td><td>${c.required ? "是" : "否"}</td>`;
+    tb.appendChild(tr);
   });
 }
-
-window._slots = [ { designator: "C70", member_id: "C_bst", title: "自举电容", value_type: "cap_nf" } ];
-window._shared = [ { id: "bst_mid", net_names: ["NetC70_2"] } ];
-
-function renderShared() {
-  const root = $("shared-signals");
-  root.innerHTML = "";
-  window._shared.forEach((s, i) => {
-    const div = document.createElement("div");
-    div.className = "slot-row";
-    div.innerHTML = `
-      <label>signal id <input data-i="${i}" data-k="id" value="${s.id||""}"></label>
-      <label>网名（逗号分隔）<input data-i="${i}" data-k="net_names" value="${(s.net_names||[]).join(",")}"></label>
-      <button type="button" data-rm="${i}">删除</button>`;
-    div.querySelectorAll("input").forEach(el => {
-      el.addEventListener("change", () => {
-        const k = el.dataset.k;
-        window._shared[i][k] = k === "net_names" ? el.value.split(",").map(x => x.trim()).filter(Boolean) : el.value;
-      });
-    });
-    div.querySelector("button").onclick = () => { window._shared.splice(i,1); renderShared(); };
-    root.appendChild(div);
-  });
-}
-
-$("btn-add-slot").onclick = () => { window._slots.push(slotTemplate()); renderSlots(); };
-$("btn-add-shared").onclick = () => { window._shared.push({ id: "", net_names: [] }); renderShared(); };
 
 $("btn-load-chip").onclick = async () => {
   const board = $("draft-board").value;
@@ -371,27 +323,41 @@ $("btn-load-chip").onclick = async () => {
   }
 };
 
-$("btn-draft").onclick = async () => {
-  const payload = {
-    board: $("draft-board").value,
-    chip: $("draft-chip").value.trim(),
-    function: "JW5065 草稿",
-    slots: window._slots,
-    shared_signals: window._shared,
-    chip_slot: { member_id: "dcdc", required: true },
-    id: "draft-jw5065-u4-c70",
-    role: "regulator"
-  };
+$("btn-draft-auto").onclick = async () => {
+  const board = $("draft-board").value;
+  const chip = $("draft-chip").value.trim();
+  draftState("自动生成中 …");
+  status("生成草稿");
   try {
-    const data = await api("/api/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const url = `/api/draft/preview?board=${encodeURIComponent(board)}&chip=${encodeURIComponent(chip)}`;
+    const data = await api(url);
     lastDraft = data.draft;
+    const conflicts = data.conflicts || [];
+    const kind = data.state === "ready" ? "ok" : "review";
+    const tail = conflicts.length ? ` · 冲突：${conflicts.join("、")}` : "";
+    const hits = ((data.replay || {}).matched_components || []).length;
+    draftState(
+      `${data.state === "ready" ? "可入库候选" : "需人工复核"} · 引脚来源 ${data.pin_source}` +
+      ` · 回放命中 ${hits} 个元件${tail}`,
+      kind
+    );
+    renderDraftTable(data.draft || {});
     $("draft-out").textContent = JSON.stringify(data, null, 2);
-    $("save-json").value = JSON.stringify(data.draft, null, 2);
+    status("就绪");
   } catch (e) {
-    $("draft-out").textContent = e.message;
+    draftState("生成失败：" + e.message, "err");
+    status("失败");
   }
 };
 
+$("btn-draft-to-save").onclick = () => {
+  if (!lastDraft) { draftState("尚未生成草稿。", "err"); return; }
+  $("save-json").value = JSON.stringify(lastDraft, null, 2);
+  const chip = ($("draft-chip").value.trim() || "chip").toLowerCase();
+  $("save-file").value = `power/draft-${chip}-auto.json`;
+  showTab("save");
+  status("草稿已送入校验/保存");
+};
 $("btn-download-draft").onclick = () => {
   if (!lastDraft) return;
   const blob = new Blob([JSON.stringify(lastDraft, null, 2)], { type: "application/json" });
@@ -642,8 +608,6 @@ $("cmp-zoom").onchange = async () => {
 };
 
 (async () => {
-  renderSlots();
-  renderShared();
   await loadBoards();
   await loadPrimitives();
   const fx = "FX-T268-V6-10米-5065.NET";

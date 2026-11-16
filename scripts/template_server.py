@@ -28,6 +28,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from template_web_lib import (  # noqa: E402
     TemplateWebError,
+    auto_draft,
     build_render_model,
     generate_draft,
     list_board_components,
@@ -131,6 +132,11 @@ class TemplateAPIHandler(BaseHTTPRequestHandler):
                 if template_id:
                     validate_primitive_id(template_id)
                 self._json(match_board(board, template_id=template_id))
+            elif path == "/api/draft/preview":
+                board = (qs.get("board") or [""])[0]
+                chip = (qs.get("chip") or [""])[0]
+                validate_board_name(board)
+                self._json(auto_draft(board, chip, db=self.db))
             else:
                 self._json({"error": "not found"}, 404)
         except TemplateWebError as exc:
@@ -143,7 +149,16 @@ class TemplateAPIHandler(BaseHTTPRequestHandler):
         try:
             body = self._read_body()
             if path == "/api/draft":
-                self._json(generate_draft(body))
+                slots = body.get("slots") or []
+                if slots:
+                    # Legacy path: hand-annotated slots.
+                    self._json(generate_draft(body))
+                else:
+                    board = body.get("board")
+                    chip = body.get("chip")
+                    if not board or not chip:
+                        raise TemplateWebError("board and chip required")
+                    self._json(auto_draft(str(board), str(chip), db=self.db))
             elif path == "/api/validate":
                 doc = body.get("template") or body
                 board = body.get("board")

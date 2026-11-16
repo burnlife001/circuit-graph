@@ -165,3 +165,49 @@ def test_match_fx_includes_u4_and_c70() -> None:
         members.update(block["components"])
     assert "U4" in members
     assert "C70" in members
+
+
+# --------------------------------------------------------------------------
+# HTTP level: POST /api/draft without slots takes the automatic path
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def draft_server() -> str:
+    import threading
+    import urllib.request
+    from http.server import HTTPServer
+
+    import template_server
+
+    from circuit_graph.knowledge.db import ComponentDatabase
+
+    template_server.TemplateAPIHandler.db = ComponentDatabase.default()
+    httpd = HTTPServer(("127.0.0.1", 0), template_server.TemplateAPIHandler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{httpd.server_address[1]}"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
+def test_post_draft_without_slots_returns_state(draft_server: str) -> None:
+    import urllib.request
+
+    body = json.dumps({"board": FX, "chip": "U4"}).encode("utf-8")
+    req = urllib.request.Request(
+        f"{draft_server}/api/draft",
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        assert resp.status == 200
+        data = json.loads(resp.read().decode("utf-8"))
+    assert data["state"] in {"ready", "needs_review"}
+    assert "conflicts" in data
+    assert data["pin_source"] == "kb"
+    assert "C70" in data["replay"]["matched_components"]
