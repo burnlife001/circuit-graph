@@ -52,6 +52,43 @@
     button:hover { background: var(--bg-hover); }
     .slot-row { border: 1px solid var(--border); background: var(--bg); padding: 0.5rem;
       margin: 0.5rem 0; border-radius: 4px; }
+    /* datasheet 对比 tab */
+    .cmp-top { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
+    .cmp-top label { margin: 0; }
+    .cmp-top input, .cmp-top select { width: auto; min-width: 9rem; }
+    .cmp-status { color: var(--text-dim); font-size: 13px; margin: 0.6rem 0 0; }
+    .cmp-status.err { color: #f87171; }
+    .cmp-status.ok { color: #86efac; }
+    .cmp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.6rem; }
+    @media (max-width: 1100px) { .cmp-cols { grid-template-columns: 1fr; } }
+    .cmp-pager { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; }
+    .cmp-pager select { width: auto; }
+    .cmp-pager .page-label { color: var(--text-bright); font-family: var(--mono); font-size: 13px; }
+    .cmp-scroll { max-height: 68vh; overflow: auto; background: #000;
+      border: 1px solid var(--border); border-radius: 6px; }
+    .cmp-stage { position: relative; width: 100%; }
+    .cmp-stage img { width: 100%; display: block; }
+    .cmp-markers { position: absolute; inset: 0; pointer-events: none; }
+    .cmp-marker { position: absolute; background: rgba(250, 204, 21, 0.32);
+      border: 1px solid #facc15; border-radius: 2px; }
+    .cmp-svg-wrap { background: #000; border: 1px solid var(--border);
+      border-radius: 6px; overflow: auto; }
+    #cmp-svg { display: block; width: 100%; height: auto; }
+    .spoke { stroke: #3b82f6; stroke-width: 1.5; cursor: pointer; }
+    .spoke:hover, .spoke.on { stroke: #facc15; stroke-width: 3; }
+    .spoke-label { fill: #e8e8e8; font-size: 11px; cursor: pointer; }
+    .spoke-label-bg { fill: #000; opacity: .8; }
+    .memb { fill: #1a1a1a; stroke: #3a3a3a; cursor: pointer; }
+    .memb:hover { stroke: #facc15; }
+    .memb-text { fill: #dcdcdc; font-size: 10px; pointer-events: none; }
+    .memb-value { fill: #6a6a6a; font-size: 8px; pointer-events: none; }
+    .chip-box { fill: #1e3a5f; stroke: #3b82f6; }
+    .chip-text { fill: #e8e8e8; font-size: 13px; text-anchor: middle; }
+    .chip-sub { fill: #93c5fd; font-size: 10px; text-anchor: middle; }
+    .trunc-text { fill: #f59e0b; font-size: 10px; }
+    .cmp-json { max-height: 26vh; margin-top: 0.5rem; }
+    details.cmp-details summary { cursor: pointer; color: var(--text-bright); font-size: 13px;
+      margin: 0.5rem 0; }
   </style>
 </head>
 <body>
@@ -66,6 +103,7 @@
     <button type="button" data-tab="replay">板级回放</button>
     <button type="button" data-tab="draft">板驱动草稿</button>
     <button type="button" data-tab="save">校验 / 保存</button>
+    <button type="button" data-tab="compare">datasheet 对比</button>
   </div>
 
   <section id="panel-list" class="panel active">
@@ -128,6 +166,47 @@
     <pre id="save-out"></pre>
   </section>
 
+  <section id="panel-compare" class="panel">
+    <h2>datasheet 对比</h2>
+    <div class="cmp-top">
+      <label>板 <select id="cmp-board"></select></label>
+      <label>芯片位号 <input id="cmp-chip" value="U4" /></label>
+      <button type="button" id="btn-cmp-load">加载对照</button>
+    </div>
+    <p id="cmp-status" class="cmp-status">未加载。</p>
+    <div class="cmp-cols">
+      <div>
+        <div class="cmp-pager">
+          <button type="button" id="cmp-prev">上一页</button>
+          <span class="page-label" id="cmp-page-label">– / –</span>
+          <button type="button" id="cmp-next">下一页</button>
+          <label style="margin:0">缩放
+            <select id="cmp-zoom">
+              <option value="1">1x</option>
+              <option value="2" selected>2x</option>
+              <option value="3">3x</option>
+            </select>
+          </label>
+        </div>
+        <div class="cmp-scroll" id="cmp-scroll">
+          <div class="cmp-stage" id="cmp-stage">
+            <img id="cmp-img" alt="datasheet page" />
+            <div class="cmp-markers" id="cmp-markers"></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="cmp-svg-wrap">
+          <svg id="cmp-svg" viewBox="0 0 920 780" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <details class="cmp-details">
+          <summary>引脚 JSON</summary>
+          <pre class="cmp-json" id="cmp-json">点击左侧辐线或元件框查看引脚明细。</pre>
+        </details>
+      </div>
+    </div>
+  </section>
+
 <script>
 const $ = (id) => document.getElementById(id);
 const status = (t) => { $("status").textContent = t; };
@@ -155,7 +234,7 @@ document.querySelectorAll(".tabs button").forEach(b => {
 });
 
 function fillBoardSelects(boards) {
-  ["board-select", "draft-board", "validate-board"].forEach(id => {
+  ["board-select", "draft-board", "validate-board", "cmp-board"].forEach(id => {
     const sel = $(id);
     sel.innerHTML = boards.map(b => `<option value="${b}">${b}</option>`).join("");
   });
@@ -350,13 +429,225 @@ $("btn-reindex").onclick = async () => {
   } catch (e) { $("save-out").textContent = e.message; }
 };
 
+/* ---------------------------------------------------- datasheet 对比 (tab 6) */
+const CMP = { locate: null, graph: null, pages: 0, page: 1, zoom: 2, selected: null };
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function cmpSetStatus(text, kind) {
+  const el = $("cmp-status");
+  el.textContent = text;
+  el.className = "cmp-status" + (kind ? " " + kind : "");
+}
+
+function cmpSvgEl(tag, attrs, text) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined && text !== null) e.textContent = text;
+  return e;
+}
+
+function cmpClearMarkers() { $("cmp-markers").innerHTML = ""; }
+
+function cmpDrawMarkers(rects) {
+  const layer = $("cmp-markers");
+  layer.innerHTML = "";
+  (rects || []).forEach(r => {
+    const d = document.createElement("div");
+    d.className = "cmp-marker";
+    d.style.left = (r.x * 100) + "%";
+    d.style.top = (r.y * 100) + "%";
+    d.style.width = (r.w * 100) + "%";
+    d.style.height = (r.h * 100) + "%";
+    layer.appendChild(d);
+  });
+}
+
+function cmpScrollToFirst(rects) {
+  if (!rects || !rects.length) return;
+  const img = $("cmp-img");
+  const box = $("cmp-scroll");
+  const imgH = img.getBoundingClientRect().height || 1;
+  box.scrollTop = Math.max(0, rects[0].y * imgH - box.clientHeight / 2);
+}
+
+function cmpRenderGraph(graph) {
+  const svg = $("cmp-svg");
+  svg.innerHTML = "";
+  const CX = 460, CY = 380, HW = 70, HH = 40, R1 = 150;
+  const chip = graph.chip || {};
+  const pins = graph.pins || [];
+  svg.appendChild(cmpSvgEl("rect", { x: CX - HW, y: CY - HH, width: HW * 2, height: HH * 2, rx: 6, class: "chip-box" }));
+  svg.appendChild(cmpSvgEl("text", { x: CX, y: CY - 4, class: "chip-text" }, chip.id || ""));
+  svg.appendChild(cmpSvgEl("text", { x: CX, y: CY + 14, class: "chip-sub" }, chip.value || ""));
+
+  const n = Math.max(1, pins.length);
+  pins.forEach((pin, i) => {
+    const ang = (-90 + i * (360 / n)) * Math.PI / 180;
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const t = Math.min(HW / Math.max(1e-6, Math.abs(dx)), HH / Math.max(1e-6, Math.abs(dy)));
+    const ax = CX + dx * t, ay = CY + dy * t;
+    const hx = CX + dx * R1, hy = CY + dy * R1;
+    const g = cmpSvgEl("g", { class: "cmp-pin", "data-pin": pin.pin });
+    g.appendChild(cmpSvgEl("line", { x1: ax, y1: ay, x2: hx, y2: hy, class: "spoke" }));
+    const lr = t + (R1 - t) * 0.5;
+    const labelText = pin.name || pin.pin;
+    const lw = String(labelText).length * 6.5 + 8;
+    const lx = CX + dx * lr, ly = CY + dy * lr - 5;
+    g.appendChild(cmpSvgEl("rect", {
+      x: lx - lw / 2, y: ly - 10, width: lw, height: 14, rx: 2, class: "spoke-label-bg",
+    }));
+    g.appendChild(cmpSvgEl("text", {
+      x: lx, y: ly, class: "spoke-label", "text-anchor": "middle",
+    }, labelText));
+
+    const members = (pin.members || []).filter(m => m.id !== chip.id);
+    members.forEach((m, j) => {
+      const r = R1 + 26 + j * 26;
+      const mx = CX + dx * r, my = CY + dy * r;
+      const rect = cmpSvgEl("rect", {
+        x: mx - 52, y: my - 14, width: 104, height: 28, rx: 3, class: "memb",
+      });
+      const value = String(m.value || "");
+      const pinsTxt = (m.pins_on_net || []).join(",");
+      g.appendChild(rect);
+      g.appendChild(cmpSvgEl("text", { x: mx, y: my - 1, class: "memb-text", "text-anchor": "middle" },
+        m.id + (pinsTxt ? " [" + pinsTxt + "]" : "")));
+      g.appendChild(cmpSvgEl("text", { x: mx, y: my + 10, class: "memb-value", "text-anchor": "middle" },
+        value.length > 20 ? value.slice(0, 19) + "…" : value));
+    });
+    if (pin.truncated) {
+      const r = R1 + 26 + members.length * 26;
+      g.appendChild(cmpSvgEl("text", {
+        x: CX + dx * r, y: CY + dy * r + 4, class: "trunc-text", "text-anchor": "middle",
+      }, "+" + pin.truncated));
+    }
+    g.addEventListener("click", () => cmpSelectPin(pin));
+    svg.appendChild(g);
+  });
+}
+
+async function cmpSearch(q, page) {
+  const board = $("cmp-board").value;
+  const chip = $("cmp-chip").value.trim();
+  const url = `/api/datasheet/search?board=${encodeURIComponent(board)}` +
+    `&chip=${encodeURIComponent(chip)}&page=${page}&q=${encodeURIComponent(q)}`;
+  const r = await fetch(url);
+  if (!r.ok) {
+    let msg = r.statusText;
+    try { msg = (await r.json()).error || msg; } catch (e) { /* non-JSON body */ }
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+async function cmpSelectPin(pin) {
+  CMP.selected = pin.pin;
+  document.querySelectorAll("#cmp-svg .cmp-pin").forEach(g => {
+    const on = g.getAttribute("data-pin") === pin.pin;
+    g.querySelectorAll(".spoke").forEach(s => s.classList.toggle("on", on));
+  });
+  $("cmp-json").textContent = JSON.stringify({
+    pin: pin.pin, name: pin.name, net: pin.net,
+    members: pin.members, truncated: pin.truncated,
+  }, null, 2);
+  const det = document.querySelector("details.cmp-details");
+  if (det) det.open = true;
+  const cands = [];
+  if (pin.name && pin.name !== pin.pin) cands.push(pin.name);
+  cands.push(pin.pin);
+  let res = null;
+  for (const q of cands) {
+    try { res = await cmpSearch(q, CMP.page); } catch (e) { res = null; }
+    if (res && res.rects && res.rects.length) break;
+  }
+  if (res) {
+    cmpDrawMarkers(res.rects);
+    cmpScrollToFirst(res.rects);
+  }
+}
+
+async function cmpLoadPage() {
+  const board = $("cmp-board").value;
+  const chip = $("cmp-chip").value.trim();
+  if (!board || !chip) return;
+  const img = $("cmp-img");
+  const url = `/api/datasheet/page?board=${encodeURIComponent(board)}` +
+    `&chip=${encodeURIComponent(chip)}&page=${CMP.page}&zoom=${CMP.zoom}&_=${Date.now()}`;
+  await new Promise((resolve) => {
+    const finish = () => { img.onload = null; img.onerror = null; resolve(); };
+    img.onload = () => { cmpClearMarkers(); finish(); };
+    img.onerror = finish;
+    img.src = url;
+    setTimeout(finish, 15000);
+  });
+  if (!img.naturalWidth) {
+    cmpSetStatus("页面渲染失败：未取得 PNG 图像（可能 PDF 渲染器不可用）。", "err");
+  }
+}
+
+async function cmpLoadGraph() {
+  const board = $("cmp-board").value;
+  const chip = $("cmp-chip").value.trim();
+  try {
+    const g = await api(`/api/compare/graph?board=${encodeURIComponent(board)}&chip=${encodeURIComponent(chip)}`);
+    CMP.graph = g;
+    cmpRenderGraph(g);
+  } catch (e) {
+    cmpSetStatus("拓扑加载失败：" + e.message, "err");
+  }
+}
+
+async function cmpLoadAll() {
+  const board = $("cmp-board").value;
+  const chip = $("cmp-chip").value.trim();
+  if (!board || !chip) { cmpSetStatus("请选择板并填写芯片位号。", "err"); return; }
+  cmpSetStatus("定位 datasheet …");
+  let loc = null;
+  try {
+    loc = await api(`/api/datasheet/locate?board=${encodeURIComponent(board)}&chip=${encodeURIComponent(chip)}`);
+  } catch (e) {
+    cmpSetStatus("定位失败：" + e.message, "err");
+    return;
+  }
+  CMP.locate = loc;
+  CMP.pages = loc.pages || 0;
+  CMP.page = loc.default_page || 1;
+  $("cmp-page-label").textContent = CMP.pages ? `${CMP.page} / ${CMP.pages}` : "– / –";
+  if (!loc.found) {
+    cmpSetStatus(`未找到 ${loc.mpn || chip} 对应的 datasheet PDF。`, "err");
+  } else if (loc.renderer !== "ok") {
+    cmpSetStatus(`已定位 ${loc.pdf_name}（${loc.pages} 页），但渲染器不可用（外部 venv / fitz 缺失）。`, "err");
+  } else {
+    cmpSetStatus(`${loc.mpn} → ${loc.pdf_name} · ${loc.pages} 页 · 应用电路默认第 ${loc.default_page} 页`, "ok");
+  }
+  await cmpLoadPage();
+  await cmpLoadGraph();
+}
+
+function cmpGotoPage(delta) {
+  if (!CMP.pages) return;
+  const next = Math.min(CMP.pages, Math.max(1, CMP.page + delta));
+  if (next === CMP.page) return;
+  CMP.page = next;
+  $("cmp-page-label").textContent = `${CMP.page} / ${CMP.pages}`;
+  cmpLoadPage();
+}
+
+$("btn-cmp-load").onclick = cmpLoadAll;
+$("cmp-prev").onclick = () => cmpGotoPage(-1);
+$("cmp-next").onclick = () => cmpGotoPage(1);
+$("cmp-zoom").onchange = async () => {
+  CMP.zoom = parseInt($("cmp-zoom").value, 10) || 2;
+  await cmpLoadPage();
+};
+
 (async () => {
   renderSlots();
   renderShared();
   await loadBoards();
   await loadPrimitives();
   const fx = "FX-T268-V6-10米-5065.NET";
-  ["board-select","draft-board","validate-board"].forEach(id => {
+  ["board-select","draft-board","validate-board","cmp-board"].forEach(id => {
     const sel = $(id);
     for (const o of sel.options) { if (o.value === fx) sel.value = fx; }
   });

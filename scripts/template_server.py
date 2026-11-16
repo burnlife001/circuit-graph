@@ -44,6 +44,27 @@ from template_web_lib import (  # noqa: E402
     board_pin_neighbors,
 )
 
+from datasheet_compare_lib import (  # noqa: E402
+    compare_graph,
+    locate_datasheet,
+    render_page,
+    search_page,
+)
+
+
+def _send_png(handler: BaseHTTPRequestHandler, body: bytes) -> None:
+    """Send raw PNG bytes.
+
+    Module-level (not a method) because ``webui_server.WebUIHandler`` delegates
+    to :class:`TemplateAPIHandler` without inheriting from it — ``self`` is a
+    ``KBAPIHandler`` there and would miss handler-specific helpers.
+    """
+    handler.send_response(200)
+    handler.send_header("Content-Type", "image/png")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
 
 class TemplateAPIHandler(BaseHTTPRequestHandler):
     db = None
@@ -78,6 +99,31 @@ class TemplateAPIHandler(BaseHTTPRequestHandler):
                 board, part = parts[3], parts[5]
                 validate_board_name(board)
                 self._json(board_kb_pinout(board, part, self.db))
+            elif path == "/api/datasheet/locate":
+                board = (qs.get("board") or [""])[0]
+                chip = (qs.get("chip") or [""])[0]
+                validate_board_name(board)
+                self._json(locate_datasheet(board, chip))
+            elif path == "/api/datasheet/page":
+                board = (qs.get("board") or [""])[0]
+                chip = (qs.get("chip") or [""])[0]
+                page = (qs.get("page") or ["1"])[0]
+                zoom = (qs.get("zoom") or ["2"])[0]
+                validate_board_name(board)
+                png = render_page(board, chip, page, zoom)
+                _send_png(self, png)
+            elif path == "/api/datasheet/search":
+                board = (qs.get("board") or [""])[0]
+                chip = (qs.get("chip") or [""])[0]
+                page = (qs.get("page") or ["1"])[0]
+                query = (qs.get("q") or [""])[0]
+                validate_board_name(board)
+                self._json(search_page(board, chip, page, query))
+            elif path == "/api/compare/graph":
+                board = (qs.get("board") or [""])[0]
+                chip = (qs.get("chip") or [""])[0]
+                validate_board_name(board)
+                self._json(compare_graph(board, chip, db=self.db))
             elif path == "/api/match":
                 board = (qs.get("board") or [""])[0]
                 template_id = (qs.get("template_id") or [None])[0]
