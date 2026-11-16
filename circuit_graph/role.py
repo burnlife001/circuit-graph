@@ -1189,6 +1189,8 @@ def _match_focal_live(
     focal: Component,
     board: "_Board",
     session: LiveMatchSession | None = None,
+    *,
+    auto: bool | None = None,
 ) -> RoleResult | None:
     """现场跑 primitives 模板，查 focal 元件的命中。
 
@@ -1197,6 +1199,10 @@ def _match_focal_live(
 
     ``session`` 为 None 时现场建一个一次性上下文（单件路径，行为不变）；
     批量路径传入共享 session，模板搜索只跑一次。
+
+    ``auto`` 过滤模板来源：``False`` 只看手工模板、``True`` 只看自动模板、
+    ``None`` 不限。自动模板是机器闸门放行但无人审的板上推导结果，只在
+    手工模板与内置规则都给不出结论时才用，所以调用方会分开跑两次。
     """
     if session is None:
         session = LiveMatchSession(ir)
@@ -1211,17 +1217,21 @@ def _match_focal_live(
 
     def _specificity(t) -> tuple:
         """模板具体度：值越小越具体。
+        0) 自动模板（机器闸门放行、无人审）永远排手工模板之后
         1) 带 expected_pin_category 的模板最具体（语义约束最强）
         2) 宽泛模板（pull-up/down 等）最后
         3) 其他按 component 数降序（元件多的模板更具体）
         """
+        is_auto = str(getattr(t, "source", "") or "") == "auto"
         has_pin_cat = any(s.expected_pin_category for s in t.signals)
         is_loose = t.id in loose_templates
-        return (0 if has_pin_cat else 1, 1 if is_loose else 0, -len(t.components))
+        return (1 if is_auto else 0, 0 if has_pin_cat else 1, 1 if is_loose else 0, -len(t.components))
 
     specific_hits: list[tuple] = []
     generic_hits: list[tuple] = []
     for t in session.templates:
+        if auto is not None and (str(getattr(t, "source", "") or "") == "auto") != auto:
+            continue
         # 粗过滤：focal 必须是 template 里某个 component 的类型
         focal_kind = focal.device_kind.value
         if not any(
@@ -1277,25 +1287,34 @@ def _match_focal_live(
     else:
         head = t.name
     title = head if not role_label else f"{head} · {role_label}"
+    is_auto = str(getattr(t, "source", "") or "") == "auto"
+    if is_auto:
+        title = f"{title}（自动模板）"
     pin_nets = [board.net_of_pin(p.id) for p in focal.pins]
     ev = [
         f"template: {t.id} (live match, confidence={bd.confidence}, score={bd.fused:.2f})",
         f"signal_mapping: {m.signal_mapping}",
         f"component_mapping: {m.component_mapping}",
     ]
+    if is_auto:
+        ev.append("source: auto template (机器闸门放行，未经人审)")
     for p, n in zip(focal.pins, pin_nets, strict=False):
         ev.append(f"pin {p.number}({p.name or '-'}) -> {_net_label(board, n)}")
+    live_result = RoleResult(
+        rule=f"primitive-live:{t.id}",
+        title=title,
+        summary=t.description or f"作为 {t.name} 的一部分",
+        evidence=ev,
+        confidence=("medium" if is_auto else bd.confidence),
+    )
+    if is_auto:
+        live_result.data["auto_template"] = True
+        live_result.data["template_source"] = "auto"
     return _semantic_details(
         board,
         pin_nets,
         t.id,
-        RoleResult(
-            rule=f"primitive-live:{t.id}",
-            title=title,
-            summary=t.description or f"作为 {t.name} 的一部分",
-            evidence=ev,
-            confidence=bd.confidence,
-        ),
+        live_result,
     )
 
 
@@ -1348,12 +1367,19 @@ def infer_role(
         "buck-converter-",
     )
     focal_blocks = [b for b in ir.blocks if focal.id in b.component_ids]
+    # 自动模板（机器闸门放行、无人审）是最弱的一层：它只在这块板上被推导出来，
+    # 而身份/器件/拓扑规则与手工模板都是跨板知识，故 auto 块排在所有手工块
+    # （含宽泛块）之后、最后兜底规则之前。
+    auto_blocks = [
+        b for b in focal_blocks if (b.metadata or {}).get("template_source") == "auto"
+    ]
+    manual_blocks = [b for b in focal_blocks if b not in auto_blocks]
     specific_blocks = [
-        b for b in focal_blocks
+        b for b in manual_blocks
         if not any(b.id.startswith(p) for p in _GENERIC_BLOCK_PREFIXES)
     ]
     generic_blocks = [
-        b for b in focal_blocks
+        b for b in manual_blocks
         if any(b.id.startswith(p) for p in _GENERIC_BLOCK_PREFIXES)
     ]
 
@@ -1364,28 +1390,39 @@ def infer_role(
             if comp_id == focal.id:
                 role_label = comp_role
                 break
+        # 自动模板（source=auto，机器闸门放行但没人审）：标题标"自动模板"，
+        # 置信度低于手工模板——手工模板优先，auto 只是兜底。
+        is_auto = (b.metadata or {}).get("template_source") == "auto"
         # 标题主名 = 模板给该成员的功能名（component.title），缺省用模板名。
         # 块里不同成员功能不同（Buck 块的输出电感 ≠ 芯片本身），不能一律冠模板名。
         head = _member_head_title(b.id.rsplit("-", 1)[0], role_label, focal)
         title = head if not role_label else f"{head} · {role_label}"
+        if is_auto:
+            title = f"{title}（自动模板）"
         summary = b.description or f"作为 {b.name} 的一部分"
         ev = [
             f"block: {b.id} (role={b.role})",
             f"members: {', '.join(b.component_ids)}",
         ]
+        if is_auto:
+            ev.append("source: auto template (机器闸门放行，未经人审)")
         for p, n in zip(focal.pins, pin_nets, strict=False):
             ev.append(f"pin {p.number}({p.name or '-'}) -> {_net_label(board, n)}")
+        result = RoleResult(
+            rule=f"primitive:{b.id}",
+            title=title,
+            summary=summary,
+            evidence=ev,
+            confidence="medium" if is_auto else "high",
+        )
+        if is_auto:
+            result.data["auto_template"] = True
+            result.data["template_source"] = "auto"
         return _semantic_details(
             board,
             pin_nets,
             b.id.rsplit("-", 1)[0],
-            RoleResult(
-                rule=f"primitive:{b.id}",
-                title=title,
-                summary=summary,
-                evidence=ev,
-                confidence="high",
-            ),
+            result,
         )
 
     # 1) 具体 primitives 块优先（shunt / snubber / resonant / pull-up/down 等）。
@@ -1433,7 +1470,7 @@ def infer_role(
     # 即便有 generic_blocks 也跑 live match —— generic 模板（voltage-divider/
     # inverting-amplifier 等）易误命中，让 specific 模板（opamp-feedback 等）优先
     if not specific_blocks:
-        live = _match_focal_live(ir, focal, board, session=live_session)
+        live = _match_focal_live(ir, focal, board, session=live_session, auto=False)
         if live is not None:
             return live
 
@@ -1446,6 +1483,15 @@ def infer_role(
     last = role_rules.apply_last_rules(board, pin_nets)
     if last is not None:
         return last
+
+    # 5) 自动模板：机器闸门放行、无人审，排在所有手工知识与内置规则之后。
+    if auto_blocks:
+        auto_blocks.sort(key=lambda b: (len(b.component_ids), b.id))
+        return _block_to_result(auto_blocks[0])
+    if not focal_blocks:
+        live = _match_focal_live(ir, focal, board, session=live_session, auto=True)
+        if live is not None:
+            return live
 
     # fallback：连接摘要
     ev = []

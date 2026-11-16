@@ -2,6 +2,7 @@
 
     cg primitives coverage board.NET               # 每个元件命中了哪个模板
     cg primitives coverage board.NET --format json
+    cg primitives draft board.NET --all --write     # 板 + 芯片 → 自动模板（过机器闸门才写）
 
 coverage 从 ``ir.blocks`` 归组：block.id 形如 ``<模板id>-<实例后缀>``，
 模板 id 用**最长前缀匹配**从 ``circuit_graph.primitives.load_primitives()``
@@ -18,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 import click
@@ -27,6 +29,9 @@ from circuit_graph.cli.app import (
     build_pin_category_provider,
     main,
 )
+
+#: 完整批量报告的落点（output/ 不入库）。
+AUTO_REPORT_PATH = Path("output/auto-draft-report.md")
 
 _NATURAL_RE = re.compile(r"(\d+)")
 _MAX_UNMATCHED_SHOWN = 20
@@ -38,22 +43,21 @@ def _natural_key(text: str) -> tuple:
     return tuple((1, int(p), "") if p.isdigit() else (0, 0, p) for p in parts)
 
 
+def _pad(text: str, width: int) -> str:
+    """按显示宽度左对齐（中日韩字符占 2 列，否则 --all 的表格列会错位）。"""
+    shown = sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
+    return text + " " * max(0, width - shown)
+
+
 def _template_of_block(block_id: str, template_ids: list[str]) -> str | None:
     """用最长前缀匹配从 block.id 解出模板 id。
 
     前缀必须落在分隔符（``-``）或字符串结尾上，否则 "rc-low" 会吃掉
     "rc-low-pass-x" 里的 "rc-low" 那一类误配。
     """
-    best: str | None = None
-    for tid in template_ids:
-        if not block_id.startswith(tid):
-            continue
-        rest = block_id[len(tid):]
-        if rest and not rest.startswith("-"):
-            continue
-        if best is None or len(tid) > len(best):
-            best = tid
-    return best
+    from circuit_graph.primitives import template_of_block
+
+    return template_of_block(block_id, template_ids)
 
 
 @main.group(name="primitives")
@@ -161,4 +165,123 @@ def coverage(
     shown = unmatched[:_MAX_UNMATCHED_SHOWN]
     tail = " ..." if len(unmatched) > _MAX_UNMATCHED_SHOWN else ""
     lines.append(f"未命中（共 {len(unmatched)} 个）：{', '.join(shown)}{tail}")
+    sys.stdout.buffer.write(("\n".join(lines) + "\n").encode("utf-8"))
+
+
+def _rebuild_primitive_index(primitives_dir: Path | None = None) -> str:
+    """重建 ``primitives/__index_primitives.md``（直接调脚本里的函数，不重复实现）。"""
+    import importlib.util
+
+    script = Path(__file__).resolve().parent.parent.parent / "scripts" / "build_primitive_index.py"
+    spec = importlib.util.spec_from_file_location("cg_build_primitive_index", script)
+    if spec is None or spec.loader is None:  # pragma: no cover - 脚本缺失
+        return ""
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    base = Path(primitives_dir) if primitives_dir else module.PRIMITIVES_DIR
+    rows = module.collect_primitives(base)
+    index_path = base / module.INDEX_PATH.name
+    index_path.write_text(module.render_markdown(rows), encoding="utf-8", newline="\n")
+    try:
+        rel = index_path.relative_to(module.REPO_ROOT).as_posix()
+    except ValueError:
+        rel = index_path.as_posix()
+    return f"{rel} ({len(rows)} entries)"
+
+
+@primitives.command(name="draft")
+@click.argument("board")
+@click.option(
+    "--chip",
+    "chips",
+    multiple=True,
+    help="芯片位号（可重复）。不指定且无 --all 时按板上全部 IC 处理。",
+)
+@click.option("--all", "all_chips", is_flag=True, help="板上所有 IC 类元件逐个跑。")
+@click.option(
+    "--write",
+    is_flag=True,
+    help="通过机器闸门后真的写入 primitives/auto/ 并重建索引（默认只出报告）。",
+)
+@click.option(
+    "--primitives-dir",
+    "primitives_dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="模板库目录（默认仓库 primitives/）。测试用临时目录，不动真实模板库。",
+)
+@click.option(
+    "--fixtures-dir",
+    "fixtures_dir",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="基准板目录（默认仓库 fixtures/），闸门 2/3 的回归对比范围。",
+)
+@click.option(
+    "--format",
+    "out_format",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    show_default=True,
+)
+def draft(
+    board: str,
+    chips: tuple[str, ...],
+    all_chips: bool,
+    write: bool,
+    primitives_dir: Path | None,
+    fixtures_dir: Path | None,
+    out_format: str,
+) -> None:
+    """板 + 芯片位号 → 自动模板草稿（机器闸门 0–3 全过才写入）。"""
+    from circuit_graph.primitive_autodraft import render_report, run_drafts
+
+    result = run_drafts(
+        board,
+        chips=list(chips) or None,
+        all_chips=all_chips,
+        write=write,
+        primitives_dir=primitives_dir,
+        fixtures_dir=fixtures_dir,
+    )
+
+    if write:
+        result["index_rebuilt"] = _rebuild_primitive_index(primitives_dir)
+
+    report = render_report(result)
+    report_path = AUTO_REPORT_PATH
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8", newline="\n")
+
+    if out_format == "json":
+        payload = dict(result)
+        payload["report_path"] = report_path.as_posix()
+        sys.stdout.buffer.write(
+            (json.dumps(payload, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+        )
+        return
+
+    lines = [
+        f"板: {result['board']}  （报告: {report_path.as_posix()}）",
+        "",
+        _pad("位号", 8) + " " + _pad("型号", 18) + " " + _pad("state", 16)
+        + " " + _pad("结论", 42) + " 耗时",
+    ]
+    for row in result["rows"]:
+        part = (row.get("part_number") or "-")[:18]
+        state = (row.get("state") or "-")[:16]
+        if row.get("action") == "write":
+            verdict = f"写入 {row.get('file')}"
+        elif row.get("action") == "would-write":
+            verdict = "闸门通过（未 --write）"
+        else:
+            verdict = row.get("reason") or "skip"
+        lines.append(
+            _pad(str(row.get("chip", "")), 8) + " " + _pad(part, 18) + " "
+            + _pad(state, 16) + " " + _pad(verdict, 42) + f" {row.get('seconds')}s"
+        )
+    lines.append("")
+    lines.append(
+        f"写入 {len(result.get('written') or [])} 个 / 共 {len(result['rows'])} 颗芯片"
+    )
     sys.stdout.buffer.write(("\n".join(lines) + "\n").encode("utf-8"))

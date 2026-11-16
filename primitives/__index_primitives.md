@@ -1,9 +1,10 @@
 # Primitives 索引
 
-> 由 [`scripts/build_primitive_index.py`](../scripts/build_primitive_index.py) 自动生成，共 41 个基元。请勿手改。
+> 由 [`scripts/build_primitive_index.py`](../scripts/build_primitive_index.py) 自动生成，共 42 个基元。请勿手改。
 
 | ID | 名称 | 用途 | 严格模式 | 文件 |
 |---|---|---|---|---|
+| `auto-rh6016c` | RH6016C 典型应用（自动） | 自动模板：参考板 FX-T268-V6-10米-5065.NET 的 U3（RH6016C）及其同网无源件；引脚 1=… | role | [auto/rh6016c.json](./auto/rh6016c.json) |
 | `bjt-npn-low-side-switch` | NPN 三极管低边开关 | NPN 双极管（BJT）低边开关：发射极接地，集电极接负载，基极经限流电阻接控制信号。注意：IR 的 DeviceKi… | role | [transistor/bjt-npn-low-side-switch.json](./transistor/bjt-npn-low-side-switch.json) |
 | `bootstrap-cap` | 自举电容 | 自举电容接在开关节点与 BST 引脚之间（100nF 典型），为高压侧栅极驱动提供浮地电源。 | — | [power/bootstrap-cap.json](./power/bootstrap-cap.json) |
 | `bridge-rectifier` | 桥式整流器 | 4 个二极管组成全波整流桥：2 个 AC 输入，1 个 DC+ 输出，1 个 DC- 输出（通常接地）。 | — | [power/bridge-rectifier.json](./power/bridge-rectifier.json) |

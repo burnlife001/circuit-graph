@@ -10,6 +10,20 @@
     "description": {"type": "string"},
     "role": {"type": "string"},
     "version": {"type": "string"},
+    "source": {
+      "type": "string",
+      "description": "模板来源：auto = 自动模板（机器闸门 0–3 放行、写入 primitives/auto/）；缺省为空 = 手工模板。"
+    },
+    "reference": {
+      "type": "object",
+      "description": "自动模板的来源板：board = 参考板文件名，chip = 该板上的芯片位号。手工模板没有这个字段。",
+      "properties": {
+        "board": {"type": "string"},
+        "chip": {"type": "string"}
+      },
+      "required": ["board", "chip"],
+      "additionalProperties": false
+    },
     "signals": {
       "type": "array",
       "items": {

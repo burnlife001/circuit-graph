@@ -37,6 +37,9 @@
     th, td { border-bottom: 1px solid var(--border); padding: 0.35rem 0.5rem; text-align: left; }
     tr.clickable { cursor: pointer; }
     tr.clickable:hover { background: var(--bg-hover); }
+    /* 自动模板（source: auto，机器闸门放行、无人审）标记 */
+    .auto-badge { color: #f59e0b; border: 1px solid #f59e0b; border-radius: 4px;
+      padding: 0 0.35rem; font-size: 12px; white-space: nowrap; }
     pre { background: #000; color: #dcdcdc; padding: 0.75rem; overflow: auto; font-size: 12px;
       border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -107,7 +110,7 @@
 
   <section id="panel-list" class="panel active">
     <h2>模板列表</h2>
-    <table id="prim-table"><thead><tr><th>id</th><th>name</th><th>version</th><th>成员</th></tr></thead><tbody></tbody></table>
+    <table id="prim-table"><thead><tr><th>id</th><th>name</th><th>version</th><th>成员</th><th>来源</th></tr></thead><tbody></tbody></table>
   </section>
 
   <section id="panel-detail" class="panel">
@@ -249,7 +252,8 @@ async function loadPrimitives() {
     fileById[row.id] = row.file;
     const tr = document.createElement("tr");
     tr.className = "clickable";
-    tr.innerHTML = `<td>${row.id}</td><td>${row.name}</td><td>${row.version}</td><td>${row.member_count}</td>`;
+    tr.innerHTML = `<td>${row.id}</td><td>${row.name}</td><td>${row.version}</td><td>${row.member_count}</td>`
+      + `<td>${row.source === "auto" ? '<span class="auto-badge">自动</span>' : "手工"}</td>`;
     tr.onclick = () => openPrimitive(row.id);
     tb.appendChild(tr);
   });

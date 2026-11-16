@@ -177,9 +177,19 @@ class PrimitiveTemplate:
     raw: dict[str, Any]
     strict_pin_matching: bool = False
     symmetry: dict[str, Any] | None = None
+    #: 模板来源：``"auto"`` = 机器闸门放行的自动模板；缺省（""）= 手工模板。
+    source: str = ""
+    #: 自动模板的来源板（``{"board": ..., "chip": ...}``），手工模板没有。
+    reference: dict[str, Any] | None = None
     _signal_to_components: dict[str, list[str]] = field(
         default_factory=dict, repr=False, compare=False
     )
+
+    @property
+    def is_auto(self) -> bool:
+        """True when the template came from the automatic (machine-gated) pipeline."""
+        return self.source == "auto"
+
 
     def __post_init__(self) -> None:
         """Populate ``_signal_to_components`` from components[*].pins[*].net.
@@ -249,6 +259,8 @@ def _parse_primitive(raw: dict[str, Any]) -> PrimitiveTemplate:
         scoring=scoring,
         strict_pin_matching=raw.get("strict_pin_matching", False),
         symmetry=raw.get("symmetry"),
+        source=str(raw.get("source") or ""),
+        reference=raw.get("reference"),
         raw=raw,
     )
 
@@ -425,6 +437,24 @@ def _require_keys(raw: dict[str, Any], keys: set[str]) -> None:
     missing = keys - set(raw)
     if missing:
         raise PrimitiveValidationError(f"Missing required keys: {sorted(missing)}")
+
+
+def template_of_block(block_id: str, template_ids: list[str]) -> str | None:
+    """用最长前缀匹配从 block.id 解出模板 id。
+
+    前缀必须落在分隔符（``-``）或字符串结尾上，否则 "rc-low" 会吃掉
+    "rc-low-pass-x" 里的 "rc-low" 那一类误配。
+    """
+    best: str | None = None
+    for tid in template_ids:
+        if not block_id.startswith(tid):
+            continue
+        rest = block_id[len(tid):]
+        if rest and not rest.startswith("-"):
+            continue
+        if best is None or len(tid) > len(best):
+            best = tid
+    return best
 
 
 # ---------------------------------------------------------------------------
@@ -633,4 +663,5 @@ __all__ = [
     "component_value_matches",
     "extract_volts",
     "signal_semantic_matches",
+    "template_of_block",
 ]

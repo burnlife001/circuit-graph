@@ -65,6 +65,17 @@ Protel 格式网表
 
 板级答案存放在 `fixtures/protel/*.answers.jsonl`，与通用模板分开维护。共建流程见 [template-system-assets.md](template-system-assets.md)。
 
+### 自动模板（`primitives/auto/`）
+
+`primitive_autodraft.py` 从"一块板 + 一颗芯片位号"推导模板草稿，**不经人审**，由机器闸门 0–3 决定写不写。落点是 `primitives/auto/<型号slug>.json`，顶层带 `"source": "auto"` 与 `"reference": {"board": ..., "chip": ...}`；模板 id 为 `auto-<型号slug>`。`primitive_autodraft.auto_draft()` 出草稿并回放，`evaluate_gates()` 判闸门，`write_auto_primitive()` 落盘，`run_drafts()` 批量跑。
+
+- **值约束不绑参考板实测值**：芯片按型号严格匹配（`strict_value`）；成员只写"值类型正则"——按元件类型给出容值 / 阻值 / 感值的 ±1 个数量级区间（`band_value_pattern()`），实测值为空的 NC 件不进模板。整数区间在生成期编译成紧凑正则（`_number_range_regex()`），避免 `.*` 网模式叠加后 VF2 组合爆炸。
+- **规模上限**：最多 2 个可选组（变体数 2²）、8 个成员、16 个芯片引脚；超出的成员按设计剪枝并记 `member_overflow` 警告。单模板回放预算 2s（`AUTO_MATCH_TIMEOUT_SECONDS`），超时判 `needs_review` 不入库——模板进了库就会在每块板上跑一遍。
+- **机器闸门**（任一失败只记录原因、不写文件）：`gate0` 参考板上该芯片已被手工模板命中 → 跳过；`gate1` state 必须是 `ready`；`gate2` 在 `fixtures/**/*.NET` 上比较"加模板前/后"的块归属，已被手工模板认领的元件改了归属 → 拒；`gate3` 参考板自己的 `<板>.answers.jsonl` 里 auto 块覆盖的元件若属于另一个具体模板 id → 拒（不同板的位号会重名，不能跨板合并答案）。
+- **优先级**：`TopologyRecognizer` 先跑手工模板，auto 模板排在后面且不抢已被手工模板认领的元件；块 metadata 标 `template_source=auto`。`cg role` 里 auto 结果排在身份 / 器件 / 拓扑规则与手工模板之后（只兜底），标题带"（自动模板）"、置信度 `medium`。
+
+批量入口是 `cg primitives draft <board> [--all|--chip U3] [--write]`，报告落 `output/auto-draft-report.md`。
+
 ## 知识库
 
 `knowledge/db.py` 提供 SQLite 元件库，保存型号、引脚、类别、来源和属性；`chip_resolver.py`、`pdf_pin_extract.py` 提供引脚数据获取能力。

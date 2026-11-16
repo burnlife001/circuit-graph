@@ -205,11 +205,33 @@ def test_primitive_fires_on_fixture(case, recognized_cache):
 
 
 def test_every_primitive_has_a_fixture_case():
-    """Guard: adding a new primitive JSON without a fixture case fails here."""
-    template_ids = {t.id for t in load_primitives()}
+    """Guard: adding a new primitive JSON without a fixture case fails here.
+
+    自动模板（``source: "auto"``）由它自带的 ``reference``（来源板 + 芯片位号）
+    覆盖 —— ``tests/test_auto_primitives.py`` 会拿 reference 板回放断言它确实
+    命中那颗芯片，所以自动模板**不要求**在这里手写一条 CASES。
+    **手工模板的要求不变**：仍然必须有显式 fixture case。
+    """
+    templates = load_primitives()
     covered = {c[0] for c in CASES}
-    missing = template_ids - covered
+    missing = []
+    for template in templates:
+        if template.id in covered:
+            continue
+        if template.is_auto and _auto_reference_is_usable(template):
+            continue
+        missing.append(template.id)
     assert not missing, f"Primitives without a fixture case: {sorted(missing)}"
+
+
+def _auto_reference_is_usable(template) -> bool:
+    """自动模板的 reference 指向一块真实存在的基准板（且带芯片位号）。"""
+    reference = template.reference or {}
+    board = reference.get("board")
+    chip = reference.get("chip")
+    if not board or not chip:
+        return False
+    return (FIXTURE_DIR / str(board)).exists()
 
 
 def test_current_shunt_does_not_fire_on_ordinary_resistance():

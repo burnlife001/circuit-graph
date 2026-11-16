@@ -21,7 +21,8 @@
 
 对齐测试 = 模式层跑该 .net，输出与基准层逐元件 diff；不一致要么修模板（模式层受益所有板），要么修答案（基准层）。
 
-## 模板修改三件套（缺一不可）
+## 模板修改三件套（手工模板缺一不可；自动模板走闸门）
+自动模板（`primitives/auto/`，`source: auto`）只由 `cg primitives draft --write` 产出，经闸门 0–3 放行即入库、无人审；覆盖由 `reference` 板承担，不另配 CASE。手工模板优先于自动模板。以下三件套针对手工模板：
 1. 改/加 primitives 模板 → 重建索引 `scripts/build_primitive_index.py`
 2. 新模板必须配 fixture CASE（`tests/test_primitives_on_fixtures.py`，`test_every_primitive_has_a_fixture_case` 强制）
 3. pytest 无新增失败（基线先行；禁止删除或放宽既有断言，行为确实变更时更新断言到与正确行为一致并说明理由）

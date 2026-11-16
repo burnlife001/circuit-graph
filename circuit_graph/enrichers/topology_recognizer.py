@@ -60,6 +60,12 @@ class TopologyRecognizer:
         component_map = {c.id: c for c in ir.components}
         net_map = {n.id: n for n in ir.nets}
 
+        # 手工模板优先：自动模板（source=auto）排在手工模板之后处理，
+        # 且不抢已经被手工模板认领的元件（见 manual_claimed）。
+        templates = sorted(
+            templates, key=lambda t: (1 if _is_auto(t) else 0, t.id)
+        )
+
         timeout = (
             self.timeout_seconds
             if self.timeout_seconds is not None
@@ -69,6 +75,8 @@ class TopologyRecognizer:
         # The matcher only depends on (ir, ignore_pin_numbers), so build one
         # per strict-mode variant instead of rebuilding it per template.
         matchers: dict[bool, Vf2TopologyMatcher] = {}
+
+        manual_claimed: set[str] = set()
 
         for template in templates:
             strict_mode = getattr(template, "strict_pin_matching", False)
@@ -176,6 +184,14 @@ class TopologyRecognizer:
                 if not component_ids:
                     continue
 
+                is_auto = _is_auto(template)
+                if is_auto:
+                    # 手工模板优先：自动模板不抢已被手工模板认领的元件。
+                    fresh = [cid for cid in component_ids if cid not in manual_claimed]
+                    if not fresh:
+                        continue
+                    component_ids = fresh
+
                 # Prefer IC components as anchor (e.g. U2B instead of R4)
                 ic_components = [
                     cid for cid in component_ids
@@ -189,6 +205,10 @@ class TopologyRecognizer:
                 fused_scores = [breakdown.fused for _, breakdown in group]
                 group_fused = sum(fused_scores) / len(fused_scores)
                 group_confidence = _to_confidence(min(fused_scores), thresholds)
+                if is_auto and group_confidence == "high":
+                    # 自动模板没人审：块描述里的置信度不能高于 cg role 给的
+                    # （role 对 auto 一律 medium），否则两处输出自相矛盾。
+                    group_confidence = "medium"
 
                 evidence: list[str] = []
                 for match, breakdown in group:
@@ -202,6 +222,9 @@ class TopologyRecognizer:
                 for match, _ in group:
                     for comp_role, comp_id in match.component_mapping.items():
                         merged_mapping.setdefault(comp_role, comp_id)
+                block_metadata: dict[str, Any] = {"component_mapping": merged_mapping}
+                if is_auto:
+                    block_metadata["template_source"] = "auto"
                 blocks.append(
                     FunctionalBlock(
                         id=block_id,
@@ -213,9 +236,11 @@ class TopologyRecognizer:
                             f"(confidence={group_confidence}, score={group_fused:.2f})"
                         ),
                         source="rule",
-                        metadata={"component_mapping": merged_mapping},
+                        metadata=block_metadata,
                     )
                 )
+                if not is_auto:
+                    manual_claimed.update(component_ids)
 
         return self._with_blocks(ir, blocks)
 
@@ -237,3 +262,8 @@ def _role_from_string(role: str) -> BlockRole:
         return BlockRole(role)
     except ValueError:
         return BlockRole.UNKNOWN
+
+
+def _is_auto(template: Any) -> bool:
+    """True when the template came from the automatic (machine-gated) pipeline."""
+    return str(getattr(template, "source", "") or "") == "auto"

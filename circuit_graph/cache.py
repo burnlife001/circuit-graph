@@ -24,7 +24,11 @@ from circuit_graph.ir import CircuitIR, ir_from_dict, ir_to_dict
 # defaults, new warnings worth surfacing).  Part of the cache key.
 # v4: EdgeSemanticEnricher 仅为“自动命名 + IC 引脚名缺失”的供电岛补
 #     role=power；旧缓存会误把已知 VIN 的输入滤波电容判成去耦。
-ENRICHER_VERSION = "4"
+# v5: TopologyRecognizer 的自动模板语义：source=auto 的块带
+#     metadata.template_source、手工模板优先认领元件。旧缓存里的块没有这个
+#     标记，cg role 会把 auto 块当成手工块处理（错误地压过内置规则）。
+# v6: 同一个变更的后半：auto 块的置信度最高 medium（与 cg role 一致）。
+ENRICHER_VERSION = "6"
 
 _DEFAULT_CACHE_DIR = Path(__file__).resolve().parent.parent / ".cg-cache"
 

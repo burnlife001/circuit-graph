@@ -114,6 +114,22 @@ cg primitives coverage board.NET --format json
 
 报告模板命中与未被模板覆盖的元件。未被模板覆盖不等于 `cg role` 无法解释：用途推理还使用器件属性和通用连接规则。
 
+## `cg primitives draft`：自动模板（机器闸门）
+
+```powershell
+cg primitives draft board.NET --chip U3
+cg primitives draft board.NET --all
+cg primitives draft board.NET --all --write
+```
+
+板 + 芯片位号 → 自动模板草稿。默认只出报告（stdout 一行一颗芯片：位号 / 型号 / state / 结论 / 耗时，完整报告写到 `output/auto-draft-report.md`），`--write` 才把通过机器闸门的模板写进 `primitives/auto/<型号slug>.json` 并重建 `primitives/__index_primitives.md`。
+
+- `--all` 处理板上所有 IC 类元件；`--chip` 可重复，指定单颗。两者都不给等同 `--all`。
+- 闸门：0 手工模板已覆盖该芯片 / 1 草稿 state 必须是 ready / 2 基准板上已被手工模板认领的元件不得改块归属 / 3 基准层答案不得指向别的具体模板。不通过的芯片只记原因，不写文件。
+- 单颗芯片异常或回放超时不影响其它芯片，报告里给出原因。
+- `--primitives-dir` / `--fixtures-dir` 指定模板库与基准板目录（测试用临时目录）。
+- `--format json` 输出完整结构化结果。
+
 ## `cg export`：导出分析结果
 
 ```powershell
