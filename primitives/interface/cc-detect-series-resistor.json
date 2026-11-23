@@ -1,0 +1,60 @@
+{
+  "$schema": "./schema.json",
+  "id": "cc-detect-series-resistor",
+  "name": "CCx 检测串联电阻",
+  "description": "Type-C CC 控制器与 MCU 之间 CCx 检测线的串接电阻：MCU 通过 CC1ID/CC2ID 回读 CC 线上电平，判断充电头能力或线缆方向。约束：CCx 侧不接 IC 引脚，CCxID 侧必须落在 IC 引脚上。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "cc_net",
+      "type": "net",
+      "name_pattern": "^CCX[12]?$",
+      "required": true,
+      "expected_ic_pin": "forbidden"
+    },
+    {
+      "id": "id_net",
+      "type": "net",
+      "name_pattern": "^CC[12]ID$",
+      "required": true,
+      "expected_ic_pin": "required"
+    }
+  ],
+  "components": [
+    {
+      "id": "R_det",
+      "type": "Resistor",
+      "required": true,
+      "value_pattern": "^150R",
+      "title": "CCx 检测串联电阻",
+      "pins": [
+        {
+          "number": "1",
+          "net": "cc_net"
+        },
+        {
+          "number": "2",
+          "net": "id_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.45,
+      "naming": 0.3,
+      "parametric": 0.15,
+      "type": 0.1
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

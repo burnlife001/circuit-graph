@@ -1,0 +1,63 @@
+{
+  "$schema": "./schema.json",
+  "id": "gate-pull-down-to-source",
+  "name": "MOSFET 栅极下拉电阻（拉到源公共端）",
+  "description": "功率级 MOSFET 的栅极经一颗 10k 级电阻拉到源/公共端（不是地）：驱动失效或 MCU 复位时把栅压拉回关断电平。识别依据：两端都是 Protel 自动命名的功率级侧网络（NetQ<n>_<引脚号>，即以 MOSFET 位号打头的网络）、都不接 IC 引脚、角色为 digital（因此既不是地也不是电源轨），且阻值落在 10k 级。模板不引入 MOSFET 成员：既避免抢占功率级器件自身的定性，也避免 MOSFET 不在 KB 时源/漏不可分——代价是「哪一端是栅、哪一端是源」靠命名约定判定，而非引脚角色。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "gate_net",
+      "type": "net",
+      "name_pattern": "^NetQ\\d+_\\d+$",
+      "required": true,
+      "expected_ic_pin": "forbidden",
+      "expected_role": "digital"
+    },
+    {
+      "id": "source_net",
+      "type": "net",
+      "name_pattern": "^NetQ\\d+_\\d+$",
+      "required": true,
+      "expected_ic_pin": "forbidden",
+      "expected_role": "digital"
+    }
+  ],
+  "components": [
+    {
+      "id": "R_pd",
+      "type": "Resistor",
+      "required": true,
+      "strict_value": true,
+      "value_pattern": "^(?:4\\.7|10|22|47|100)(?:\\.[0-9]+)?K",
+      "title": "栅极下拉电阻（拉到源公共端）",
+      "pins": [
+        {
+          "number": "1",
+          "net": "gate_net"
+        },
+        {
+          "number": "2",
+          "net": "source_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.4,
+      "naming": 0.3,
+      "parametric": 0.2,
+      "type": 0.1
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

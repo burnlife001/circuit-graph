@@ -1,0 +1,12 @@
+{
+  "connector_type": "ICSW",
+  "description": "Single-row 4-pin tactile/switch header",
+  "package": "HDR1X4",
+  "pin_count": 4,
+  "pins": [
+    {"number": "1", "name": "SW1",    "pin_type": "input"},
+    {"number": "2", "name": "GND",    "pin_type": "ground"},
+    {"number": "3", "name": "SW2",    "pin_type": "input"},
+    {"number": "4", "name": "GND",    "pin_type": "ground"}
+  ]
+}

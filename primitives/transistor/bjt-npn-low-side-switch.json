@@ -1,0 +1,75 @@
+{
+  "$schema": "./schema.json",
+  "id": "bjt-npn-low-side-switch",
+  "name": "NPN 三极管低边开关",
+  "description": "NPN 双极管（BJT）低边开关：发射极接地，集电极接负载，基极经限流电阻接控制信号。注意：IR 的 DeviceKind 没有 BJT，Protel 解析器按位号前缀把 Q* 一律判成 Mosfet（见 circuit_graph/parsers/protel.py::_infer_device_kind），所以这里用 type=Mosfet + strict_value 型号白名单来锁定真正的 NPN 管。",
+  "role": "switch",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "load_net",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "expected_role": "gnd",
+      "required": true
+    },
+    {
+      "id": "ctrl",
+      "type": "net",
+      "name_pattern": ".*",
+      "expected_role": "digital",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "Q1",
+      "type": [
+        "Mosfet",
+        "Unknown"
+      ],
+      "required": true,
+      "strict_value": true,
+      "value_pattern": "^(8050|S8050|SS8050|9011|S9011|9013|S9013|9014|S9014|9016|S9016|9018|S9018|MMBT3903|MMBT3904|MMBT5551|2N2221|2N2222|2N3903|2N3904|2N4401|BC547|BC337|BC817|BC847)$",
+      "pin_count_max": 6,
+      "title": "NPN 三极管",
+      "pins": [
+        {
+          "number": "C",
+          "net": "load_net"
+        },
+        {
+          "number": "E",
+          "net": "gnd"
+        },
+        {
+          "number": "B",
+          "net": "ctrl"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.30,
+      "naming": 0.20,
+      "parametric": 0.25,
+      "type": 0.25
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.55,
+      "low": 0.0
+    }
+  }
+}

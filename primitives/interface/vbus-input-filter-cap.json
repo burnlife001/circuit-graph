@@ -1,0 +1,62 @@
+{
+  "$schema": "./schema.json",
+  "id": "vbus-input-filter-cap",
+  "name": "Type-C VBUS 输入滤波电容",
+  "description": "Type-C 连接器的 VBUS 引脚经一颗 10nF 级电容对地（PGND）滤波：VBUS 直接落到连接器侧，噪声先在这里旁路掉再进后级 0R/磁珠。约束：该网络必须真的落在连接器引脚上且不接任何 IC 引脚；值限 10nF（CC 线上的 10pF 小电容归 cc-line-filter-cap）。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "vbus_net",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true,
+      "expected_connector_pin": "required",
+      "expected_ic_pin": "forbidden"
+    },
+    {
+      "id": "gnd_net",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|CGND|VSS)$",
+      "required": true,
+      "expected_role": "gnd"
+    }
+  ],
+  "components": [
+    {
+      "id": "C_vbus",
+      "type": "Capacitor",
+      "required": true,
+      "strict_value": true,
+      "value_pattern": "^(?:10nF|103)(?:[/\\s]|$)",
+      "title": "VBUS 输入滤波电容",
+      "pins": [
+        {
+          "number": "1",
+          "net": "vbus_net"
+        },
+        {
+          "number": "2",
+          "net": "gnd_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.4,
+      "naming": 0.3,
+      "parametric": 0.2,
+      "type": 0.1
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

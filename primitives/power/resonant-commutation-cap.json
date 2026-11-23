@@ -1,0 +1,36 @@
+{
+  "$schema": "./schema.json",
+  "id": "resonant-commutation-cap",
+  "name": "谐振/换流电容",
+  "description": "跨接在两个开关/谐振节点之间的大容量电容（µF 级），不到地，参与 LLC/LC 谐振换流、储存并转移谐振能量。",
+  "role": "power",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "sw_a", "type": "net",
+      "name_pattern": "^SW\\d+$",
+      "required": true
+    },
+    {
+      "id": "sw_b", "type": "net",
+      "name_pattern": "^(VBAK|VSW|HB|HO|VCOM|VMID|VBUS).*$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "C_res", "type": "Capacitor", "required": true,
+      "value_pattern": "^\\d+(\\.\\d+)?\\s*[nNµu][Ff]|^\\s*NC\\s*$",
+      "pins": [
+        {"number": "1", "net": "sw_a"},
+        {"number": "2", "net": "sw_b"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "symmetry": {"axis_signal": "sw_a", "include_axis_extras": true},
+  "scoring": {
+    "weights": {"structural": 0.30, "naming": 0.30, "parametric": 0.20, "type": 0.20},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

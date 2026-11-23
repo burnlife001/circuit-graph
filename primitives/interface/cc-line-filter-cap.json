@@ -1,0 +1,62 @@
+{
+  "$schema": "./schema.json",
+  "id": "cc-line-filter-cap",
+  "name": "CC 线高频滤波电容",
+  "description": "Type-C 的 CC1/CC2 线对 PGND 的 pF 级高频滤波电容：CC 线上跑的是 PD 握手脉冲，pF 级电容把边沿高频旁路到地。约束：网络必须落在连接器的 CC 引脚上（CC1/CC2），且不接任何 IC 引脚（CCxIO/CCxID 是 MCU 侧的另一段网络）。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "cc_net",
+      "type": "net",
+      "name_pattern": "^CC[12]$",
+      "required": true,
+      "expected_connector_pin": "required",
+      "expected_ic_pin": "forbidden"
+    },
+    {
+      "id": "gnd_net",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|CGND|VSS)$",
+      "required": true,
+      "expected_role": "gnd"
+    }
+  ],
+  "components": [
+    {
+      "id": "C_cc",
+      "type": "Capacitor",
+      "required": true,
+      "strict_value": true,
+      "value_pattern": "^(?:[0-9]|[1-9][0-9])pF",
+      "title": "CC 线高频滤波电容",
+      "pins": [
+        {
+          "number": "1",
+          "net": "cc_net"
+        },
+        {
+          "number": "2",
+          "net": "gnd_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.4,
+      "naming": 0.3,
+      "parametric": 0.2,
+      "type": 0.1
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

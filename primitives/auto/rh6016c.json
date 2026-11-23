@@ -1,0 +1,147 @@
+{
+  "$schema": "../schema.json",
+  "id": "auto-rh6016c",
+  "name": "RH6016C 典型应用（自动）",
+  "description": "自动模板：参考板 FX-T268-V6-10米-5065.NET 的 U3（RH6016C）及其同网无源件；引脚 1=CS, 2=GND, 3=TCH, 4=AHLB, 5=VDD, 6=OC；成员值为类型区间而非实测值，板网名不入库。",
+  "version": "0.1.0",
+  "source": "auto",
+  "reference": {
+    "board": "FX-T268-V6-10米-5065.NET",
+    "chip": "U3"
+  },
+  "strict_pin_matching": true,
+  "signals": [
+    {
+      "id": "cs",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|CGND|PGND|AGND|DGND|VSS)$",
+      "required": true,
+      "expected_role": "gnd"
+    },
+    {
+      "id": "tch",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "ahlb",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "vdd",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true,
+      "expected_role": "power"
+    },
+    {
+      "id": "oc",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "net_1",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": false
+    }
+  ],
+  "components": [
+    {
+      "id": "chip",
+      "type": "IC",
+      "required": true,
+      "pins": [
+        {
+          "number": "1",
+          "net": "cs"
+        },
+        {
+          "number": "2",
+          "net": "gnd"
+        },
+        {
+          "number": "3",
+          "net": "tch"
+        },
+        {
+          "number": "4",
+          "net": "ahlb"
+        },
+        {
+          "number": "5",
+          "net": "vdd"
+        },
+        {
+          "number": "6",
+          "net": "oc"
+        }
+      ],
+      "value_pattern": "RH6016C",
+      "strict_value": true
+    },
+    {
+      "id": "cs_cap",
+      "type": "Capacitor",
+      "required": false,
+      "optional_group": "cs",
+      "pins": [
+        {
+          "number": "1",
+          "net": "cs"
+        },
+        {
+          "number": "2",
+          "net": "gnd"
+        }
+      ],
+      "value_pattern": "^\\s*(?:(?:[1-9]\\d\\d\\d|[1-9]\\d\\d\\d\\d|100000)\\s*pf|(?:[1-9]|[1-9]\\d|100)\\s*nf|0\\.\\d\\s*uf|0\\.\\d\\s*µf|0\\.\\d\\s*μf)",
+      "strict_value": true
+    },
+    {
+      "id": "oc_res",
+      "type": "Resistor",
+      "required": false,
+      "optional_group": "oc",
+      "pins": [
+        {
+          "number": "1",
+          "net": "net_1"
+        },
+        {
+          "number": "2",
+          "net": "oc"
+        }
+      ],
+      "value_pattern": "^\\s*(?:(?:[1-9]\\d\\d|[1-9]\\d\\d\\d|10000)\\s*ω|(?:[1-9]|10)\\s*kω)",
+      "strict_value": true
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": false
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.35,
+      "naming": 0.25,
+      "parametric": 0.2,
+      "type": 0.2
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

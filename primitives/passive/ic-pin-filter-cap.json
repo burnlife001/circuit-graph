@@ -1,0 +1,65 @@
+{
+  "$schema": "./schema.json",
+  "id": "ic-pin-filter-cap",
+  "name": "IC 引脚滤波电容",
+  "description": "IC 的模拟/检测类引脚（VOL/NTC/TEMP/VSENSE/ADJ…）经一颗 100nF 级电容对地滤波，滤掉引脚上的高频毛刺。引脚网络必须真的落在 IC 引脚上，且不是电源轨（电源轨的去耦由 dc-decoupling-cap 负责）。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "pin_net",
+      "type": "net",
+      "name_pattern": "^(?:VOL|VOUT|VADJ|VIN2|NTC|TEMP|TC\\d*|RT\\d*|VSENSE|SENSE\\w*|ADJ|TRIM|VREF|VMON|VBAT|AIN\\d*)\\w*$",
+      "required": true,
+      "expected_ic_pin": "required",
+      "expected_role": [
+        "analog",
+        "digital"
+      ]
+    },
+    {
+      "id": "gnd_net",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|CGND|VSS)$",
+      "required": true,
+      "expected_role": "gnd"
+    }
+  ],
+  "components": [
+    {
+      "id": "C_filt",
+      "type": "Capacitor",
+      "required": true,
+      "strict_value": true,
+      "value_pattern": "^(?:100nF|104)(?:[/\\s]|$)",
+      "title": "IC 引脚滤波电容",
+      "pins": [
+        {
+          "number": "1",
+          "net": "pin_net"
+        },
+        {
+          "number": "2",
+          "net": "gnd_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.4,
+      "naming": 0.3,
+      "parametric": 0.2,
+      "type": 0.1
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

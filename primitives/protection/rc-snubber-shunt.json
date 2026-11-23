@@ -1,0 +1,37 @@
+{
+  "$schema": "./schema.json",
+  "id": "rc-snubber-shunt",
+  "name": "RC 吸收网络（单 C 到地）",
+  "description": "开关节点直接经小容量电容到地的 snubber：吸收 MOSFET 开关瞬间的高频振铃与 dv/dt 毛刺，降低 EMI。",
+  "role": "switch",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "sw", "type": "net",
+      "name_pattern": "^SW\\d+$",
+      "required": true
+    },
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|CGND|PGND|AGND|DGND)$",
+      "expected_role": "gnd",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "C_snub", "type": "Capacitor", "required": true,
+      "value_pattern": "^\\d+(\\.\\d+)?\\s*[np][Ff]",
+      "pins": [
+        {"number": "1", "net": "sw"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "symmetry": {"axis_signal": "sw", "include_axis_extras": true},
+  "scoring": {
+    "weights": {"structural": 0.35, "naming": 0.25, "parametric": 0.20, "type": 0.20},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

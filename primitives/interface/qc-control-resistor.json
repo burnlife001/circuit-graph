@@ -1,0 +1,61 @@
+{
+  "$schema": "./schema.json",
+  "id": "qc-control-resistor",
+  "name": "QC 协议 D+/D- 控制电阻",
+  "description": "USB 数据线 D+/D- 与 MCU GPIO 之间的控制电阻：快充协议（QC/AFC/VOOC…）靠 MCU 在 D+/D- 上打高频脉冲与充电器握手，这颗电阻是握手回路的串接件。约束：D+/D- 一侧必须落在连接器引脚上；MCU 一侧必须是普通信号网络（不能是 GND 或电源轨，否则就是上拉/下拉电阻而不是握手控制电阻）。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "dp_net",
+      "type": "net",
+      "name_pattern": "^(?:USB|D)[+-]$|^(?:DP|DM|USB_DP|USB_DM)$",
+      "required": true,
+      "expected_connector_pin": "required"
+    },
+    {
+      "id": "mcu_net",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true,
+      "expected_ic_pin": "required",
+      "expected_role": "digital"
+    }
+  ],
+  "components": [
+    {
+      "id": "R_ctrl",
+      "type": "Resistor",
+      "required": true,
+      "value_pattern": "^[0-9]{1,4}(?:\\.[0-9]+)?[RK\\u03a9]",
+      "title": "QC 协议控制电阻",
+      "pins": [
+        {
+          "number": "1",
+          "net": "dp_net"
+        },
+        {
+          "number": "2",
+          "net": "mcu_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.45,
+      "naming": 0.3,
+      "parametric": 0.15,
+      "type": 0.1
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

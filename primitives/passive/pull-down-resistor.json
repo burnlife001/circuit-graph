@@ -1,0 +1,35 @@
+{
+  "$schema": "./schema.json",
+  "id": "pull-down-resistor",
+  "name": "下拉电阻",
+  "description": "电阻一端接地（role=gnd），另一端接数字信号（role=digital），将信号默认拉到低电平。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|CGND|PGND|AGND|DGND|VSS)$",
+      "required": true
+    },
+    {
+      "id": "signal", "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "R_pull", "type": "Resistor", "required": true,
+      "value_pattern": "^\\d+(\\.\\d+)?\\s*[kK]",
+      "pins": [
+        {"number": "1", "net": "signal"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.20, "naming": 0.20, "parametric": 0.20, "type": 0.40},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

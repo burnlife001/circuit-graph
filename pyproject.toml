@@ -1,0 +1,51 @@
+[project]
+name = "circuit-graph"
+version = "0.2.0"
+description = "Explain circuit and component functions from a netlist in one command"
+readme = "Readme.md"
+requires-python = ">=3.10"
+dependencies = [
+    "networkx>=3.0",
+    "click>=8.0",
+    "jlc2kicadlib>=1.2.3",
+    "python-dotenv>=1.2.2",
+    "tomli_w>=1.0",  # circuit_graph.bootstrap writes .cg.toml via tomli_w
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-xdist>=3.0",
+    "ruff>=0.5.0",
+    "jsonschema>=4.0",
+]
+
+[project.scripts]
+cg = "circuit_graph.cli:main"
+pin2json = "circuit_graph.knowledge.chip_resolver:_parse_cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# 默认并行全核跑（19 min → ~2.5 min）；串行可 -p no:xdist 覆盖。
+# --dist loadfile：同文件的测试进同一 worker，让模块级缓存（IR/role_all 结果）生效。
+addopts = "-n auto --dist loadfile"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+
+[tool.hatch.build.targets.wheel]
+packages = ["circuit_graph"]
+# .claude/ 配置位于仓库根，通过 editable 安装接入，不打入 wheel。

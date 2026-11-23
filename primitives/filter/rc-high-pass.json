@@ -1,0 +1,34 @@
+{
+  "$schema": "./schema.json",
+  "id": "rc-high-pass",
+  "name": "RC 高通滤波器",
+  "description": "电容串联、电阻从输出节点到地：高频通过、低频/直流被电容阻断。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {"id": "vin",  "type": "net", "name_pattern": ".*", "required": true},
+    {"id": "vout", "type": "net", "name_pattern": ".*", "required": true},
+    {"id": "gnd",  "type": "net", "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$", "required": true}
+  ],
+  "components": [
+    {
+      "id": "C_series", "type": "Capacitor", "required": true,
+      "pins": [
+        {"number": "1", "net": "vin"},
+        {"number": "2", "net": "vout"}
+      ]
+    },
+    {
+      "id": "R_shunt", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "vout"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 2, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.45, "naming": 0.10, "parametric": 0.20, "type": 0.25},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

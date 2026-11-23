@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>模式层模板工作台</title>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --bg-alt: #1a1a1a;
+      --bg-hover: #252525;
+      --border: #2a2a2a;
+      --text: #c8c8c8;
+      --text-dim: #6a6a6a;
+      --text-bright: #e8e8e8;
+      --accent: #3b82f6;
+      --accent-bg: #1e3a5f;
+      --mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-family: system-ui, sans-serif;
+      color-scheme: dark;
+    }
+    body { margin: 0; padding: 0 1rem 2rem; background: var(--bg); color: var(--text); }
+  .layer-banner { background: #111; color: var(--text-bright); border-bottom: 1px solid var(--border);
+    padding: 0.5rem 1rem; position: sticky; top: 0; z-index: 10; display: flex;
+    justify-content: space-between; align-items: center; }
+  .layer-banner strong { letter-spacing: 0.05em; }
+  .tabs { display: flex; gap: 0.5rem; margin: 1rem 0; flex-wrap: wrap; }
+  .tabs button { padding: 0.4rem 0.9rem; border: 1px solid var(--border); background: var(--bg-alt);
+    color: var(--text); cursor: pointer; border-radius: 4px; }
+  .tabs button:hover { background: var(--bg-hover); }
+  .tabs button.active { background: var(--accent-bg); color: #fff; border-color: var(--accent); }
+  .panel { display: none; background: var(--bg-alt); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem; }
+    .panel.active { display: block; }
+    h2, h3 { color: var(--text-bright); }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 0.35rem 0.5rem; text-align: left; }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover { background: var(--bg-hover); }
+    /* 自动模板（source: auto，机器闸门放行、无人审）标记 */
+    .auto-badge { color: #f59e0b; border: 1px solid #f59e0b; border-radius: 4px;
+      padding: 0 0.35rem; font-size: 12px; white-space: nowrap; }
+    pre { background: #000; color: #dcdcdc; padding: 0.75rem; overflow: auto; font-size: 12px;
+      border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .warn { color: #f87171; font-size: 13px; }
+    label { display: block; margin: 0.4rem 0; font-size: 14px; }
+    input, select, textarea { width: 100%; max-width: 32rem; padding: 0.3rem; background: var(--bg);
+      color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: none; }
+    input[type="checkbox"] { width: auto; accent-color: var(--accent); }
+    button { padding: 0.4rem 0.9rem; border: 1px solid var(--border); background: var(--bg-alt);
+      color: var(--text); border-radius: 4px; cursor: pointer; }
+    button:hover { background: var(--bg-hover); }
+    /* datasheet 对比 tab */
+    .cmp-top { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
+    .cmp-top label { margin: 0; }
+    .cmp-top input, .cmp-top select { width: auto; min-width: 9rem; }
+    .cmp-status { color: var(--text-dim); font-size: 13px; margin: 0.6rem 0 0; }
+    .cmp-status.err { color: #f87171; }
+    .cmp-status.ok { color: #86efac; }
+    .cmp-status.review { color: #f59e0b; }
+    .cmp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0.6rem; }
+    @media (max-width: 1100px) { .cmp-cols { grid-template-columns: 1fr; } }
+    .cmp-pager { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; }
+    .cmp-pager select { width: auto; }
+    .cmp-pager .page-label { color: var(--text-bright); font-family: var(--mono); font-size: 13px; }
+    .cmp-scroll { max-height: 68vh; overflow: auto; background: #000;
+      border: 1px solid var(--border); border-radius: 6px; }
+    .cmp-stage { position: relative; width: 100%; }
+    .cmp-stage img { width: 100%; display: block; }
+    .cmp-markers { position: absolute; inset: 0; pointer-events: none; }
+    .cmp-marker { position: absolute; background: rgba(250, 204, 21, 0.32);
+      border: 1px solid #facc15; border-radius: 2px; }
+    .cmp-svg-wrap { background: #000; border: 1px solid var(--border);
+      border-radius: 6px; overflow: auto; }
+    #cmp-svg { display: block; width: 100%; height: auto; }
+    .spoke { stroke: #3b82f6; stroke-width: 1.5; cursor: pointer; }
+    .spoke:hover, .spoke.on { stroke: #facc15; stroke-width: 3; }
+    .spoke-label { fill: #e8e8e8; font-size: 11px; cursor: pointer; }
+    .spoke-label-bg { fill: #000; opacity: .8; }
+    .memb { fill: #1a1a1a; stroke: #3a3a3a; cursor: pointer; }
+    .memb:hover { stroke: #facc15; }
+    .memb-text { fill: #dcdcdc; font-size: 10px; pointer-events: none; }
+    .memb-value { fill: #6a6a6a; font-size: 8px; pointer-events: none; }
+    .chip-box { fill: #1e3a5f; stroke: #3b82f6; }
+    .chip-text { fill: #e8e8e8; font-size: 13px; text-anchor: middle; }
+    .chip-sub { fill: #93c5fd; font-size: 10px; text-anchor: middle; }
+    .trunc-text { fill: #f59e0b; font-size: 10px; }
+    .cmp-json { max-height: 26vh; margin-top: 0.5rem; }
+    details.cmp-details summary { cursor: pointer; color: var(--text-bright); font-size: 13px;
+      margin: 0.5rem 0; }
+  </style>
+</head>
+<body>
+  <div class="layer-banner">
+    <div><strong>模式层 · 只读</strong> — 写入仅 primitives/**/*.json（保存需显式开启）</div>
+    <span id="status">就绪</span>
+  </div>
+
+  <div class="tabs">
+    <button type="button" data-tab="list" class="active">模板列表</button>
+    <button type="button" data-tab="detail">模板详情</button>
+    <button type="button" data-tab="replay">板级回放</button>
+    <button type="button" data-tab="draft">板驱动草稿</button>
+    <button type="button" data-tab="save">校验 / 保存</button>
+    <button type="button" data-tab="compare">datasheet 对比</button>
+  </div>
+
+  <section id="panel-list" class="panel active">
+    <h2>模板列表</h2>
+    <table id="prim-table"><thead><tr><th>id</th><th>name</th><th>version</th><th>成员</th><th>来源</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section id="panel-detail" class="panel">
+    <h2>模板详情</h2>
+    <p id="detail-meta"></p>
+    <div class="grid">
+      <div><h3>Signals</h3><pre id="detail-signals"></pre></div>
+      <div><h3>Components</h3><pre id="detail-components"></pre></div>
+    </div>
+    <h3>Constraints / Scoring</h3>
+    <pre id="detail-constraints"></pre>
+    <h3>原始 JSON</h3>
+    <pre id="detail-raw"></pre>
+  </section>
+
+  <section id="panel-replay" class="panel">
+    <h2>板级回放</h2>
+    <label>Fixture <select id="board-select"></select></label>
+    <label>限定模板（可选）<input id="replay-template" placeholder="jw5065-buck" /></label>
+    <button type="button" id="btn-match">运行回放</button>
+    <pre id="replay-out"></pre>
+  </section>
+
+  <section id="panel-draft" class="panel">
+    <h2>板驱动草稿</h2>
+    <p class="cmp-status">只读证据 + 自动候选：选板与芯片位号即可出草稿，无需手填任何内部字段。</p>
+    <label>板 <select id="draft-board"></select></label>
+    <label>芯片位号 <input id="draft-chip" value="U4" /></label>
+    <button type="button" id="btn-load-chip">加载引脚 / 邻接</button>
+    <button type="button" id="btn-draft-auto">自动生成草稿</button>
+    <p id="draft-state" class="cmp-status">未生成。</p>
+    <div class="grid">
+      <div><h3>KB 引脚表</h3><pre id="draft-pinout"></pre></div>
+      <div><h3>引脚 → 同网元件</h3><pre id="draft-conn"></pre></div>
+    </div>
+    <h3>草稿成员（自动推导）</h3>
+    <table id="draft-table">
+      <thead><tr><th>成员 id</th><th>类型</th><th>引脚 → signal</th><th>required</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button type="button" id="btn-draft-to-save">送入校验/保存</button>
+    <button type="button" id="btn-download-draft">下载草稿</button>
+    <pre id="draft-out"></pre>
+  </section>
+
+  <section id="panel-save" class="panel">
+    <h2>校验与保存</h2>
+    <p class="warn">默认只读。保存前需 schema + 可选 fixture 回放；保存后请手跑 pytest。</p>
+    <label>相对路径（primitives/ 下）<input id="save-file" placeholder="power/draft-xxx.json" /></label>
+    <label>自检板 <select id="validate-board"></select></label>
+    <label><input type="checkbox" id="enable-write" /> enable_write（允许写盘）</label>
+    <label><input type="checkbox" id="confirm-version" /> confirm_unchanged_version</label>
+    <textarea id="save-json" rows="14" placeholder="粘贴模板 JSON"></textarea>
+    <button type="button" id="btn-validate">POST /api/validate</button>
+    <button type="button" id="btn-save">POST /api/save</button>
+    <button type="button" id="btn-reindex">POST /api/index/rebuild</button>
+    <pre id="save-out"></pre>
+  </section>
+
+  <section id="panel-compare" class="panel">
+    <h2>datasheet 对比</h2>
+    <div class="cmp-top">
+      <label>板 <select id="cmp-board"></select></label>
+      <label>芯片位号 <input id="cmp-chip" value="U4" /></label>
+      <button type="button" id="btn-cmp-load">加载对照</button>
+    </div>
+    <p id="cmp-status" class="cmp-status">未加载。</p>
+    <div class="cmp-cols">
+      <div>
+        <div class="cmp-pager">
+          <button type="button" id="cmp-prev">上一页</button>
+          <span class="page-label" id="cmp-page-label">– / –</span>
+          <button type="button" id="cmp-next">下一页</button>
+          <label style="margin:0">缩放
+            <select id="cmp-zoom">
+              <option value="1">1x</option>
+              <option value="2" selected>2x</option>
+              <option value="3">3x</option>
+            </select>
+          </label>
+        </div>
+        <div class="cmp-scroll" id="cmp-scroll">
+          <div class="cmp-stage" id="cmp-stage">
+            <img id="cmp-img" alt="datasheet page" />
+            <div class="cmp-markers" id="cmp-markers"></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="cmp-svg-wrap">
+          <svg id="cmp-svg" viewBox="0 0 920 780" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <details class="cmp-details">
+          <summary>引脚 JSON</summary>
+          <pre class="cmp-json" id="cmp-json">点击左侧辐线或元件框查看引脚明细。</pre>
+        </details>
+      </div>
+    </div>
+  </section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const status = (t) => { $("status").textContent = t; };
+
+let currentRaw = null;
+let lastDraft = null;
+let connData = null;
+const fileById = {};
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+function showTab(name) {
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $(`panel-${name}`).classList.add("active");
+}
+
+document.querySelectorAll(".tabs button").forEach(b => {
+  b.addEventListener("click", () => showTab(b.dataset.tab));
+});
+
+function fillBoardSelects(boards) {
+  ["board-select", "draft-board", "validate-board", "cmp-board"].forEach(id => {
+    const sel = $(id);
+    sel.innerHTML = boards.map(b => `<option value="${b}">${b}</option>`).join("");
+  });
+}
+
+async function loadPrimitives() {
+  const rows = await api("/api/primitives");
+  const tb = $("prim-table").querySelector("tbody");
+  tb.innerHTML = "";
+  rows.forEach(row => {
+    fileById[row.id] = row.file;
+    const tr = document.createElement("tr");
+    tr.className = "clickable";
+    tr.innerHTML = `<td>${row.id}</td><td>${row.name}</td><td>${row.version}</td><td>${row.member_count}</td>`
+      + `<td>${row.source === "auto" ? '<span class="auto-badge">自动</span>' : "手工"}</td>`;
+    tr.onclick = () => openPrimitive(row.id);
+    tb.appendChild(tr);
+  });
+}
+
+async function openPrimitive(id) {
+  status("加载 " + id);
+  const data = await api(`/api/primitives/${id}`);
+  currentRaw = data.raw;
+  $("detail-meta").textContent = `${data.raw.id} · v${data.raw.version} · ${data.raw.name}`;
+  $("detail-signals").textContent = JSON.stringify(data.render.signals, null, 2);
+  $("detail-components").textContent = JSON.stringify(data.render.components, null, 2);
+  $("detail-constraints").textContent = JSON.stringify({
+    constraints: data.render.constraints,
+    scoring: data.render.scoring,
+    symmetry: data.render.symmetry
+  }, null, 2);
+  $("detail-raw").textContent = JSON.stringify(data.raw, null, 2);
+  $("save-json").value = JSON.stringify(data.raw, null, 2);
+  $("save-file").value = fileById[id] || "";
+  showTab("detail");
+  status("就绪");
+}
+
+async function loadBoards() {
+  const boards = await api("/api/boards");
+  fillBoardSelects(boards);
+}
+
+$("btn-match").onclick = async () => {
+  const board = $("board-select").value;
+  const tid = $("replay-template").value.trim();
+  let url = `/api/match?board=${encodeURIComponent(board)}`;
+  if (tid) url += `&template_id=${encodeURIComponent(tid)}`;
+  $("replay-out").textContent = "…";
+  try {
+    const data = await api(url);
+    $("replay-out").textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    $("replay-out").textContent = e.message;
+  }
+};
+
+function draftState(text, kind) {
+  const el = $("draft-state");
+  el.textContent = text;
+  el.className = "cmp-status" + (kind ? " " + kind : "");
+}
+
+function renderDraftTable(draft) {
+  const tb = $("draft-table").querySelector("tbody");
+  tb.innerHTML = "";
+  (draft.components || []).forEach(c => {
+    const tr = document.createElement("tr");
+    const pins = (c.pins || []).map(p => `${p.number}→${p.net}`).join("  ");
+    tr.innerHTML = `<td>${c.id}</td><td>${c.type}</td><td>${pins}</td><td>${c.required ? "是" : "否"}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+$("btn-load-chip").onclick = async () => {
+  const board = $("draft-board").value;
+  const chip = $("draft-chip").value.trim();
+  try {
+    const pinout = await api(`/api/boards/${encodeURIComponent(board)}/pinout/${encodeURIComponent(chip)}`);
+    $("draft-pinout").textContent = JSON.stringify(pinout, null, 2);
+    connData = await api(`/api/boards/${encodeURIComponent(board)}/conn/${encodeURIComponent(chip)}`);
+    $("draft-conn").textContent = JSON.stringify(connData, null, 2);
+  } catch (e) {
+    $("draft-pinout").textContent = e.message;
+  }
+};
+
+$("btn-draft-auto").onclick = async () => {
+  const board = $("draft-board").value;
+  const chip = $("draft-chip").value.trim();
+  draftState("自动生成中 …");
+  status("生成草稿");
+  try {
+    const url = `/api/draft/preview?board=${encodeURIComponent(board)}&chip=${encodeURIComponent(chip)}`;
+    const data = await api(url);
+    lastDraft = data.draft;
+    const conflicts = data.conflicts || [];
+    const kind = data.state === "ready" ? "ok" : "review";
+    const tail = conflicts.length ? ` · 冲突：${conflicts.join("、")}` : "";
+    const hits = ((data.replay || {}).matched_components || []).length;
+    draftState(
+      `${data.state === "ready" ? "可入库候选" : "需人工复核"} · 引脚来源 ${data.pin_source}` +
+      ` · 回放命中 ${hits} 个元件${tail}`,
+      kind
+    );
+    renderDraftTable(data.draft || {});
+    $("draft-out").textContent = JSON.stringify(data, null, 2);
+    status("就绪");
+  } catch (e) {
+    draftState("生成失败：" + e.message, "err");
+    status("失败");
+  }
+};
+
+$("btn-draft-to-save").onclick = () => {
+  if (!lastDraft) { draftState("尚未生成草稿。", "err"); return; }
+  $("save-json").value = JSON.stringify(lastDraft, null, 2);
+  const chip = ($("draft-chip").value.trim() || "chip").toLowerCase();
+  $("save-file").value = `power/draft-${chip}-auto.json`;
+  showTab("save");
+  status("草稿已送入校验/保存");
+};
+$("btn-download-draft").onclick = () => {
+  if (!lastDraft) return;
+  const blob = new Blob([JSON.stringify(lastDraft, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (lastDraft.id || "draft") + ".json";
+  a.click();
+};
+
+$("btn-validate").onclick = async () => {
+  const doc = JSON.parse($("save-json").value);
+  const body = { template: doc, board: $("validate-board").value };
+  try {
+    $("save-out").textContent = JSON.stringify(await api("/api/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), null, 2);
+  } catch (e) { $("save-out").textContent = e.message; }
+};
+
+$("btn-save").onclick = async () => {
+  const doc = JSON.parse($("save-json").value);
+  const body = {
+    template: doc,
+    file: $("save-file").value.trim(),
+    board: $("validate-board").value,
+    enable_write: $("enable-write").checked,
+    confirm_unchanged_version: $("confirm-version").checked
+  };
+  try {
+    $("save-out").textContent = JSON.stringify(await api("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), null, 2);
+  } catch (e) { $("save-out").textContent = e.message; }
+};
+
+$("btn-reindex").onclick = async () => {
+  try {
+    $("save-out").textContent = JSON.stringify(await api("/api/index/rebuild", { method: "POST" }), null, 2);
+  } catch (e) { $("save-out").textContent = e.message; }
+};
+
+/* ---------------------------------------------------- datasheet 对比 (tab 6) */
+const CMP = { locate: null, graph: null, pages: 0, page: 1, zoom: 2, selected: null };
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function cmpSetStatus(text, kind) {
+  const el = $("cmp-status");
+  el.textContent = text;
+  el.className = "cmp-status" + (kind ? " " + kind : "");
+}
+
+function cmpSvgEl(tag, attrs, text) {
+  const e = document.createElementNS(SVG_NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined && text !== null) e.textContent = text;
+  return e;
+}
+
+function cmpClearMarkers() { $("cmp-markers").innerHTML = ""; }
+
+function cmpDrawMarkers(rects) {
+  const layer = $("cmp-markers");
+  layer.innerHTML = "";
+  (rects || []).forEach(r => {
+    const d = document.createElement("div");
+    d.className = "cmp-marker";
+    d.style.left = (r.x * 100) + "%";
+    d.style.top = (r.y * 100) + "%";
+    d.style.width = (r.w * 100) + "%";
+    d.style.height = (r.h * 100) + "%";
+    layer.appendChild(d);
+  });
+}
+
+function cmpScrollToFirst(rects) {
+  if (!rects || !rects.length) return;
+  const img = $("cmp-img");
+  const box = $("cmp-scroll");
+  const imgH = img.getBoundingClientRect().height || 1;
+  box.scrollTop = Math.max(0, rects[0].y * imgH - box.clientHeight / 2);
+}
+
+function cmpRenderGraph(graph) {
+  const svg = $("cmp-svg");
+  svg.innerHTML = "";
+  const CX = 460, CY = 380, HW = 70, HH = 40, R1 = 150;
+  const chip = graph.chip || {};
+  const pins = graph.pins || [];
+  svg.appendChild(cmpSvgEl("rect", { x: CX - HW, y: CY - HH, width: HW * 2, height: HH * 2, rx: 6, class: "chip-box" }));
+  svg.appendChild(cmpSvgEl("text", { x: CX, y: CY - 4, class: "chip-text" }, chip.id || ""));
+  svg.appendChild(cmpSvgEl("text", { x: CX, y: CY + 14, class: "chip-sub" }, chip.value || ""));
+
+  const n = Math.max(1, pins.length);
+  pins.forEach((pin, i) => {
+    const ang = (-90 + i * (360 / n)) * Math.PI / 180;
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const t = Math.min(HW / Math.max(1e-6, Math.abs(dx)), HH / Math.max(1e-6, Math.abs(dy)));
+    const ax = CX + dx * t, ay = CY + dy * t;
+    const hx = CX + dx * R1, hy = CY + dy * R1;
+    const g = cmpSvgEl("g", { class: "cmp-pin", "data-pin": pin.pin });
+    g.appendChild(cmpSvgEl("line", { x1: ax, y1: ay, x2: hx, y2: hy, class: "spoke" }));
+    const lr = t + (R1 - t) * 0.5;
+    const labelText = pin.name || pin.pin;
+    const lw = String(labelText).length * 6.5 + 8;
+    const lx = CX + dx * lr, ly = CY + dy * lr - 5;
+    g.appendChild(cmpSvgEl("rect", {
+      x: lx - lw / 2, y: ly - 10, width: lw, height: 14, rx: 2, class: "spoke-label-bg",
+    }));
+    g.appendChild(cmpSvgEl("text", {
+      x: lx, y: ly, class: "spoke-label", "text-anchor": "middle",
+    }, labelText));
+
+    const members = (pin.members || []).filter(m => m.id !== chip.id);
+    members.forEach((m, j) => {
+      const r = R1 + 26 + j * 26;
+      const mx = CX + dx * r, my = CY + dy * r;
+      const rect = cmpSvgEl("rect", {
+        x: mx - 52, y: my - 14, width: 104, height: 28, rx: 3, class: "memb",
+      });
+      const value = String(m.value || "");
+      const pinsTxt = (m.pins_on_net || []).join(",");
+      g.appendChild(rect);
+      g.appendChild(cmpSvgEl("text", { x: mx, y: my - 1, class: "memb-text", "text-anchor": "middle" },
+        m.id + (pinsTxt ? " [" + pinsTxt + "]" : "")));
+      g.appendChild(cmpSvgEl("text", { x: mx, y: my + 10, class: "memb-value", "text-anchor": "middle" },
+        value.length > 20 ? value.slice(0, 19) + "…" : value));
+    });
+    if (pin.truncated) {
+      const r = R1 + 26 + members.length * 26;
+      g.appendChild(cmpSvgEl("text", {
+        x: CX + dx * r, y: CY + dy * r + 4, class: "trunc-text", "text-anchor": "middle",
+      }, "+" + pin.truncated));
+    }
+    g.addEventListener("click", () => cmpSelectPin(pin));
+    svg.appendChild(g);
+  });
+}
+
+async function cmpSearch(q, page) {
+  const board = $("cmp-board").value;
+  const chip = $("cmp-chip").value.trim();
+  const url = `/api/datasheet/search?board=${encodeURIComponent(board)}` +
+    `&chip=${encodeURIComponent(chip)}&page=${page}&q=${encodeURIComponent(q)}`;
+  const r = await fetch(url);
+  if (!r.ok) {
+    let msg = r.statusText;
+    try { msg = (await r.json()).error || msg; } catch (e) { /* non-JSON body */ }
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+async function cmpSelectPin(pin) {
+  CMP.selected = pin.pin;
+  document.querySelectorAll("#cmp-svg .cmp-pin").forEach(g => {
+    const on = g.getAttribute("data-pin") === pin.pin;
+    g.querySelectorAll(".spoke").forEach(s => s.classList.toggle("on", on));
+  });
+  $("cmp-json").textContent = JSON.stringify({
+    pin: pin.pin, name: pin.name, net: pin.net,
+    members: pin.members, truncated: pin.truncated,
+  }, null, 2);
+  const det = document.querySelector("details.cmp-details");
+  if (det) det.open = true;
+  const cands = [];
+  if (pin.name && pin.name !== pin.pin) cands.push(pin.name);
+  cands.push(pin.pin);
+  let res = null;
+  for (const q of cands) {
+    try { res = await cmpSearch(q, CMP.page); } catch (e) { res = null; }
+    if (res && res.rects && res.rects.length) break;
+  }
+  if (res) {
+    cmpDrawMarkers(res.rects);
+    cmpScrollToFirst(res.rects);
+  }
+}
+
+async function cmpLoadPage() {
+  const board = $("cmp-board").value;
+  const chip = $("cmp-chip").value.trim();
+  if (!board || !chip) return;
+  const img = $("cmp-img");
+  const url = `/api/datasheet/page?board=${encodeURIComponent(board)}` +
+    `&chip=${encodeURIComponent(chip)}&page=${CMP.page}&zoom=${CMP.zoom}&_=${Date.now()}`;
+  await new Promise((resolve) => {
+    const finish = () => { img.onload = null; img.onerror = null; resolve(); };
+    img.onload = () => { cmpClearMarkers(); finish(); };
+    img.onerror = finish;
+    img.src = url;
+    setTimeout(finish, 15000);
+  });
+  if (!img.naturalWidth) {
+    cmpSetStatus("页面渲染失败：未取得 PNG 图像（可能 PDF 渲染器不可用）。", "err");
+  }
+}
+
+async function cmpLoadGraph() {
+  const board = $("cmp-board").value;
+  const chip = $("cmp-chip").value.trim();
+  try {
+    const g = await api(`/api/compare/graph?board=${encodeURIComponent(board)}&chip=${encodeURIComponent(chip)}`);
+    CMP.graph = g;
+    cmpRenderGraph(g);
+  } catch (e) {
+    cmpSetStatus("拓扑加载失败：" + e.message, "err");
+  }
+}
+
+async function cmpLoadAll() {
+  const board = $("cmp-board").value;
+  const chip = $("cmp-chip").value.trim();
+  if (!board || !chip) { cmpSetStatus("请选择板并填写芯片位号。", "err"); return; }
+  cmpSetStatus("定位 datasheet …");
+  let loc = null;
+  try {
+    loc = await api(`/api/datasheet/locate?board=${encodeURIComponent(board)}&chip=${encodeURIComponent(chip)}`);
+  } catch (e) {
+    cmpSetStatus("定位失败：" + e.message, "err");
+    return;
+  }
+  CMP.locate = loc;
+  CMP.pages = loc.pages || 0;
+  CMP.page = loc.default_page || 1;
+  $("cmp-page-label").textContent = CMP.pages ? `${CMP.page} / ${CMP.pages}` : "– / –";
+  if (!loc.found) {
+    cmpSetStatus(`未找到 ${loc.mpn || chip} 对应的 datasheet PDF。`, "err");
+  } else if (loc.renderer !== "ok") {
+    cmpSetStatus(`已定位 ${loc.pdf_name}（${loc.pages} 页），但渲染器不可用（外部 venv / fitz 缺失）。`, "err");
+  } else {
+    cmpSetStatus(`${loc.mpn} → ${loc.pdf_name} · ${loc.pages} 页 · 应用电路默认第 ${loc.default_page} 页`, "ok");
+  }
+  await cmpLoadPage();
+  await cmpLoadGraph();
+}
+
+function cmpGotoPage(delta) {
+  if (!CMP.pages) return;
+  const next = Math.min(CMP.pages, Math.max(1, CMP.page + delta));
+  if (next === CMP.page) return;
+  CMP.page = next;
+  $("cmp-page-label").textContent = `${CMP.page} / ${CMP.pages}`;
+  cmpLoadPage();
+}
+
+$("btn-cmp-load").onclick = cmpLoadAll;
+$("cmp-prev").onclick = () => cmpGotoPage(-1);
+$("cmp-next").onclick = () => cmpGotoPage(1);
+$("cmp-zoom").onchange = async () => {
+  CMP.zoom = parseInt($("cmp-zoom").value, 10) || 2;
+  await cmpLoadPage();
+};
+
+(async () => {
+  await loadBoards();
+  await loadPrimitives();
+  const fx = "FX-T268-V6-10米-5065.NET";
+  ["board-select","draft-board","validate-board","cmp-board"].forEach(id => {
+    const sel = $(id);
+    for (const o of sel.options) { if (o.value === fx) sel.value = fx; }
+  });
+})();
+</script>
+</body>
+</html>

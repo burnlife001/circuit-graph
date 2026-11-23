@@ -1,0 +1,63 @@
+{
+  "$schema": "./schema.json",
+  "id": "pwm-gate-series-resistor",
+  "name": "PWM 栅极驱动串联电阻",
+  "description": "MCU 的 PWM 输出经一颗小阻值电阻（几欧到几十欧）串到功率 MOSFET 的栅极：既做驱动阻抗匹配，也给栅极电容提供阻尼，抑制开关振铃。Protel 自动命名里 MOSFET 侧网络形如 NetQ<n>_<引脚号>，且不接任何 IC 引脚。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "pwm_net",
+      "type": "net",
+      "name_pattern": "^\\w*PWMN?$",
+      "required": true,
+      "expected_ic_pin": "required",
+      "expected_role": "digital"
+    },
+    {
+      "id": "gate_net",
+      "type": "net",
+      "name_pattern": "^NetQ\\d+_\\d+$",
+      "required": true,
+      "expected_ic_pin": "forbidden",
+      "expected_role": "digital"
+    }
+  ],
+  "components": [
+    {
+      "id": "R_gate",
+      "type": "Resistor",
+      "required": true,
+      "strict_value": true,
+      "value_pattern": "^(?:[0-9]|[1-9][0-9]|100)(?:\\.[0-9]+)?[R\\u03a9]",
+      "title": "栅极驱动串联电阻（阻尼）",
+      "pins": [
+        {
+          "number": "1",
+          "net": "gate_net"
+        },
+        {
+          "number": "2",
+          "net": "pwm_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.4,
+      "naming": 0.3,
+      "parametric": 0.2,
+      "type": 0.1
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

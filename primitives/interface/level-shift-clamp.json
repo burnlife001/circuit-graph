@@ -1,0 +1,124 @@
+{
+  "$schema": "./schema.json",
+  "id": "level-shift-clamp",
+  "name": "CC 线电平转换/钳位电路",
+  "description": "2N7002 小信号 MOSFET 做 Type-C CC 线的电平转换/钳位：漏极接连接器侧 CC 脚、源极接控制器侧 CCx，栅极由 51k 下拉 + 5.1k 上拉偏置。约束（防误报）：型号锁 2N7002、引脚按 SOT-23 物理脚号（G=1 / S=2 / D=3）匹配；连接器侧网络必须落在 CC1/CC2 且确实在连接器引脚上；控制器侧网络必须落在 CCx/CCx2（MCU 侧 CCxIO/CCxID 经串接电阻接过来，故本网络本身不挂 IC 引脚）；栅极网络不得接任何 IC 或连接器引脚。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "strict_pin_matching": true,
+  "signals": [
+    {
+      "id": "gate_net",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true,
+      "expected_ic_pin": "forbidden",
+      "expected_connector_pin": "forbidden"
+    },
+    {
+      "id": "cc_pin_net",
+      "type": "net",
+      "name_pattern": "^CC[12]$",
+      "required": true,
+      "expected_connector_pin": "required",
+      "expected_ic_pin": "forbidden"
+    },
+    {
+      "id": "cc_ctrl_net",
+      "type": "net",
+      "name_pattern": "^CCX[12]?$",
+      "required": true,
+      "expected_ic_pin": "forbidden",
+      "expected_connector_pin": "forbidden"
+    },
+    {
+      "id": "gnd_net",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|CGND|VSS)$",
+      "required": true,
+      "expected_role": "gnd"
+    },
+    {
+      "id": "vcc_net",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true,
+      "expected_role": "power"
+    }
+  ],
+  "components": [
+    {
+      "id": "Q_clamp",
+      "type": "Mosfet",
+      "required": true,
+      "strict_value": true,
+      "value_pattern": "2N7002",
+      "title": "CC 线电平转换/钳位开关",
+      "pins": [
+        {
+          "number": "1",
+          "net": "gate_net"
+        },
+        {
+          "number": "2",
+          "net": "cc_ctrl_net"
+        },
+        {
+          "number": "3",
+          "net": "cc_pin_net"
+        }
+      ]
+    },
+    {
+      "id": "R_lo",
+      "type": "Resistor",
+      "required": true,
+      "value_pattern": "^(?:[1-9]|[1-9][0-9]|100)(?:\\.[0-9]+)?K",
+      "title": "钳位偏置下臂",
+      "pins": [
+        {
+          "number": "1",
+          "net": "gate_net"
+        },
+        {
+          "number": "2",
+          "net": "gnd_net"
+        }
+      ]
+    },
+    {
+      "id": "R_hi",
+      "type": "Resistor",
+      "required": true,
+      "value_pattern": "^(?:[1-9]|10)(?:\\.[0-9]+)?K",
+      "title": "钳位偏置上臂",
+      "pins": [
+        {
+          "number": "1",
+          "net": "gate_net"
+        },
+        {
+          "number": "2",
+          "net": "vcc_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 3,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.4,
+      "naming": 0.2,
+      "parametric": 0.2,
+      "type": 0.2
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "./schema.json",
+  "id": "voltage-divider-signal",
+  "name": "信号分压器（送 IC 采样）",
+  "description": "信号源节点 → 上电阻 → 中点 → 下电阻 → 地，中点接到 IC 引脚（典型是 MCU ADC 采样脚）。与 voltage-divider（vin 为电源轨）互补：这里 vin 是不接任何 IC 引脚的无源信号节点，所以运放反馈网络（输出→反相输入→地）不会被误判成分压器，而中点没有 IC 负载的普通串联电阻同样不会命中。",
+  "role": "power",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "vin",
+      "type": "net",
+      "name_pattern": "^(?!(?:GND|PGND|AGND|DGND|CGND|VSS|VEE)$).*$",
+      "expected_role": ["digital", "analog"],
+      "expected_ic_pin": "forbidden",
+      "required": true
+    },
+    {
+      "id": "vout",
+      "type": "net",
+      "name_pattern": "^(?!(?:GND|PGND|AGND|DGND|CGND|VSS|VEE)$).*$",
+      "expected_role": ["digital", "analog"],
+      "expected_ic_pin": "required",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "R_top",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "vin"},
+        {"number": "2", "net": "vout"}
+      ]
+    },
+    {
+      "id": "R_bottom",
+      "type": "Resistor",
+      "required": true,
+      "pins": [
+        {"number": "1", "net": "vout"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 2,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.35,
+      "naming": 0.25,
+      "parametric": 0.20,
+      "type": 0.20
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.50,
+      "low": 0.0
+    }
+  }
+}

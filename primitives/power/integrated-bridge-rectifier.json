@@ -1,0 +1,30 @@
+{
+  "$schema": "./schema.json",
+  "id": "integrated-bridge-rectifier",
+  "name": "集成桥堆整流器",
+  "description": "单颗集成桥堆实现全波整流：一个 4 引脚器件同时跨接 2 路交流输入（L/N/AC*）与正负直流母线。不依赖位号命名（BD1/DB1 等由工程师随意命名），识别特征是 AC 前端结构：交流进线 L/N/AC*、直流母线（如 310V/VDC）与负端（GND 或 *-），前端常伴随保险丝、压敏电阻（CNR/MOV）、Y 电容。",
+  "role": "power",
+  "version": "0.2.0",
+  "signals": [
+    {"id": "ac_l",    "type": "net", "name_pattern": "^(AC\\d*|AC_L|AC_N|L|N)$", "required": true},
+    {"id": "ac_n",    "type": "net", "name_pattern": "^(AC\\d*|AC_L|AC_N|L|N)$", "required": true},
+    {"id": "dc_plus", "type": "net", "name_pattern": "(VDC|\\+V|DC\\+|VOUT|VBUS|\\+DC|^\\d+V).*", "required": true},
+    {"id": "dc_minus","type": "net", "name_pattern": "^(GND|PGND|VSS|DC\\-)$", "required": true}
+  ],
+  "components": [
+    {
+      "id": "BD", "type": ["Diode", "Unknown"], "required": true,
+      "pins": [
+        {"number": "1", "net": "ac_l"},
+        {"number": "2", "net": "ac_n"},
+        {"number": "3", "net": "dc_plus"},
+        {"number": "4", "net": "dc_minus"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 1, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.40, "naming": 0.30, "parametric": 0.10, "type": 0.20},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

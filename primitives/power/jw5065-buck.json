@@ -1,0 +1,222 @@
+{
+  "$schema": "./schema.json",
+  "id": "jw5065-buck",
+  "name": "JW5065 同步降压变换器",
+  "description": "Joulwatt JW5065：24V/3A 同步降压变换器（I2 架构，450kHz，SOT23-8）。VIN 经内部开关管在 SW 输出，FB 做输出电压反馈，BST 为高侧驱动自举电容节点，EN 使能，MODE 选工作模式。 功率级搭接件（0Ω 供电跳线 / 开关节点 0Ω 串接 / 自举电容 / 自举充电限流电阻 / 输出电感）按本设计参考电路建模为可选成员：不焊的位随 optional_group 共进退，不阻碍芯片本体命中。",
+  "role": "regulator",
+  "version": "0.3.0",
+  "strict_pin_matching": true,
+  "signals": [
+    {
+      "id": "mode",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "vin",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "sw",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "required": true
+    },
+    {
+      "id": "bst",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "en",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "fb",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true
+    },
+    {
+      "id": "vin_in",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": false
+    },
+    {
+      "id": "sw_out",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": false
+    },
+    {
+      "id": "bst_mid",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": false
+    },
+    {
+      "id": "vout",
+      "type": "net",
+      "name_pattern": "^(USB_5V|VOUT|VDD.*|VCC.*|\\+?\\d+(\\.\\d+)?V|5V\\d*|3V\\d*)$",
+      "required": false
+    }
+  ],
+  "components": [
+    {
+      "id": "dcdc",
+      "type": "IC",
+      "required": true,
+      "value_pattern": "JW5065",
+      "strict_value": true,
+      "pins": [
+        {
+          "number": "1",
+          "net": "mode"
+        },
+        {
+          "number": "2",
+          "net": "vin"
+        },
+        {
+          "number": "3",
+          "net": "sw"
+        },
+        {
+          "number": "4",
+          "net": "gnd"
+        },
+        {
+          "number": "5",
+          "net": "bst"
+        },
+        {
+          "number": "6",
+          "net": "en"
+        },
+        {
+          "number": "8",
+          "net": "fb"
+        }
+      ]
+    },
+    {
+      "id": "R_vin",
+      "type": "Resistor",
+      "required": false,
+      "value_pattern": "^(?:0+(?:\\.0+)?(?:m?[RΩ])?(?:[-_].*)?%?\\d*|0\\.\\d+(?:[RΩ]|$))$",
+      "strict_value": true,
+      "title": "0R 供电跳线",
+      "pins": [
+        {
+          "number": "1",
+          "net": "vin_in"
+        },
+        {
+          "number": "2",
+          "net": "vin"
+        }
+      ]
+    },
+    {
+      "id": "R_sw",
+      "type": "Resistor",
+      "required": false,
+      "optional_group": "sw-stage",
+      "value_pattern": "^(?:0+(?:\\.0+)?(?:m?[RΩ])?(?:[-_].*)?%?\\d*|0\\.\\d+(?:[RΩ]|$))$",
+      "strict_value": true,
+      "title": "0R 串接（开关节点）",
+      "pins": [
+        {
+          "number": "1",
+          "net": "sw"
+        },
+        {
+          "number": "2",
+          "net": "sw_out"
+        }
+      ]
+    },
+    {
+      "id": "R_bst",
+      "type": "Resistor",
+      "required": false,
+      "optional_group": "sw-stage",
+      "value_pattern": "^[12](?:\\.\\d+)?\\s*[RΩ](?!\\d)",
+      "strict_value": true,
+      "title": "自举充电限流电阻",
+      "pins": [
+        {
+          "number": "1",
+          "net": "bst_mid"
+        },
+        {
+          "number": "2",
+          "net": "sw_out"
+        }
+      ]
+    },
+    {
+      "id": "C_bst",
+      "type": "Capacitor",
+      "required": false,
+      "title": "自举电容",
+      "pins": [
+        {
+          "number": "1",
+          "net": "bst"
+        },
+        {
+          "number": "2",
+          "net": "bst_mid"
+        }
+      ]
+    },
+    {
+      "id": "L_out",
+      "type": "Inductor",
+      "required": false,
+      "optional_group": "sw-stage",
+      "title": "Buck 输出电感",
+      "pins": [
+        {
+          "number": "1",
+          "net": "vout"
+        },
+        {
+          "number": "2",
+          "net": "sw_out"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.35,
+      "naming": 0.25,
+      "parametric": 0.2,
+      "type": 0.2
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

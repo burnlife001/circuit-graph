@@ -1,0 +1,51 @@
+{
+  "$schema": "./schema.json",
+  "id": "type-c-cc-pull-down",
+  "name": "Type-C CC Pull-down",
+  "description": "USB Type-C CC pin pulled to ground through a 5.1 kΩ resistor.",
+  "role": "pd_controller",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "cc",
+      "type": "net",
+      "name_pattern": "^(CC1|CC2)$",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND)$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "R_pull",
+      "type": "Resistor",
+      "required": true,
+      "value_pattern": "^5\\.1K",
+      "pins": [
+        {"number": "1", "net": "cc"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": false
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.30,
+      "naming": 0.25,
+      "parametric": 0.25,
+      "type": 0.20
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.50,
+      "low": 0.0
+    }
+  }
+}

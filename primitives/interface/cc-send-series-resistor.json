@@ -1,0 +1,60 @@
+{
+  "$schema": "./schema.json",
+  "id": "cc-send-series-resistor",
+  "name": "CCx 发送串联电阻",
+  "description": "Type-C CC 控制器与 MCU 之间 CCx 发送线的串接电阻：MCU 通过 CC1IO/CC2IO 驱动 CCx 线上的一串脉冲，串接电阻限流并压降边沿。约束：CCx 侧不接 IC 引脚（只挂 CC 线上的串接件），CCxIO 侧必须落在 IC 引脚上。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "cc_net",
+      "type": "net",
+      "name_pattern": "^CCX[12]?$",
+      "required": true,
+      "expected_ic_pin": "forbidden"
+    },
+    {
+      "id": "io_net",
+      "type": "net",
+      "name_pattern": "^CC[12]IO$",
+      "required": true,
+      "expected_ic_pin": "required"
+    }
+  ],
+  "components": [
+    {
+      "id": "R_send",
+      "type": "Resistor",
+      "required": true,
+      "value_pattern": "^300R",
+      "title": "CCx 发送串联电阻",
+      "pins": [
+        {
+          "number": "1",
+          "net": "cc_net"
+        },
+        {
+          "number": "2",
+          "net": "io_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.45,
+      "naming": 0.3,
+      "parametric": 0.15,
+      "type": 0.1
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

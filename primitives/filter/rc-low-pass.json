@@ -1,0 +1,36 @@
+{
+  "$schema": "./schema.json",
+  "id": "rc-low-pass",
+  "name": "RC 低通滤波器",
+  "description": "电阻串联、电容从输出节点到地：低频通过、高频被电容旁路。vin（电阻另一端）与 vout（滤波节点）都排除电源轨 —— 电源轨上的电阻/电容是供电支路与去耦，不是 RC 滤波。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {"id": "vin",  "type": "net", "name_pattern": "^(?!(?:.*\\d+(?:\\.\\d+)?V)|(?:.*(?:VBUS|VCC|VDD|VEE|VBAT|VIN|DCIN))).*$", "required": true},
+    {"id": "vout", "type": "net", "name_pattern": "^(?!(?:.*\\d+(?:\\.\\d+)?V)|(?:.*(?:VBUS|VCC|VDD|VEE|VBAT|VIN|DCIN))).*$", "required": true},
+    {"id": "gnd",  "type": "net", "name_pattern": "^(GND|CGND|PGND|AGND|DGND|VSS)$", "required": true}
+  ],
+  "components": [
+    {
+      "id": "R_series", "type": "Resistor", "required": true,
+      "pins": [
+        {"number": "1", "net": "vin"},
+        {"number": "2", "net": "vout"}
+      ]
+    },
+    {
+      "id": "C_shunt", "type": "Capacitor", "required": true,
+      "strict_value": true,
+      "value_pattern": "^\\d+(\\.\\d+)?\\s*[np][Ff]",
+      "pins": [
+        {"number": "1", "net": "vout"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 2, "exact_component_count": true},
+  "scoring": {
+    "weights": {"structural": 0.45, "naming": 0.10, "parametric": 0.20, "type": 0.25},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "./schema.json",
+  "id": "feedback-feedforward-cap",
+  "name": "反馈分压馈通补偿电容",
+  "description": "开关电源输出轨经一颗 pF 级小电容馈通到反馈分压节点（FB）：给环路加一条高频旁路，加速环路响应。本模板只认「输出轨（power 角色）→ 无 IC 引脚的中间节点」这一段馈通支路，不把分压上臂电阻收进本块（分压臂仍归 voltage-divider / voltage-divider-signal），避免抢占已确认的定性。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "out_net",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true,
+      "expected_role": "power"
+    },
+    {
+      "id": "tap_net",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true,
+      "expected_ic_pin": "forbidden",
+      "expected_role": "digital"
+    }
+  ],
+  "components": [
+    {
+      "id": "C_ff",
+      "type": "Capacitor",
+      "required": true,
+      "strict_value": true,
+      "value_pattern": "^(?:[0-9]|[1-9][0-9])pF",
+      "title": "反馈馈通补偿电容",
+      "pins": [
+        {
+          "number": "1",
+          "net": "out_net"
+        },
+        {
+          "number": "2",
+          "net": "tap_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.35,
+      "naming": 0.25,
+      "parametric": 0.3,
+      "type": 0.1
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

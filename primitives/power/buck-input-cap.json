@@ -1,0 +1,64 @@
+{
+  "$schema": "./schema.json",
+  "id": "buck-input-cap",
+  "name": "Buck 输入滤波电容",
+  "description": "降压变换器 VIN 引脚（KB 认定为 power_in）到地之间的大容量输入滤波电容，抑制输入轨上的开关噪声。反例约束：VIN 节点必须是**专用输入节点**（网表角色为 digital，不是共用电源轨 role=power）——共用电源轨上的去耦电容归 dc-decoupling-cap；VIN 节点上还必须真的有 IC 的 power_in 引脚；本模板不引入 IC 成员，避免把不在 KB 里的 LDO 之类拉进本块。",
+  "role": "power",
+  "version": "0.2.0",
+  "priority": 10,
+  "signals": [
+    {
+      "id": "vin_net",
+      "type": "net",
+      "name_pattern": ".*",
+      "required": true,
+      "expected_ic_pin": "required",
+      "expected_pin_category": "power_in",
+      "expected_role": "digital"
+    },
+    {
+      "id": "gnd_net",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|CGND|VSS)$",
+      "required": true,
+      "expected_role": "gnd"
+    }
+  ],
+  "components": [
+    {
+      "id": "C_in",
+      "type": "Capacitor",
+      "required": true,
+      "strict_value": true,
+      "value_pattern": "^(?:[1-9]|[1-9][0-9])(?:\\.[0-9]+)?[u\\u00b5]F",
+      "title": "Buck 输入滤波电容",
+      "pins": [
+        {
+          "number": "1",
+          "net": "vin_net"
+        },
+        {
+          "number": "2",
+          "net": "gnd_net"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.4,
+      "naming": 0.25,
+      "parametric": 0.2,
+      "type": 0.15
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

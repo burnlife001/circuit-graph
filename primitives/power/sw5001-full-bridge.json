@@ -1,0 +1,141 @@
+{
+  "$schema": "./schema.json",
+  "id": "sw5001-full-bridge",
+  "name": "SW5001 全桥无线充发射功率级",
+  "description": "珠海智融 SW5001：集成输入快充的 15W 无线充发射端 Power Stage 芯片。芯片内置 4 管 NMOS 组成的全桥（full-bridge）变换器——PWM1/PWM2 是全桥两路驱动信号，SW1/SW2 是全桥两个开关节点（各自配合 BST1/BST2 上管自举电容），VIN 为 3.6~12V 输入，VDD 输出 5V 给 MCU 及外围供电。芯片另集成无损电流采样（ISENSE）、PPS/PD/FCP/SCP/AFC 输入快充协议、电压/电流两路 ASK 解码、Q 值检测（QDET）、内部 PWM 发生器与 FSK 调制、I2C 配置（从机地址 0x3C）。封装 QFN-26(4x4mm)。引脚 22(GND) 不参与模板匹配：部分应用把 PGND 与 GND 并在一网（如 FX-T268 的 Q5），信号绑定的单射约束会让独立的 gnd 信号在这种合法接法下命中失败；地脚由 pgnd 信号（模式含 GND.*）统一覆盖，识别依据仍是 strict_value 型号 + VIN/SW/PWM/BST/VDD 物理引脚。",
+  "role": "power_stage",
+  "version": "0.1.1",
+  "strict_pin_matching": true,
+  "signals": [
+    {
+      "id": "vin",
+      "type": "net",
+      "name_pattern": "^(DCIN.*|VIN.*|V_IN.*|VCC.*)$",
+      "required": true
+    },
+    {
+      "id": "pgnd",
+      "type": "net",
+      "name_pattern": "^(CGND|PGND|AGND|DGND|GND.*)$",
+      "required": true
+    },
+    {
+      "id": "vdd",
+      "type": "net",
+      "name_pattern": "^(5V.*|3V3.*|VDD.*|VCC.*)$",
+      "required": true
+    },
+    {
+      "id": "sw1",
+      "type": "net",
+      "name_pattern": "^SW.*$",
+      "required": true
+    },
+    {
+      "id": "sw2",
+      "type": "net",
+      "name_pattern": "^SW.*$",
+      "required": true
+    },
+    {
+      "id": "pwm1",
+      "type": "net",
+      "name_pattern": ".*PWM$",
+      "required": true
+    },
+    {
+      "id": "pwm2",
+      "type": "net",
+      "name_pattern": ".*PWMN$",
+      "required": true
+    },
+    {
+      "id": "bst1",
+      "type": "net",
+      "name_pattern": "^(Net.*|BST.*)$",
+      "required": true
+    },
+    {
+      "id": "bst2",
+      "type": "net",
+      "name_pattern": "^(Net.*|BST.*)$",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "pstage",
+      "type": ["IC", "Mosfet"],
+      "required": true,
+      "value_pattern": "SW5001",
+      "strict_value": true,
+      "pins": [
+        {
+          "number": "4",
+          "net": "vin"
+        },
+        {
+          "number": "16",
+          "net": "vin"
+        },
+        {
+          "number": "5",
+          "net": "sw1"
+        },
+        {
+          "number": "15",
+          "net": "sw2"
+        },
+        {
+          "number": "6",
+          "net": "pgnd"
+        },
+        {
+          "number": "14",
+          "net": "pgnd"
+        },
+        {
+          "number": "23",
+          "net": "vdd"
+        },
+        {
+          "number": "24",
+          "net": "vdd"
+        },
+        {
+          "number": "7",
+          "net": "bst1"
+        },
+        {
+          "number": "13",
+          "net": "bst2"
+        },
+        {
+          "number": "8",
+          "net": "pwm1"
+        },
+        {
+          "number": "9",
+          "net": "pwm2"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 1,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.35,
+      "naming": 0.25,
+      "parametric": 0.2,
+      "type": 0.2
+    },
+    "thresholds": {
+      "high": 0.8,
+      "medium": 0.5,
+      "low": 0.0
+    }
+  }
+}

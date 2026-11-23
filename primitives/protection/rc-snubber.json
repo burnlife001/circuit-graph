@@ -1,0 +1,52 @@
+{
+  "$schema": "./schema.json",
+  "id": "rc-snubber",
+  "name": "RC 吸收电路",
+  "description": "开关节点 RC 吸收：电阻从开关节点串联到中间网，电容从中间网到地（2Ω + 4.7nF 典型），抑制开关振铃。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "sw", "type": "net",
+      "name_pattern": "^SW\\d+$",
+      "required": true
+    },
+    {
+      "id": "mid", "type": "net",
+      "name_pattern": "^Net.+_\\d+$",
+      "required": true
+    },
+    {
+      "id": "gnd", "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS|CGND)$",
+      "expected_role": "gnd",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "R_series", "type": "Resistor", "required": true,
+      "strict_value": true,
+      "value_pattern": "2\\s*[RΩ]",
+      "pins": [
+        {"number": "1", "net": "sw"},
+        {"number": "2", "net": "mid"}
+      ]
+    },
+    {
+      "id": "C_shunt", "type": "Capacitor", "required": true,
+      "strict_value": true,
+      "value_pattern": "4\\.7\\s*n[Ff]",
+      "pins": [
+        {"number": "1", "net": "mid"},
+        {"number": "2", "net": "gnd"}
+      ]
+    }
+  ],
+  "constraints": {"min_components": 2, "exact_component_count": true},
+  "symmetry": {"axis_signal": "sw", "include_axis_extras": true},
+  "scoring": {
+    "weights": {"structural": 0.45, "naming": 0.10, "parametric": 0.20, "type": 0.25},
+    "thresholds": {"high": 0.80, "medium": 0.55, "low": 0.0}
+  }
+}

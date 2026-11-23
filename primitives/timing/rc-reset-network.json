@@ -1,0 +1,86 @@
+{
+  "$schema": "./schema.json",
+  "id": "rc-reset-network",
+  "name": "MCU 上电复位 RC 网络",
+  "description": "MCU 上电复位电路：上拉电阻把复位脚拉到电源，电容从复位脚接到地，上电瞬间靠 RC 延时完成复位。",
+  "role": "unknown",
+  "version": "0.1.0",
+  "signals": [
+    {
+      "id": "vcc",
+      "type": "net",
+      "name_pattern": "^(VCC|VDD|VBUS|\\+?\\d+\\.?\\d*V|\\+?\\d+V\\d+|3V3|5V).*",
+      "expected_role": "power",
+      "required": true,
+      "expected_pin_category": "power_in",
+      "pin_category_fallback": true
+    },
+    {
+      "id": "rst",
+      "type": "net",
+      "name_pattern": "^(RST|RESET|NRST|NRESET|RSTN|MRESET)(_[0-9]+)?$",
+      "expected_role": "digital",
+      "required": true
+    },
+    {
+      "id": "gnd",
+      "type": "net",
+      "name_pattern": "^(GND|PGND|AGND|DGND|VSS)$",
+      "expected_role": "gnd",
+      "required": true
+    }
+  ],
+  "components": [
+    {
+      "id": "R_pull",
+      "type": "Resistor",
+      "required": true,
+      "value_pattern": "^\\d+(\\.\\d+)?\\s*[kK]",
+      "title": "MCU 上电复位上拉电阻",
+      "pins": [
+        {
+          "number": "1",
+          "net": "vcc"
+        },
+        {
+          "number": "2",
+          "net": "rst"
+        }
+      ]
+    },
+    {
+      "id": "C_reset",
+      "type": "Capacitor",
+      "required": true,
+      "value_pattern": "^(104|100\\s*[nN][fF]|0\\.1\\s*[uUµμ][fF])",
+      "title": "MCU 上电复位电容",
+      "pins": [
+        {
+          "number": "1",
+          "net": "rst"
+        },
+        {
+          "number": "2",
+          "net": "gnd"
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "min_components": 2,
+    "exact_component_count": true
+  },
+  "scoring": {
+    "weights": {
+      "structural": 0.30,
+      "naming": 0.30,
+      "parametric": 0.15,
+      "type": 0.25
+    },
+    "thresholds": {
+      "high": 0.80,
+      "medium": 0.55,
+      "low": 0.0
+    }
+  }
+}

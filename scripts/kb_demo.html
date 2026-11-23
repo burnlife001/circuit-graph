@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>circuit-graph KB Manager</title>
+<style>
+/* ================================================================== */
+/* Black theme — dark, minimal, functional                             */
+/* ================================================================== */
+:root {
+  --bg:        #0d0d0d;
+  --bg-alt:    #1a1a1a;
+  --bg-hover:  #252525;
+  --border:    #2a2a2a;
+  --text:      #c8c8c8;
+  --text-dim:  #6a6a6a;
+  --text-bright:#e8e8e8;
+  --accent:    #3b82f6;
+  --accent-bg: #1e3a5f;
+  --green:     #22c55e;
+  --green-bg:  #14532d;
+  --red:       #ef4444;
+  --red-bg:    #7f1d1d;
+  --yellow:    #eab308;
+  --yellow-bg: #713f12;
+  --radius:    6px;
+  --font:      'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono:      'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ---- layout ---- */
+#app {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: 100vh;
+}
+
+/* ---- left panel ---- */
+#sidebar {
+  background: var(--bg-alt);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#sidebar-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+#sidebar-header h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 10px;
+}
+#search {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+}
+#search:focus { border-color: var(--accent); }
+#search::placeholder { color: var(--text-dim); }
+
+#comp-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+#comp-list::-webkit-scrollbar { width: 5px; }
+#comp-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.comp-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+  transition: background .12s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.comp-item:hover { background: var(--bg-hover); }
+.comp-item.active { background: var(--accent-bg); border-left: 3px solid var(--accent); }
+
+.comp-item .name {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-bright);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+.badge-credible { background: var(--green-bg); color: var(--green); }
+.badge-unknown  { background: var(--bg);      color: var(--text-dim); border: 1px solid var(--border); }
+.badge-manual   { background: var(--yellow-bg);color: var(--yellow); }
+
+#sidebar-footer {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+}
+#sidebar-footer button {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+/* ---- right panel ---- */
+#main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#main-header {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+#main-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+#main-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+#main-body::-webkit-scrollbar { width: 5px; }
+#main-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ---- form ---- */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+  margin-bottom: 20px;
+}
+.form-grid .full { grid-column: 1 / -1; }
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-dim);
+}
+.field input, .field select, .field textarea {
+  padding: 7px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  border-color: var(--accent);
+}
+.field textarea { resize: vertical; min-height: 50px; }
+
+/* ---- buttons ---- */
+.btn {
+  padding: 8px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-alt);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--font);
+  transition: background .12s, border-color .12s;
+}
+.btn:hover { background: var(--bg-hover); }
+.btn:active { background: var(--bg); }
+
+.btn-primary { background: var(--accent-bg); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: #1e4a7a; }
+
+.btn-danger  { background: var(--red-bg); border-color: var(--red); color: #fca5a5; }
+.btn-danger:hover { background: #991b1b; }
+
+.btn-group { display: flex; gap: 8px; margin-top: 16px; }
+
+/* ---- pin table ---- */
+#pins-section { margin-top: 20px; }
+#pins-section h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 10px;
+}
+
+.pin-table { width: 100%; border-collapse: collapse; }
+.pin-table th {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.pin-table td { padding: 5px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 13px; }
+.pin-table tr:hover td { background: var(--bg-hover); }
+.pin-table input {
+  width: 100%;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--mono);
+  outline: none;
+}
+.pin-table input:focus { border-color: var(--accent); }
+.pin-table .del-pin {
+  background: none; border: none; color: var(--red);
+  cursor: pointer; font-size: 14px; padding: 0 4px;
+  opacity: .5; transition: opacity .12s;
+}
+.pin-table .del-pin:hover { opacity: 1; }
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 3px;
+}
+
+/* ---- empty state ---- */
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-dim);
+}
+.empty h3 { font-size: 16px; margin-bottom: 8px; color: var(--text); }
+.empty p  { font-size: 13px; margin-bottom: 16px; }
+
+/* ---- toast ---- */
+#toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity .2s;
+  pointer-events: none;
+  z-index: 100;
+}
+#toast.show  { opacity: 1; }
+#toast.ok    { background: var(--green-bg); color: var(--green); border: 1px solid var(--green); }
+#toast.error { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red); }
+
+/* ---- stats bar ---- */
+#stats {
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+}
+#stats span { margin-right: 14px; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============== SIDEBAR ============== -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h2>📦 Components</h2>
+      <input id="search" type="text" placeholder="Search part number…" autocomplete="off">
+    </div>
+    <div id="comp-list"></div>
+    <div id="stats"><span id="stat-count">0</span> components</div>
+    <div id="sidebar-footer">
+      <button class="btn btn-primary" onclick="newComponent()">+ New</button>
+      <button class="btn" onclick="loadList()" title="Refresh">↻</button>
+    </div>
+  </div>
+
+  <!-- ============== MAIN ============== -->
+  <div id="main">
+    <div id="main-header">
+      <h3 id="main-title">Select a component</h3>
+      <span id="main-badge"></span>
+    </div>
+    <div id="main-body">
+      <div class="empty" id="empty-state">
+        <h3>Component Editor</h3>
+        <p>Select a component from the left panel, or click <strong>+ New</strong> to create one.</p>
+      </div>
+
+      <div id="editor" style="display:none">
+        <input type="hidden" id="edit-id">
+
+        <div class="form-grid">
+          <div class="field">
+            <label>Part Number *</label>
+            <input id="edit-pn" type="text" placeholder="e.g. LM321">
+          </div>
+          <div class="field">
+            <label>Package</label>
+            <input id="edit-pkg" type="text" placeholder="e.g. SOT-23-5">
+          </div>
+          <div class="field">
+            <label>Manufacturer</label>
+            <input id="edit-mfg" type="text" placeholder="e.g. Texas Instruments">
+          </div>
+          <div class="field">
+            <label>Category</label>
+            <input id="edit-cat" type="text" placeholder="e.g. IC / opamp">
+          </div>
+          <div class="field">
+            <label>Subcategory</label>
+            <input id="edit-sub" type="text" placeholder="e.g. Op-Amp">
+          </div>
+          <div class="field">
+            <label>Pin Source</label>
+            <select id="edit-ps">
+              <option value="">—</option>
+              <option value="jlcpcb">jlcpcb</option>
+              <option value="kicad_official">kicad_official</option>
+              <option value="easyeda">easyeda</option>
+              <option value="datasheet">datasheet</option>
+              <option value="manual">manual</option>
+              <option value="unknown">unknown</option>
+            </select>
+          </div>
+          <div class="field full">
+            <label>Description</label>
+            <textarea id="edit-desc" placeholder="Optional description…"></textarea>
+          </div>
+        </div>
+
+        <!-- pins -->
+        <div id="pins-section">
+          <h4>📌 Pins</h4>
+          <table class="pin-table">
+            <thead><tr><th>#</th><th>Pin Name</th><th style="width:40px"></th></tr></thead>
+            <tbody id="pins-tbody"></tbody>
+          </table>
+          <button class="btn btn-sm" style="margin-top:8px" onclick="addPinRow()">+ Add Pin</button>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="saveComponent()">💾 Save</button>
+          <button class="btn btn-danger"  onclick="deleteComponent()">🗑 Delete</button>
+          <button class="btn" onclick="cancelEdit()">Cancel</button>
+        </div>
+      </div><!-- /editor -->
+    </div><!-- /main-body -->
+  </div><!-- /main -->
+
+</div><!-- /app -->
+
+<div id="toast"></div>
+
+<script>
+// ======================================================================
+// State
+// ======================================================================
+const API = '/api/components';
+let components = [];
+let activeId = null;
+
+// ======================================================================
+// Init
+// ======================================================================
+document.getElementById('search').addEventListener('input', renderList);
+loadList();
+
+// ======================================================================
+// Data loading
+// ======================================================================
+async function loadList() {
+  try {
+    const res = await fetch(API);
+    components = await res.json();
+    if (!Array.isArray(components)) components = [];
+    renderList();
+    document.getElementById('stat-count').textContent = components.length;
+  } catch (e) {
+    toast('Failed to load: ' + e.message, 'error');
+  }
+}
+
+function renderList() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const filtered = components.filter(c =>
+    c.part_number.toLowerCase().includes(q)
+  );
+  const el = document.getElementById('comp-list');
+  el.innerHTML = filtered.map(c => {
+    const cls = c.id === activeId ? ' active' : '';
+    const badge = sourceBadge(c.pin_source, c.is_credible);
+    const label = displayLabel(c);
+    return `<div class="comp-item${cls}" onclick="selectComponent(${c.id})">
+      <span class="name" title="${esc(c.part_number)}">${esc(label)}</span>
+      ${badge}
+    </div>`;
+  }).join('');
+}
+
+function displayLabel(c) {
+  // Variant rows (part_number contains '@') show "BASE(PACKAGE)".
+  // For regular components, append package when available and differs from
+  // the part_number alone.
+  const pn = c.part_number || '';
+  const pkg = c.package || '';
+  if (pn.includes('@')) {
+    const base = pn.split('@')[0];
+    return base + (pkg ? `(${pkg})` : '');
+  }
+  return pn + (pkg ? `(${pkg})` : '');
+}
+
+function sourceBadge(pin_source, is_credible) {
+  if (!pin_source) pin_source = '';
+  const cls = is_credible ? 'badge-credible' : (pin_source === 'manual' ? 'badge-manual' : 'badge-unknown');
+  const label = pin_source || '—';
+  return `<span class="badge ${cls}" title="pin_source=${label}">${label}</span>`;
+}
+
+// ======================================================================
+// Selection
+// ======================================================================
+async function selectComponent(id) {
+  activeId = id;
+  renderList();
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('editor').style.display = 'block';
+
+  try {
+    const res = await fetch(`${API}/${id}`);
+    const c = await res.json();
+    if (c.error) { toast(c.error, 'error'); return; }
+    fillForm(c);
+  } catch (e) {
+    toast('Failed to load component: ' + e.message, 'error');
+  }
+}
+
+function fillForm(c) {
+  document.getElementById('edit-id').value = c.id;
+  document.getElementById('edit-pn').value = c.part_number || '';
+  document.getElementById('edit-pkg').value = c.package || '';
+  document.getElementById('edit-mfg').value = c.manufacturer || '';
+  document.getElementById('edit-cat').value = c.category || '';
+  document.getElementById('edit-sub').value = c.subcategory || '';
+  document.getElementById('edit-desc').value = c.description || '';
+  document.getElementById('edit-ps').value = c.pin_source || '';
+
+  document.getElementById('main-title').textContent = c.part_number || '(new)';
+  const badge = sourceBadge(c.pin_source, c.is_credible);
+  document.getElementById('main-badge').innerHTML = badge;
+
+  // Pins
+  const pins = c.pins || {};
+  const tbody = document.getElementById('pins-tbody');
+  tbody.innerHTML = Object.entries(pins).map(([num, name]) => pinRow(num, name)).join('');
+}
+
+function pinRow(num, name) {
+  return `<tr>
+    <td><input value="${esc(num || '')}" class="pin-num" placeholder="1"></td>
+    <td><input value="${esc(name || '')}" class="pin-name" placeholder="VCC"></td>
+    <td><button class="del-pin" onclick="this.closest('tr').remove()" title="Remove">×</button></td>
+  </tr>`;
+}
+
+function addPinRow() {
+  document.getElementById('pins-tbody').insertAdjacentHTML('beforeend', pinRow('', ''));
+}
+
+// ======================================================================
+// CRUD
+// ======================================================================
+function newComponent() {
+  activeId = null;
+  renderList();
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('editor').style.display = 'block';
+  document.getElementById('edit-id').value = '';
+  document.getElementById('edit-pn').value = '';
+  document.getElementById('edit-pkg').value = '';
+  document.getElementById('edit-mfg').value = '';
+  document.getElementById('edit-cat').value = '';
+  document.getElementById('edit-sub').value = '';
+  document.getElementById('edit-desc').value = '';
+  document.getElementById('edit-ps').value = 'manual';
+  document.getElementById('main-title').textContent = 'New Component';
+  document.getElementById('main-badge').innerHTML = '';
+  document.getElementById('pins-tbody').innerHTML = pinRow('1', '') + pinRow('2', '');
+}
+
+function cancelEdit() {
+  activeId = null;
+  document.getElementById('editor').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'block';
+  document.getElementById('main-title').textContent = 'Select a component';
+  document.getElementById('main-badge').innerHTML = '';
+  renderList();
+}
+
+async function saveComponent() {
+  const id = document.getElementById('edit-id').value;
+  const body = {
+    part_number: document.getElementById('edit-pn').value.trim(),
+    manufacturer: document.getElementById('edit-mfg').value.trim() || null,
+    category: document.getElementById('edit-cat').value.trim() || null,
+    subcategory: document.getElementById('edit-sub').value.trim() || null,
+    description: document.getElementById('edit-desc').value.trim() || null,
+    package: document.getElementById('edit-pkg').value.trim() || null,
+    pin_source: document.getElementById('edit-ps').value || null,
+    pins: collectPins(),
+  };
+
+  if (!body.part_number) { toast('Part Number is required', 'error'); return; }
+
+  try {
+    let res;
+    if (id) {
+      res = await fetch(`${API}/${id}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+    } else {
+      res = await fetch(API, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+    }
+    const data = await res.json();
+    if (res.ok) {
+      toast('Saved ✓', 'ok');
+      await loadList();
+      if (data.id) selectComponent(data.id);
+    } else {
+      toast(data.error || 'Save failed', 'error');
+    }
+  } catch (e) {
+    toast('Save failed: ' + e.message, 'error');
+  }
+}
+
+async function deleteComponent() {
+  const id = document.getElementById('edit-id').value;
+  if (!id) return;
+  if (!confirm('Delete this component and all its pins?')) return;
+
+  try {
+    const res = await fetch(`${API}/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      toast('Deleted ✓', 'ok');
+      cancelEdit();
+      await loadList();
+    } else {
+      const data = await res.json();
+      toast(data.error || 'Delete failed', 'error');
+    }
+  } catch (e) {
+    toast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+function collectPins() {
+  const rows = document.querySelectorAll('#pins-tbody tr');
+  const pins = {};
+  rows.forEach(tr => {
+    const num = tr.querySelector('.pin-num').value.trim();
+    const name = tr.querySelector('.pin-name').value.trim();
+    if (num && name) pins[num] = name;
+  });
+  return pins;
+}
+
+// ======================================================================
+// Utilities
+// ======================================================================
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg, kind) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = kind + ' show';
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// Keyboard shortcut: Ctrl+S to save
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveComponent();
+  }
+});
+</script>
+
+</body>
+</html>
