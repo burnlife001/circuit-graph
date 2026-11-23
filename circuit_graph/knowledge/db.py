@@ -606,6 +606,33 @@ class ComponentDatabase:
         ).fetchone()
         return self._row_to_record(row) if row else None
 
+    def lookup_candidates(self, part_number: str) -> list[ComponentRecord]:
+        """Candidate rows for *part_number* in resolution priority order.
+
+        The exact row comes first; then strict-prefix rows (shorter than the
+        query, e.g. ``MM32F014X`` for ``MM32F014X-QFP48``) longest-first.
+        Callers pick the first candidate that actually carries the data they
+        need (pinout / facts), because a board-level variant row often exists
+        under the full suffixed name but carries no payload of its own.
+        """
+        if not part_number:
+            return []
+        out: list[ComponentRecord] = []
+        exact = self.get_component(part_number)
+        if exact is not None:
+            out.append(exact)
+        rows = self.conn.execute(
+            """
+            SELECT * FROM components
+            WHERE UPPER(?) LIKE UPPER(part_number) || '%'
+              AND LENGTH(part_number) < LENGTH(?)
+            ORDER BY LENGTH(part_number) DESC
+            """,
+            (part_number, part_number),
+        ).fetchall()
+        out.extend(self._row_to_record(row) for row in rows)
+        return out
+
     def get_category(self, part_number: str) -> Optional[str]:
         """Return the category of the longest matching prefix, if any."""
         rec = self.lookup_prefix(part_number)
@@ -658,6 +685,22 @@ class ComponentDatabase:
         if not rows:
             return None
         return {r["pin_number"]: r["pin_name"] for r in rows}
+
+    def get_pinout_effective(self, part_number: str) -> Optional[dict[str, str]]:
+        """Pinout for a board-level value, with variant-row fallback.
+
+        The exact row often exists but carries nothing (netlist-import stub
+        like ``MM32F014X-QFP48``); walk :meth:`lookup_candidates`
+        (exact → strict prefixes longest-first) and return the pinout of the
+        first row that actually has one.  ``None`` when nothing matches.
+        """
+        if not part_number:
+            return None
+        for rec in self.lookup_candidates(part_number):
+            po = self.get_pinout(rec.part_number)
+            if po:
+                return po
+        return None
 
     def find_by_pin_name(self, pin_name: str) -> list[str]:
         """Return part numbers having a pin named ``pin_name`` (case-insensitive)."""
@@ -1062,12 +1105,17 @@ class ComponentDatabase:
 
         Resolution order for each IC (first success wins):
 
-        1. **KB pre-check** — skip if any pin data already exists.
+        1. **KB pre-check** — skip if any pin data already exists
+           (exact row or a prefix row, via
+           :meth:`get_pinout_effective`).
         2. **Local symbol-dir** — fuzzy-match ``.kicad_sym`` files, parse
            locally (``pin_source="kicad_official"``).
         3. **LCSC fallback** — for ``Cxxxxx`` part numbers resolve directly.
         4. **Batch JLCPCB** — remaining candidates in a single
            ``JLC2KiCadLib`` invocation (``pin_source="jlcpcb"``).
+        5. **PDF datasheet fallback** — when a datasheet directory is
+           configured, extract the pin table from the PDF via Camelot
+           (lattice-only) in the external ``CAMELOT_VENV``.
 
         Package-match policy (Stage 4 only):
 
@@ -1111,10 +1159,11 @@ class ComponentDatabase:
                 continue
 
             # Stage 1 — KB pre-check: skip if any pin data already exists.
+            # 变体行（MM32F014X-QFP48）自身无引脚，须沿前缀链看基础行。
             existing = self.get_component(pn)
             if existing is not None and (
                 existing.pin_source is not None
-                or self.get_pinout(pn) is not None
+                or self.get_pinout_effective(pn) is not None
             ):
                 continue
 

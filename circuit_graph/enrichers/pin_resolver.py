@@ -65,14 +65,14 @@ class PinNameResolver:
                 continue
             pinout = None
             if comp.part_number:
-                pinout = db.get_pinout(comp.part_number)
+                pinout = db.get_pinout_effective(comp.part_number)
             if pinout is None and comp.value and getattr(comp.value, "raw", None):
                 # Component dataclass stores value as NormalizedValue, but the
                 # original netlist value lives in raw_value; try that as a
                 # fallback search key.
-                pinout = db.get_pinout(comp.value.raw)  # type: ignore[union-attr]
+                pinout = db.get_pinout_effective(comp.value.raw)  # type: ignore[union-attr]
             if pinout is None and comp.raw_value:
-                pinout = db.get_pinout(comp.raw_value)
+                pinout = db.get_pinout_effective(comp.raw_value)
             if pinout is None:
                 new_components.append(comp)
                 continue

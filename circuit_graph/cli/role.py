@@ -35,10 +35,11 @@ def _kb_pinout_provider(kb_path: Path):
         for key in (comp.part_number, comp.raw_value):
             if not key:
                 continue
-            rec = db.get_component(key)
-            if rec is None:
-                continue
-            return db.get_pinout(rec.part_number)
+            # 精确行可能是不带任何数据的板级变体（MM32F014X-QFP48，0 引脚），
+            # get_pinout_effective 沿 精确→最长前缀 链取第一个真正带引脚数据的行。
+            po = db.get_pinout_effective(key)
+            if po:
+                return po
         return None
 
     return provider
@@ -63,16 +64,15 @@ def _kb_facts_provider(kb_path: Path):
         for key in (comp.part_number, comp.raw_value):
             if not key:
                 continue
-            rec = db.get_component(key)
-            if rec is None:
-                continue
-            facts = {}
-            for field in ("category", "subcategory"):
-                value = getattr(rec, field, None)
-                if value:
-                    facts[field] = str(value)
-            if facts:
-                return facts
+            # 与 _kb_pinout_provider 同一策略：变体行无事实时沿前缀链降级。
+            for rec in db.lookup_candidates(key):
+                facts = {}
+                for field in ("category", "subcategory"):
+                    value = getattr(rec, field, None)
+                    if value:
+                        facts[field] = str(value)
+                if facts:
+                    return facts
         return {}
 
     return provider
