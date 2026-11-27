@@ -2,6 +2,9 @@
 # Set COMMIT_API_KEY in environment, or enter interactively when prompted.
 
 $ErrorActionPreference = "Stop"
+# 脚本位于仓库根目录，仓库根即脚本所在目录（不可再取父级，否则越出仓库导致 fatal: not a git repository）
+$Root = $PSScriptRoot
+Set-Location -LiteralPath $Root
 
 # ---------- force UTF-8 everywhere ----------
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8

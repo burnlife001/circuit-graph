@@ -2,6 +2,10 @@
 # Auto Git Commit and Push Script
 # Function: Commit and push all branches with user input message
 
+# 脚本位于仓库根目录，仓库根即脚本所在目录（不可再取父级，否则越出仓库导致 fatal: not a git repository）
+$Root = $PSScriptRoot
+Set-Location -LiteralPath $Root
+
 # Ensure Git is in PATH
 $gitCmdPath = "C:\Program Files\Git\cmd"
 $gitCmdPathAlt = "C:\Program Files (x86)\Git\cmd"
