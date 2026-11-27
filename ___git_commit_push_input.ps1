@@ -2,10 +2,6 @@
 # Auto Git Commit and Push Script
 # Function: Commit and push all branches with user input message
 
-# 脚本位于仓库根目录，仓库根即脚本所在目录（不可再取父级，否则越出仓库导致 fatal: not a git repository）
-$Root = $PSScriptRoot
-Set-Location -LiteralPath $Root
-
 # Ensure Git is in PATH
 $gitCmdPath = "C:\Program Files\Git\cmd"
 $gitCmdPathAlt = "C:\Program Files (x86)\Git\cmd"
@@ -16,6 +12,14 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         $env:PATH = "$gitCmdPathAlt;$env:PATH"
     }
 }
+
+# 仓库根定位：从脚本所在目录向上查找 git 仓库根，脚本放在仓库内任意位置均可
+$Root = git -C $PSScriptRoot rev-parse --show-toplevel 2>$null
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Root)) {
+    Write-Host "Error: 脚本所在目录不在任何 git 仓库内: $PSScriptRoot" -ForegroundColor Red
+    exit 1
+}
+Set-Location -LiteralPath $Root
 
 # Function to check and clear any existing Git processes and lock files
 function Clear-GitProcesses {

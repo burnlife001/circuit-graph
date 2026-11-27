@@ -2,8 +2,21 @@
 # Set COMMIT_API_KEY in environment, or enter interactively when prompted.
 
 $ErrorActionPreference = "Stop"
-# 脚本位于仓库根目录，仓库根即脚本所在目录（不可再取父级，否则越出仓库导致 fatal: not a git repository）
-$Root = $PSScriptRoot
+
+# ---------- ensure git on PATH ----------
+$gitPaths = @("C:\Program Files\Git\cmd", "C:\Program Files (x86)\Git\cmd")
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    foreach ($p in $gitPaths) {
+        if (Test-Path $p) { $env:PATH = "$p;$env:PATH"; break }
+    }
+}
+
+# ---------- 仓库根定位：从脚本所在目录向上查找 git 仓库根，脚本放在仓库内任意位置均可 ----------
+$Root = git -C $PSScriptRoot rev-parse --show-toplevel 2>$null
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Root)) {
+    Write-Host "Error: 脚本所在目录不在任何 git 仓库内: $PSScriptRoot" -ForegroundColor Red
+    exit 1
+}
 Set-Location -LiteralPath $Root
 
 # ---------- force UTF-8 everywhere ----------
@@ -39,14 +52,6 @@ if ($env:COMMIT_API_KEY) {
 if (-not $apiKey) {
     Write-Host "Error: COMMIT_API_KEY is empty." -ForegroundColor Red
     exit 1
-}
-
-# ---------- ensure git on PATH ----------
-$gitPaths = @("C:\Program Files\Git\cmd", "C:\Program Files (x86)\Git\cmd")
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    foreach ($p in $gitPaths) {
-        if (Test-Path $p) { $env:PATH = "$p;$env:PATH"; break }
-    }
 }
 
 # ---------- prompt template ----------
